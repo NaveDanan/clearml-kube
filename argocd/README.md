@@ -24,11 +24,28 @@ spec:
     targetRevision: main
 ```
 
-Apply the app after replacing the repository URL:
+Apply the app if you want to create the ArgoCD Application from kubectl:
 
 ```powershell
 kubectl apply -f .\argocd\clearml-app.yaml
 kubectl get applications -n argocd
+```
+
+Or create it manually in the ArgoCD UI:
+
+```text
+Application name: clearml
+Project: default
+Repository URL: https://github.com/NaveDanan/clearml-kube.git
+Revision: main
+Path: clearml-charts
+Cluster URL: https://kubernetes.default.svc
+Namespace: clearml
+Helm value files:
+  values.yaml
+  values-testing.yaml
+Sync option:
+  Create namespace
 ```
 
 If ArgoCD is already port-forwarded to `8443`, open:
@@ -39,7 +56,7 @@ https://localhost:8443
 
 ## Local ClearML access
 
-The minikube values expose the services as NodePorts, but on Docker Desktop
+The testing values expose the services as NodePorts, but on Docker Desktop
 minikube the most reliable local access is port-forwarding:
 
 ```powershell
@@ -62,7 +79,7 @@ Invoke-WebRequest -UseBasicParsing http://localhost:8008/debug.ping
 
 ## Refresh local images
 
-The minikube values use `clearml/server:local` and
+The testing values use `clearml/server:local` and
 `clearml/runai-worker:local` with `imagePullPolicy: IfNotPresent`. Reusing the
 same tag is fine for local work, but you must rebuild, load into minikube, and
 restart the pods whenever source changes should appear in the cluster:

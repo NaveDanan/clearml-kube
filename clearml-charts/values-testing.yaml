@@ -1,0 +1,167 @@
+# Local minikube / ArgoCD test values.
+#
+# Use this from the ArgoCD UI with:
+#   Repository URL: https://github.com/NaveDanan/clearml-kube.git
+#   Path: clearml-charts
+#   Target revision: main
+#   Helm values files:
+#     - values.yaml
+#     - values-testing.yaml
+#
+# The ClearML images are intentionally local tags. Before syncing in ArgoCD,
+# build and load them into minikube:
+#   docker build -f .\Dockerfile.local -t clearml/server:local .
+#   docker build -f .\clearml-server\docker\build\runai-worker.Dockerfile -t clearml/runai-worker:local .
+#   minikube image load clearml/server:local
+#   minikube image load clearml/runai-worker:local
+
+global:
+  imageRegistry: docker.io
+
+imageCredentials:
+  enabled: false
+
+clearml:
+  cookieName: clearml-token-k8s
+  cookieDomain: ""
+  clientConfigurationApiUrl: "http://localhost:8008"
+  clientConfigurationFilesUrl: "http://localhost:8081"
+
+apiserver:
+  enabled: true
+  image:
+    registry: ""
+    repository: "clearml/server"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    nodePort: 30008
+  ingress:
+    enabled: false
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+
+fileserver:
+  enabled: true
+  image:
+    registry: ""
+    repository: "clearml/server"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    nodePort: 30081
+  ingress:
+    enabled: false
+  storage:
+    enabled: true
+    data:
+      class: standard
+      accessMode: ReadWriteOnce
+      size: 5Gi
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+webserver:
+  enabled: true
+  image:
+    registry: ""
+    repository: "clearml/server"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    nodePort: 30080
+  ingress:
+    enabled: false
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+runaiWorker:
+  enabled: true
+  image:
+    registry: ""
+    repository: "clearml/runai-worker"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  pollInterval: 10
+  batchSize: 5
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+redis:
+  enabled: true
+  master:
+    persistence:
+      enabled: true
+      storageClass: standard
+      size: 1Gi
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: standard
+    size: 5Gi
+
+elasticsearch:
+  enabled: true
+  replicas: 1
+  image: "docker.elastic.co/elasticsearch/elasticsearch"
+  imageTag: "7.17.3"
+  imagePullPolicy: IfNotPresent
+  esJavaOpts: "-Xmx1g -Xms1g"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  volumeClaimTemplate:
+    storageClassName: standard
+    resources:
+      requests:
+        storage: 10Gi
