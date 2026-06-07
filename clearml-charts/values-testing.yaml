@@ -14,6 +14,18 @@
 #   docker build -f .\clearml-server\docker\build\runai-worker.Dockerfile -t clearml/runai-worker:local .
 #   minikube image load clearml/server:local
 #   minikube image load clearml/runai-worker:local
+#
+# These values expose fixed Kubernetes NodePorts:
+#   web:  30080 -> service port 8080
+#   api:  30008 -> service port 8008
+#   file: 30081 -> service port 8081
+#
+# On Docker Desktop / Windows minikube, Kubernetes YAML cannot create local
+# localhost port-forwards. If NodePorts are not directly reachable from Windows,
+# run these local commands after sync:
+#   kubectl port-forward -n clearml-server svc/clearml-server-webserver 8080:8080
+#   kubectl port-forward -n clearml-server svc/clearml-server-apiserver 8008:8008
+#   kubectl port-forward -n clearml-server svc/clearml-server-fileserver 8081:8081
 
 global:
   imageRegistry: docker.io
