@@ -48,7 +48,7 @@ apiserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "autoscalar-v1.0.0"
+    tag: "autoscalar-v2026-06-07"
   ingress:
     enabled: true
     ingressClassName: "nginx"
@@ -71,7 +71,7 @@ fileserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "autoscalar-v1.0.0"
+    tag: "autoscalar-v2026-06-07"
   ingress:
     enabled: true
     ingressClassName: "nginx"
@@ -115,7 +115,7 @@ webserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "autoscalar-v1.0.0"
+    tag: "autoscalar-v2026-06-07"
   ingress:
     enabled: true
     ingressClassName: "nginx"
@@ -139,7 +139,7 @@ runaiWorker:
   image:
     repository: "runai-worker"
     pullPolicy: IfNotPresent
-    tag: "2026-06-03"
+    tag: "2026-06-07"
   replicaCount: 1
   pollInterval: 10
   batchSize: 5
