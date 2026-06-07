@@ -1,0 +1,12 @@
+clearml-web/node_modules
+clearml-web/.angular
+clearml-web/dist
+clearml-web/build
+clearml-web/.git
+clearml-server/.git
+clearml-server/apiserver/tests
+**/.git
+**/__pycache__
+**/*.pyc
+**/node_modules
+**/.angular

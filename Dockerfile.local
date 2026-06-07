@@ -1,0 +1,41 @@
+FROM node:20-bookworm-slim AS webapp_builder
+
+USER root
+WORKDIR /opt
+
+# Copy local clearml-web source instead of cloning from git
+COPY clearml-web /opt/open-webapp
+COPY clearml-server/docker/build/internal_files/build_webapp.sh /tmp/internal_files/
+RUN sed -i 's/\r$//' /tmp/internal_files/build_webapp.sh && /bin/bash -c '/tmp/internal_files/build_webapp.sh'
+
+FROM python:3.11-slim-bookworm
+ENV PIP_TRUSTED_HOST=pypi.org\ files.pythonhosted.org\ pypi.python.org
+COPY --chmod=744 clearml-server/docker/build/internal_files/entrypoint.sh /opt/clearml/
+COPY --chmod=744 clearml-server/docker/build/internal_files/update_from_env.py /opt/clearml/utilities/
+COPY clearml-server/fileserver /opt/clearml/fileserver/
+ARG CACHEBUST=1
+COPY clearml-server/apiserver /opt/clearml/apiserver/
+
+COPY --chmod=744 clearml-server/docker/build/internal_files/final_image_preparation.sh /tmp/internal_files/
+COPY clearml-server/docker/build/internal_files/clearml.conf.template /tmp/internal_files/
+COPY clearml-server/docker/build/internal_files/clearml_subpath.conf.template /tmp/internal_files/
+RUN find /tmp/internal_files -type f -exec sed -i 's/\r$//' {} + && \
+    sed -i 's/\r$//' /opt/clearml/entrypoint.sh && \
+    find /opt/clearml/utilities -type f -name '*.py' -exec sed -i 's/\r$//' {} + && \
+    find /opt/clearml/fileserver -type f -name '*.py' -exec sed -i 's/\r$//' {} + && \
+    find /opt/clearml/apiserver -type f \( -name '*.py' -o -name '*.sh' \) -exec sed -i 's/\r$//' {} + && \
+    /bin/bash -c '/tmp/internal_files/final_image_preparation.sh'
+
+COPY --from=webapp_builder --chown=1000:1000 /opt/open-webapp/build/browser /usr/share/nginx/html
+COPY --from=webapp_builder --chown=1000:1000 /opt/open-webapp/dist/report-widgets /usr/share/nginx/widgets
+
+EXPOSE 8080
+EXPOSE 8008
+EXPOSE 8081
+
+ENV CLEARML_SERVER_VERSION=dev
+ENV CLEARML_SERVER_BUILD=local
+
+USER 1000
+WORKDIR /opt/clearml/
+ENTRYPOINT ["/opt/clearml/entrypoint.sh"]

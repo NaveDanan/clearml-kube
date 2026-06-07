@@ -1,0 +1,49 @@
+{{- if .Values.webserver.enabled }}
+{{- if .Values.webserver.ingress.enabled }}
+{{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1
+{{- else if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  name: {{ include "webserver.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+  {{- $annotations := .Values.webserver.ingress.annotations }}
+  {{- if .Values.webserver.ingress.annotations }}
+  {{- $annotations = mergeOverwrite $annotations .Values.webserver.ingress.annotations }}
+  {{- end }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+spec:
+  {{- if .Values.webserver.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.webserver.ingress.ingressClassName }}
+  {{- end }}
+  {{- if .Values.webserver.ingress.tlsSecretName }}
+  tls:
+    - hosts:
+        - {{ .Values.webserver.ingress.hostName }}
+      secretName: {{ .Values.webserver.ingress.tlsSecretName }}
+  {{- end }}
+  rules:
+  - host: {{ .Values.webserver.ingress.hostName }}
+    http:
+      paths:
+      - path: {{ .Values.webserver.ingress.path }}
+  {{ if semverCompare ">=1.19-0" .Capabilities.KubeVersion.GitVersion }}
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "webserver.referenceName" . }}
+            port:
+              number: {{ .Values.webserver.service.port }}
+  {{ else }}
+        backend:
+          serviceName: {{ include "webserver.referenceName" . }}
+          servicePort: {{ .Values.webserver.service.port }}
+  {{ end }}
+{{- end }}
+{{- end }}

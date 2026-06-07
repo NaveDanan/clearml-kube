@@ -1,0 +1,204 @@
+{{- if .Values.apiserver.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "apiserver.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+{{- with .Values.apiserver.deploymentAnnotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.apiserver.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "apiserver.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.apiserver.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "apiserver.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.apiserver.serviceAccountName }}-apiserver
+      {{- if .Values.imageCredentials.enabled }}
+      imagePullSecrets:
+      {{- if .Values.imageCredentials.existingSecret }}
+      - name: {{ .Values.imageCredentials.existingSecret }}
+      {{- else }}
+      - name: clearml-registry-key
+      {{- end }}
+      {{- end }}
+      {{- if or .Values.apiserver.additionalConfigs .Values.apiserver.existingAdditionalConfigsConfigMap .Values.apiserver.existingAdditionalConfigsSecret .Values.apiserver.additionalVolumes }}
+      volumes:
+        {{- if .Values.apiserver.existingAdditionalConfigsConfigMap }}
+        - name: apiserver-config
+          configMap:
+            name: {{ .Values.apiserver.existingAdditionalConfigsConfigMap }}
+        {{- else if .Values.apiserver.existingAdditionalConfigsSecret }}
+        - name: apiserver-config
+          secret:
+            secretName: {{ .Values.apiserver.existingAdditionalConfigsSecret }}
+        {{- else if .Values.apiserver.additionalConfigs }}
+        - name: apiserver-config
+          configMap:
+            name: "{{ include "apiserver.referenceName" . }}-configmap"
+        {{- end }}
+        {{- if .Values.apiserver.additionalVolumes }}
+        {{- toYaml .Values.apiserver.additionalVolumes | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      securityContext:
+        {{ toYaml .Values.apiserver.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-apiserver
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.apiserver.image.registry) }}{{ .Values.apiserver.image.repository }}:{{ .Values.apiserver.image.tag }}"
+          command:
+            - /bin/sh
+            - -c
+            - >
+              set -x;
+              {{- if .Values.elasticsearch.enabled }}
+              while [ $(curl -sw '%{http_code}' "http://{{ include "elasticsearch.servicename" . }}:{{ include "elasticsearch.serviceport" . }}/_cluster/health" -o /dev/null) -ne 200 ] ; do
+                echo "waiting for elasticsearch" ;
+                sleep 5 ;
+              done ;
+              {{- end }}
+              {{- if .Values.mongodb.enabled }}
+              while [ $(curl --telnet-option BOGUS --connect-timeout 2 -s "telnet://{{ .Release.Name }}-{{ include "mongodb.hostname" . }}:27017" -o /dev/null; echo $?) -ne 49 ] ; do
+                echo "waiting for mongodb" ;
+                sleep 5 ;
+              done ;
+              {{- end }}
+              {{- if .Values.redis.enabled }}
+              while [ $(curl --telnet-option BOGUS --connect-timeout 2 -s "telnet://{{ include "redis.servicename" . }}:{{ include "redis.serviceport" . }}" -o /dev/null; echo $?) -ne 49 ] ; do
+                echo "waiting for redis" ;
+                sleep 5 ;
+              done ;
+              {{- end }}
+          securityContext:
+            {{ toYaml .Values.apiserver.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.apiserver.initContainers.resources | nindent 12 }}
+      containers:
+        - name: clearml-apiserver
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.apiserver.image.registry) }}{{ .Values.apiserver.image.repository }}:{{ .Values.apiserver.image.tag }}"
+          imagePullPolicy: {{ .Values.apiserver.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8008
+              protocol: TCP
+          env:
+          - name: CLEARML__HOSTS__ELASTIC__WORKERS__HOSTS
+            value: {{ include "elasticsearch.connectionstring" . }}
+          - name: CLEARML__HOSTS__ELASTIC__EVENTS__HOSTS
+            value: {{ include "elasticsearch.connectionstring" . }}
+          - name: CLEARML__HOSTS__ELASTIC__DATASETS__HOSTS
+            value: {{ include "elasticsearch.connectionstring" . }}
+          - name: CLEARML__HOSTS__ELASTIC__LOGS__HOSTS
+            value: {{ include "elasticsearch.connectionstring" . }}
+          {{- if .Values.mongodb.enabled }}
+          - name: CLEARML_MONGODB_SERVICE_CONNECTION_STRING
+            value: {{ include "mongodb.connectionstring" . | quote }}
+          {{- else }}
+          - name: CLEARML__HOSTS__MONGO__BACKEND__HOST
+            value: {{ .Values.externalServices.mongodbConnectionStringBackend | quote }}
+          - name: CLEARML__HOSTS__MONGO__AUTH__HOST
+            value: {{ .Values.externalServices.mongodbConnectionStringAuth | quote }}
+          {{- end }}
+          - name: CLEARML_REDIS_SERVICE_HOST
+            value: {{ include "redis.servicename" . }}
+          - name: CLEARML_REDIS_SERVICE_PORT
+            value: "{{ include "redis.serviceport" . }}"
+          - name: CLEARML_CONFIG_PATH
+            value: /opt/clearml/config
+          - name: CLEARML__apiserver__default_company_name
+            value: "{{ .Values.clearml.defaultCompany }}"
+          - name: CLEARML__APISERVER__AUTH__SESSION_AUTH_COOKIE_NAME
+            value: {{ .Values.clearml.cookieName }}
+          {{- if .Values.clearml.cookieDomain }}
+          - name: CLEARML__APISERVER__AUTH__COOKIES__DOMAIN
+            value: ".{{ .Values.clearml.cookieDomain }}"
+          {{- end }}
+          - name: CLEARML__secure__credentials__apiserver__user_key
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clearml.confSecretName" .}}
+                key: apiserver_key
+          - name: CLEARML__secure__credentials__apiserver__user_secret
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clearml.confSecretName" .}}
+                key: apiserver_secret
+          - name: CLEARML__secure__auth__token_secret
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clearml.confSecretName" .}}
+                key: secure_auth_token_secret
+          {{- if .Values.apiserver.prepopulateEnabled }}
+          - name: CLEARML__APISERVER__PRE_POPULATE__ENABLED
+            value: "true"
+          - name: CLEARML__APISERVER__PRE_POPULATE__ZIP_FILES
+            value: "/opt/clearml/db-pre-populate"
+          {{- end }}
+          - name: CLEARML__SECURE__CREDENTIALS__TESTS__USER_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clearml.confSecretName" .}}
+                key: test_user_key
+          - name: CLEARML__SECURE__CREDENTIALS__TESTS__USER_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clearml.confSecretName" .}}
+                key: test_user_secret
+          - name: CLEARML_ENV
+            value: "helm-cloud"
+          {{- if .Values.apiserver.extraEnvs }}
+          {{ toYaml .Values.apiserver.extraEnvs | nindent 10 }}
+          {{- end }}
+          args:
+            - apiserver
+          livenessProbe:
+            initialDelaySeconds: 60
+            httpGet:
+              path: /debug.ping
+              port: 8008
+          readinessProbe:
+            initialDelaySeconds: 60
+            failureThreshold: 8
+            httpGet:
+              path: /debug.ping
+              port: 8008
+              httpHeaders:
+                - name: Authorization
+                  value: Basic {{ include "readinessProbeAuth" . }}
+          {{- if or .Values.apiserver.additionalConfigs .Values.apiserver.existingAdditionalConfigsConfigMap  .Values.apiserver.existingAdditionalConfigsSecret .Values.apiserver.additionalVolumeMounts }}
+          volumeMounts:  
+            {{- if or .Values.apiserver.additionalConfigs .Values.apiserver.existingAdditionalConfigsConfigMap  .Values.apiserver.existingAdditionalConfigsSecret }}
+            - name: apiserver-config
+              mountPath: /opt/clearml/config
+            {{- end }}
+            {{- if .Values.apiserver.additionalVolumeMounts }}
+            {{- toYaml .Values.apiserver.additionalVolumeMounts | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.apiserver.resources | nindent 12 }}
+          securityContext:
+            {{ toYaml .Values.apiserver.containerSecurityContext | nindent 12 }}
+      {{- with .Values.apiserver.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiserver.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiserver.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

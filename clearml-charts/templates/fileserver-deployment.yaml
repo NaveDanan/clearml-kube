@@ -1,0 +1,139 @@
+{{- if .Values.fileserver.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fileserver.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+{{- with .Values.fileserver.deploymentAnnotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.fileserver.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "fileserver.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.fileserver.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "fileserver.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.fileserver.serviceAccountName }}-fileserver
+      {{- if .Values.imageCredentials.enabled }}
+      imagePullSecrets:
+      {{- if .Values.imageCredentials.existingSecret }}
+      - name: {{ .Values.imageCredentials.existingSecret }}
+      {{- else }}
+      - name: clearml-registry-key
+      {{- end }}
+      {{- end }}
+      volumes:
+        {{- if .Values.fileserver.storage.enabled }}
+        {{- if .Values.fileserver.storage.data.existingPVC }}
+        - name: fileserver-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.fileserver.storage.data.existingPVC | quote }}
+        {{- else }}
+        - name: fileserver-data
+          persistentVolumeClaim:
+            claimName: {{ include "fileserver.referenceName" . }}-data
+        {{- end }}
+        {{- else }}
+        - name: fileserver-data
+          emptyDir: {}
+        {{- end }}
+        {{- if .Values.fileserver.additionalVolumes }}
+        {{- toYaml .Values.fileserver.additionalVolumes | nindent 8 }}
+        {{- end }}
+      securityContext:
+        {{ toYaml .Values.fileserver.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-fileserver
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.fileserver.image.registry) }}{{ .Values.fileserver.image.repository }}:{{ .Values.fileserver.image.tag }}"
+          command:
+            - /bin/sh
+            - -c
+            - >
+              set -x;
+              while [ $(curl -sw '%{http_code}' "http://{{ include "apiserver.referenceName" . }}:{{ .Values.apiserver.service.port }}/debug.ping" -o /dev/null) -ne 200 ] ; do
+                echo "waiting for apiserver" ;
+                sleep 5 ;
+              done
+          securityContext:
+            {{ toYaml .Values.fileserver.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.fileserver.initContainers.resources | nindent 12 }}
+      containers:
+        - name: clearml-fileserver
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.fileserver.image.registry) }}{{ .Values.fileserver.image.repository }}:{{ .Values.fileserver.image.tag }}"
+          imagePullPolicy: {{ .Values.fileserver.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8081
+              protocol: TCP
+          env:
+          - name: CLEARML__HOSTS__API_SERVER
+            value: "http://{{ include "apiserver.referenceName" . }}:{{ .Values.apiserver.service.port }}"
+          - name: CLEARML_REDIS_SERVICE_HOST
+            value: {{ include "redis.servicename" . }}
+          - name: CLEARML_REDIS_SERVICE_PORT
+            value: "{{ include "redis.serviceport" . }}"
+          {{- if not (eq .Values.clearml.cookieDomain "") }}
+          - name: CLEARML__FILESERVER__AUTH__COOKIE_NAMES
+            value: "[ {{ .Values.clearml.cookieName }} ]"
+          {{- end }}
+          - name: USER_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clearml.confSecretName" .}}
+                key: fileserver_key
+          - name: USER_SECRET
+            valueFrom:
+              secretKeyRef: 
+                name: {{ include "clearml.confSecretName" .}}
+                key: fileserver_secret
+          {{- if .Values.fileserver.extraEnvs }}
+          {{ toYaml .Values.fileserver.extraEnvs | nindent 10 }}
+          {{- end }}
+          args:
+            - fileserver
+          livenessProbe:
+            exec:
+              command:
+                - curl
+                - -X OPTIONS
+                - http://localhost:8081/
+          readinessProbe:
+            exec:
+              command:
+                - curl
+                - -X OPTIONS
+                - http://localhost:8081/
+          volumeMounts:
+            - name: fileserver-data
+              mountPath: /mnt/fileserver
+            {{- if .Values.fileserver.additionalVolumeMounts }}
+            {{- toYaml .Values.fileserver.additionalVolumeMounts | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.fileserver.resources | nindent 12 }}
+          securityContext:
+            {{ toYaml .Values.fileserver.containerSecurityContext | nindent 12 }}
+      {{- with .Values.fileserver.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.fileserver.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.fileserver.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

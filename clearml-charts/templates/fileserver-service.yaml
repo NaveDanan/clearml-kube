@@ -1,0 +1,23 @@
+{{- if .Values.fileserver.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fileserver.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+  {{- with .Values.fileserver.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.fileserver.service.type }}
+  ports:
+    - port: {{ .Values.fileserver.service.port }}
+      targetPort: 8081
+      {{- if eq .Values.fileserver.service.type "NodePort" }}
+      nodePort: {{ .Values.fileserver.service.nodePort }}
+      {{- end }}
+      protocol: TCP
+  selector:
+    {{- include "fileserver.selectorLabels" . | nindent 4 }}
+{{- end }}

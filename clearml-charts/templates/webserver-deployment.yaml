@@ -1,0 +1,116 @@
+{{- if .Values.webserver.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "webserver.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+{{- with .Values.webserver.deploymentAnnotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.webserver.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "webserver.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.webserver.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "webserver.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.webserver.serviceAccountName }}-webserver
+      {{- if .Values.imageCredentials.enabled }}
+      imagePullSecrets:
+      {{- if .Values.imageCredentials.existingSecret }}
+      - name: {{ .Values.imageCredentials.existingSecret }}
+      {{- else }}
+      - name: clearml-registry-key
+      {{- end }}
+      {{- end }}
+      volumes:
+        - name: webserver-config
+          configMap:
+            name: "{{ include "webserver.referenceName" . }}-configmap"
+        {{- if .Values.webserver.additionalVolumes }}
+        {{- toYaml .Values.webserver.additionalVolumes | nindent 8 }}
+        {{- end }}
+      securityContext:
+        {{ toYaml .Values.webserver.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-webserver
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.webserver.image.registry) }}{{ .Values.webserver.image.repository }}:{{ .Values.webserver.image.tag }}"
+          command:
+            - /bin/sh
+            - -c
+            - >
+              set -x;
+              while [ $(curl -sw '%{http_code}' "http://{{ include "apiserver.referenceName" . }}:{{ .Values.apiserver.service.port }}/debug.ping" -o /dev/null) -ne 200 ] ; do
+                echo "waiting for apiserver" ;
+                sleep 5 ;
+              done
+          securityContext:
+            {{ toYaml .Values.webserver.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.webserver.initContainers.resources | nindent 12 }}
+      containers:
+        - name: clearml-webserver
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.webserver.image.registry) }}{{ .Values.webserver.image.repository }}:{{ .Values.webserver.image.tag }}"
+          imagePullPolicy: {{ .Values.webserver.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+                - curl
+                - -X OPTIONS
+                - http://localhost:8080/
+          readinessProbe:
+            exec:
+              command:
+                - curl
+                - -X OPTIONS
+                - http://localhost:8080/
+          env:
+          - name: NGINX_APISERVER_ADDRESS
+            value: "http://{{ include "apiserver.referenceName" . }}:{{ .Values.apiserver.service.port }}"
+          - name: NGINX_FILESERVER_ADDRESS
+            value: "http://{{ include "fileserver.referenceName" . }}:{{ .Values.fileserver.service.port }}"
+          {{- if include "clearml.clientConfiguration" . }}
+          - name: WEBSERVER__displayedServerUrls
+            value: {{ include "clearml.clientConfiguration" . | quote }} 
+          {{- end }}
+          {{- if .Values.webserver.extraEnvs }}
+          {{ toYaml .Values.webserver.extraEnvs | nindent 10 }}
+          {{- end }}
+          args:
+            - webserver
+          volumeMounts:
+            - name: webserver-config
+              mountPath: /mnt/external_files/configs
+            {{- if .Values.webserver.additionalVolumeMounts }}
+            {{- toYaml .Values.webserver.additionalVolumeMounts | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.webserver.resources | nindent 12 }}
+          securityContext:
+            {{ toYaml .Values.webserver.containerSecurityContext | nindent 12 }}
+      {{- with .Values.webserver.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webserver.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webserver.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

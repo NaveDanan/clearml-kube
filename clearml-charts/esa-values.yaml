@@ -1,0 +1,200 @@
+global:
+  imageRegistry: "dvd12af:5113/clearml"
+  imagePullSecrets:
+  - name: nave-pull-secret
+
+imageCredentials:
+  enabled: true
+  # existingSecret: "artifactory-pull-secret"
+  registry: dvd12af:5113
+  existingSecret: "nave-pull-secret"
+
+clearml:
+  # -- Name fo the UI cookie
+  cookieName: "clearml-token-k8s"
+  # -- Cookie domain to be left empty if not exposed with an ingress
+  cookieDomain: "mems.rafael.co.il"
+  # -- Company name
+  defaultCompany: "d1bd92a3b039400cbafc60a7a5b1e52b"
+  # -- Api Server basic auth key
+  apiserverKey: GGS9F4M6XB2DXJ5AFT9F
+  # -- Api Server basic auth secret
+  apiserverSecret: 2oGujVFhPfaozhpuz2GzQfA5OyxmMsR3WVJpsCR5hrgHFs20PO
+  # -- File Server basic auth key
+  fileserverKey: XXCRJ123CEE2KSQ068WO
+  # -- File Server basic auth secret
+  fileserverSecret: YIy8EVAC7QCT4FtgitxAQGyW7xRHDZ4jpYlTE7HKiscpORl1hG
+  # -- Readiness probe basic auth key
+  readinessprobeKey: GK4PRTVT3706T25K6BA1
+  # -- Readiness probe basic auth secret
+  readinessprobeSecret: ymLh1ok5k5xNUQfS944Xdx9xjf0wueokqKM2dMZfHuH9ayItG2
+  # -- Secure Auth secret
+  secureAuthTokenSecret: ymLh1ok5k5xNUQfS944Xdx9xjf0wueokqKM2dMZfHuH9ayItG2
+  # -- Test Server basic auth key
+  testUserKey: "ENP39EQM4SLACGD5FXB7"
+  # -- Test File Server basic auth secret
+  testUserSecret: "lPcm0imbcBZ8mwgO7tpadutiS3gnJD05x9j7afwXPS35IKbpiQ"
+  # -- Override the API Urls displayed when showing an example of the SDK's clearml.conf configuration
+  clientConfigurationApiUrl: "https://api-clearml.mems.rafael.co.il"
+  # -- Override the Files Urls displayed when showing an example of the SDK's clearml.conf configuration
+  clientConfigurationFilesUrl: "https://files-clearml.mems.rafael.co.il"
+  # -- Pass Clearml secrets using an existing secret
+  # must contain the keys: apiserver_key, apiserver_secret, secure_auth_token_secret, test_user_key, test_user_secret
+  existingSecret: "clearml-server-secrets"
+
+
+apiserver:
+  enabled: true
+  image:
+    repository: "clearml"
+    pullPolicy: IfNotPresent
+    tag: "autoscalar-v1.0.0"
+  ingress:
+    enabled: true
+    ingressClassName: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+      nginx.ingress.kubernetes.io/proxy-body-size: "2g"
+    hostName: "api-clearml.mems.rafael.co.il"
+    tlsSecretName: wildcard-certs-secret
+    tls:
+      - hosts:
+          - api-clearml.mems.rafael.co.il
+        secretName: wildcard-certs-secret
+    path: "/"    
+    pathType: ImplementationSpecific
+
+fileserver:
+  enabled: true
+  image:
+    repository: "clearml"
+    pullPolicy: IfNotPresent
+    tag: "autoscalar-v1.0.0"
+  ingress:
+    enabled: true
+    ingressClassName: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+      nginx.ingress.kubernetes.io/proxy-body-size: "2g"
+    hostName: "files-clearml.mems.rafael.co.il"
+    tlsSecretName: wildcard-certs-secret
+    tls:
+      - hosts:
+          - files-clearml.mems.rafael.co.il
+        secretName: wildcard-certs-secret
+    path: "/"
+    pathType: ImplementationSpecific
+  storage:
+    enabled: true # Set true for nfs storage and add data section
+    data:
+      class: "nfs-main"
+      accessMode: ReadWriteOnce
+      size: 200Gi
+  # extraEnvs:
+  # - name: CLEARML_FILES_URL
+  #   value: "http://minio.minio.svc.cluster.local:9000/label-studio"
+  # - name: CLEARML_FILE_STORAGE_DRIVER
+  #   value: "s3"
+  # - name: CLEARML_S3_ACCESS_KEY_ID
+  #   value: "5NFJZVQTFKTXHIT1XM4K6IOI9TJ6G0"
+  # - name: CLEARML_S3_SECRECT_ACCESS_KEY
+  #   value: "67dXXqKIt5PXuSf885EZg6jphPZJQZ6mHHXS4PHNLSzBM2HL6A1TQ9hCnrVi-5Z5yds"
+  # - name: CLEARML_S3_ENDPOINT_URL
+  #   value: "http://minio.minio.svc.cluster.local:9000"
+  # - name: CLEARML_S3_REGION
+  #   value: "il-central-1"
+  # - name: CLEARML_S3_SECURE
+  #   value: "false"
+
+webserver:
+  enabled: true
+  image:
+    repository: "clearml"
+    pullPolicy: IfNotPresent
+    tag: "autoscalar-v1.0.0"
+  ingress:
+    enabled: true
+    ingressClassName: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+      nginx.ingress.kubernetes.io/proxy-body-size: "2g"
+    hostName: "clearml.mems.rafael.co.il"    
+    tlsSecretName: wildcard-certs-secret
+    tls:
+      - hosts:
+          - clearml.mems.rafael.co.il
+        secretName: wildcard-certs-secret
+    path: "/"
+    # tlsSecretName: wildcard-tls
+    pathType: ImplementationSpecific
+
+runaiWorker:
+  enabled: true
+  image:
+    repository: "runai-worker"
+    pullPolicy: IfNotPresent
+    tag: "2026-06-03"
+  replicaCount: 1
+  pollInterval: 10
+  batchSize: 5
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+redis:
+  enabled: true
+  master:
+    name: "{{ .Release.Name }}-redis-master"
+    port: 6379
+    persistence:
+      enabled: true
+      accessModes:
+      - ReadWriteOnce
+      size: 10Gi
+      storageClass: nfs-main
+  architecture: standalone
+  image:
+    repository: redis
+    tag: 7.0.9-debian-11-r1
+    pullPolicy: IfNotPresent
+    pullSecrets:
+    - artifactory-pull-secret
+
+mongodb:
+  enabled: true
+  persistence:
+    enabled: true
+    accessModes:
+    - ReadWriteOnce
+    size: 10Gi
+    storageClass: nfs-main
+  image:
+    repository: mongodb
+    tag: 6.0.10-debian-11-r8
+    pullPolicy: IfNotPresent
+    # pullSecrets:
+    # - clearml-registry-key
+
+elasticsearch:
+  image: "dvd12af:5113/clearml/elasticsearch"
+  imageTag: "7.17.3"
+  imagePullPolicy: "IfNotPresent"
+  imagePullSecrets:
+    - name: artifactory-pull-secret
+  persistence:
+    enabled: true
+  volumeClaimTemplate:
+    storageClassName: nfs-main
+    resources:
+      requests:
+        storage: 10Gi

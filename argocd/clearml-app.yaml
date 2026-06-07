@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: clearml
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: clearml-charts
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: clearml
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  # ArgoCD must read the chart from a Git repository it can reach.
+  # Replace repoURL with the repository containing this project root before
+  # applying the Application.
+  source:
+    repoURL: https://github.com/REPLACE_WITH_OWNER/clearml.git
+    path: clearml-charts
+    targetRevision: main
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-minikube.yaml

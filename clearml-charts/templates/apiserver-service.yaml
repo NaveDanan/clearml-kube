@@ -1,0 +1,23 @@
+{{- if .Values.apiserver.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "apiserver.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+  {{- with .Values.apiserver.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.apiserver.service.type }}
+  ports:
+    - port: {{ .Values.apiserver.service.port }}
+      targetPort: {{ .Values.apiserver.service.port }}
+      {{- if eq .Values.apiserver.service.type "NodePort" }}
+      nodePort: {{ .Values.apiserver.service.nodePort }}
+      {{- end }}
+      protocol: TCP
+  selector:
+    {{- include "apiserver.selectorLabels" . | nindent 4 }}
+{{- end }}

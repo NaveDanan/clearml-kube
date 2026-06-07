@@ -1,0 +1,138 @@
+# ClearML Ecosystem for Kubernetes
+{{ template "chart.deprecationWarning" . }}
+
+{{ template "chart.badgesSection" . }}
+
+{{ template "chart.description" . }}
+
+{{ template "chart.homepageLine" . }}
+
+{{ template "chart.maintainersSection" . }}
+
+## Introduction
+
+The **clearml-server** is the backend service infrastructure for [ClearML](https://github.com/clearml/clearml).
+It allows multiple users to collaborate and manage their experiments.
+
+**clearml-server** contains the following components:
+
+* The ClearML Web-App, a single-page UI for experiment management and browsing
+* RESTful API for:
+    * Documenting and logging experiment information, statistics and results
+    * Querying experiments history, logs and results
+* Locally-hosted file server for storing images and models making them easily accessible using the Web-App
+
+## Add to local Helm repository
+
+To add this chart to your local Helm repository:
+
+```
+helm repo add clearml https://clearml.github.io/clearml-helm-charts
+```
+
+## Local environment
+
+For development/evaluation it's possible to use [kind](https://kind.sigs.k8s.io).
+After installation, following commands will create a complete ClearML insatllation:
+
+```
+cat <<EOF | kind create cluster --config=-
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraPortMappings:
+  # API server's default nodePort is 30008. If you customize it in helm values by
+  # `apiserver.service.nodePort`, `containerPort` should match it
+  - containerPort: 30008
+    hostPort: 30008
+    listenAddress: "127.0.0.1"
+    protocol: TCP
+  # Web server's default nodePort is 30080. If you customize it in helm values by
+  # `webserver.service.nodePort`, `containerPort` should match it
+  - containerPort: 30080
+    hostPort: 30080
+    listenAddress: "127.0.0.1"
+    protocol: TCP
+  # File server's default nodePort is 30081. If you customize it in helm values by
+  # `fileserver.service.nodePort`, `containerPort` should match it
+  - containerPort: 30081
+    hostPort: 30081
+    listenAddress: "127.0.0.1"
+    protocol: TCP
+  extraMounts:
+  - hostPath: /tmp/clearml-kind/
+    containerPath: /var/local-path-provisioner
+EOF
+
+helm install clearml clearml/clearml
+```
+
+After deployment, the services will be exposed on localhost on the following ports:
+
+* API server on `30008`
+* Web server on `30080`
+* File server on `30081`
+
+Data persisted in every Kubernetes volume by ClearML will be accessible in /tmp/clearml-kind folder on the host.
+
+## Production cluster environment
+
+In a production environment it's suggested to install an ingress controller and verify that is working correctly.
+During ClearML deployment enable `ingress` section of chart values.
+This will create 3 ingress rules:
+
+* `app.<your domain name>` 
+* `files.<your domain name>`
+* `api.<your domain name>`
+
+(*for example, `app.clearml.mydomainname.com`, `files.clearml.mydomainname.com` and `api.clearml.mydomainname.com`*)
+
+Just pointing the domain records to the IP where ingress controller is responding will complete the deployment process.
+
+A production ready cluster should also have some different configuration like the one proposed in `values-production.yaml` that can be applied with:
+
+```
+helm install clearml clearml/clearml -f values-production.yaml
+```
+
+## Upgrades/ Values upgrades
+
+Updating to latest version of this chart can be done in two steps:
+
+```
+helm repo update
+helm upgrade clearml clearml/clearml
+```
+
+Changing values on existing installation can be done with:
+
+```
+helm upgrade clearml clearml/clearml --version <CURRENT CHART VERSION> -f custom_values.yaml
+```
+
+Please note: updating values only should always be done setting explicit chart version to avoid a possible chart update. 
+Keeping separate updates procedures between version and values can be a good practice to seprate potential concerns.
+
+### Major upgrade from 5.* to 6.*
+
+Before issuing helm upgrade:
+
+* delete Redis statefulset(s)
+* scale MongoDB deployment(s) replicas to 0
+* if using securityContexts check for new value form in values.yaml (podSecurityContext and containerSecurityContext)
+
+## Additional Configuration for ClearML Server
+
+You can also configure the **clearml-server** for:
+ 
+* fixed users (users with credentials)
+* non-responsive experiment watchdog settings
+ 
+For detailed instructions, see the [Optional Configuration](https://github.com/clearml/clearml-server#optional-configuration) section in the **clearml-server** repository README file.
+
+{{ template "chart.sourcesSection" . }}
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}

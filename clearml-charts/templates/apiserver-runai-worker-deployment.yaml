@@ -1,0 +1,122 @@
+{{- if and .Values.apiserver.enabled .Values.runaiWorker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "runaiWorker.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+{{- with .Values.runaiWorker.deploymentAnnotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.runaiWorker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "runaiWorker.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.runaiWorker.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "runaiWorker.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.runaiWorker.serviceAccountName }}-runai-worker
+      {{- if .Values.imageCredentials.enabled }}
+      imagePullSecrets:
+      {{- if .Values.imageCredentials.existingSecret }}
+      - name: {{ .Values.imageCredentials.existingSecret }}
+      {{- else }}
+      - name: clearml-registry-key
+      {{- end }}
+      {{- end }}
+      securityContext:
+        {{ toYaml .Values.runaiWorker.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: init-runai-worker
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.runaiWorker.image.registry) }}{{ .Values.runaiWorker.image.repository }}:{{ .Values.runaiWorker.image.tag }}"
+          command:
+            - /bin/sh
+            - -c
+            - >
+              set -x;
+              {{- if .Values.elasticsearch.enabled }}
+              while [ $(curl -sw '%{http_code}' "http://{{ include "elasticsearch.servicename" . }}:{{ include "elasticsearch.serviceport" . }}/_cluster/health" -o /dev/null) -ne 200 ] ; do
+                echo "waiting for elasticsearch" ;
+                sleep 5 ;
+              done ;
+              {{- end }}
+              {{- if .Values.mongodb.enabled }}
+              while [ $(curl --telnet-option BOGUS --connect-timeout 2 -s "telnet://{{ .Release.Name }}-{{ include "mongodb.hostname" . }}:27017" -o /dev/null; echo $?) -ne 49 ] ; do
+                echo "waiting for mongodb" ;
+                sleep 5 ;
+              done ;
+              {{- end }}
+              {{- if .Values.redis.enabled }}
+              while [ $(curl --telnet-option BOGUS --connect-timeout 2 -s "telnet://{{ include "redis.servicename" . }}:{{ include "redis.serviceport" . }}" -o /dev/null; echo $?) -ne 49 ] ; do
+                echo "waiting for redis" ;
+                sleep 5 ;
+              done ;
+              {{- end }}
+          securityContext:
+            {{ toYaml .Values.runaiWorker.containerSecurityContext | nindent 12 }}
+          resources:
+            {{- toYaml .Values.runaiWorker.initContainers.resources | nindent 12 }}
+      containers:
+        - name: runai-worker
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.runaiWorker.image.registry) }}{{ .Values.runaiWorker.image.repository }}:{{ .Values.runaiWorker.image.tag }}"
+          imagePullPolicy: {{ .Values.runaiWorker.image.pullPolicy }}
+          command:
+            - python3
+            - -m
+            - jobs.runai_worker
+          env:
+          - name: CLEARML_REDIS_SERVICE_HOST
+            value: {{ include "redis.servicename" . }}
+          - name: CLEARML_REDIS_SERVICE_PORT
+            value: "{{ include "redis.serviceport" . }}"
+          {{- if .Values.mongodb.enabled }}
+          - name: CLEARML_MONGODB_SERVICE_CONNECTION_STRING
+            value: {{ include "mongodb.connectionstring" . | quote }}
+          {{- else }}
+          - name: CLEARML__HOSTS__MONGO__BACKEND__HOST
+            value: {{ .Values.externalServices.mongodbConnectionStringBackend | quote }}
+          - name: CLEARML__HOSTS__MONGO__AUTH__HOST
+            value: {{ .Values.externalServices.mongodbConnectionStringAuth | quote }}
+          {{- end }}
+          - name: CLEARML__HOSTS__ELASTIC__WORKERS__HOSTS
+            value: {{ include "elasticsearch.connectionstring" . }}
+          - name: CLEARML__HOSTS__ELASTIC__EVENTS__HOSTS
+            value: {{ include "elasticsearch.connectionstring" . }}
+          - name: CLEARML__HOSTS__ELASTIC__DATASETS__HOSTS
+            value: {{ include "elasticsearch.connectionstring" . }}
+          - name: CLEARML__HOSTS__ELASTIC__LOGS__HOSTS
+            value: {{ include "elasticsearch.connectionstring" . }}
+          - name: PYTHONPATH
+            value: /opt/clearml/apiserver
+          - name: RUNAI_WORKER_POLL_INTERVAL
+            value: "{{ .Values.runaiWorker.pollInterval }}"
+          - name: RUNAI_WORKER_BATCH_SIZE
+            value: "{{ .Values.runaiWorker.batchSize }}"
+          {{- if .Values.runaiWorker.extraEnvs }}
+          {{ toYaml .Values.runaiWorker.extraEnvs | nindent 10 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.runaiWorker.resources | nindent 12 }}
+          securityContext:
+            {{ toYaml .Values.runaiWorker.containerSecurityContext | nindent 12 }}
+      {{- with .Values.runaiWorker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.runaiWorker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.runaiWorker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

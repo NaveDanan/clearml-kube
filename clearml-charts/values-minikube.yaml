@@ -1,0 +1,128 @@
+# Minimal ClearML values for minikube local deployment
+# Uses locally-built images from this project (Dockerfile.local + runai-worker.Dockerfile)
+# All images must be pre-loaded into minikube (imagePullPolicy: IfNotPresent)
+
+# Use the locally-built image for all ClearML components
+apiserver:
+  image:
+    repository: "clearml/server"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  service:
+    type: NodePort
+    nodePort: 30008
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  ingress:
+    enabled: false
+
+fileserver:
+  image:
+    repository: "clearml/server"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  service:
+    type: NodePort
+    nodePort: 30081
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  storage:
+    enabled: true
+    data:
+      class: "standard"
+      size: 5Gi
+  ingress:
+    enabled: false
+
+webserver:
+  image:
+    repository: "clearml/server"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  service:
+    type: NodePort
+    nodePort: 30080
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  ingress:
+    enabled: false
+
+# Enable the Run:ai worker with the locally-built image
+runaiWorker:
+  enabled: true
+  image:
+    repository: "clearml/runai-worker"
+    tag: "local"
+    pullPolicy: IfNotPresent
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+redis:
+  enabled: true
+  master:
+    persistence:
+      size: 1Gi
+
+mongodb:
+  enabled: true
+  persistence:
+    size: 5Gi
+
+elasticsearch:
+  enabled: true
+  replicas: 1
+  image: "docker.elastic.co/elasticsearch/elasticsearch"
+  imageTag: "7.17.3"
+  imagePullPolicy: IfNotPresent
+  esJavaOpts: "-Xmx1g -Xms1g"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  volumeClaimTemplate:
+    resources:
+      requests:
+        storage: 10Gi
