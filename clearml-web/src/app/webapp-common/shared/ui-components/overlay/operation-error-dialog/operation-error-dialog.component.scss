@@ -1,0 +1,37 @@
+:host {
+  width: 640px;
+  display: block;
+
+  .buttons {
+    display: inline-block;
+    left: 50%;
+    position: relative;
+    transform: translateX(-50%);
+    margin-top: 41px;
+
+    button {
+      text-transform: uppercase;
+    }
+  }
+
+  .errors-title {
+    margin-bottom: 12px;
+    color: var(--color-on-surface-variant);
+  }
+
+  .list-container {
+    padding: 12px 12px 12px 30px;
+    border: 1px solid var(--color-outline-variant);
+    border-radius: 4px;
+    max-height: 180px;
+    overflow: auto;
+  }
+
+  li {
+    margin-bottom: 6px;
+  }
+
+  .error-reason {
+    font-size: 12px;
+  }
+}

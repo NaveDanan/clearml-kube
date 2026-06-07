@@ -1,0 +1,14 @@
+<div class="counter-container">
+  <div [class]="'d-flex justify-content-center align-items-center circle ' + (status() || type())"
+       [class.model]="defaultStatus()">
+    @if (defaultStatus()) {
+      <mat-icon class="lg" [class]="defaultStatus() + ' i-' + status()"></mat-icon>
+    } @else if (status()){
+      <mat-icon class="lg" fontSet="al" [fontIcon]="statusIcon()"></mat-icon>
+    }
+    @if (type()) {
+      <mat-icon class="lg" fontSet="al" [fontIcon]="'al-ico-type-'+ type().replace('_', '-')"></mat-icon>
+    }
+  </div>
+  <div class="counter-label" data-id="label">{{experimentsStatusLabels[(status()|| type())]}}</div>
+</div>

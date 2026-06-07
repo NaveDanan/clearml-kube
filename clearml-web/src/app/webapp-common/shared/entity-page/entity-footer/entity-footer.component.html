@@ -1,0 +1,80 @@
+@if (footerState()) {
+  <div class="footer-container" data-id="footerActionMenuBar">
+    @for (footerItem of footerItems(); track $index) {
+      @let footerItemState = footerItem.getItemState(footerState());
+      @if (!footerItem.isTag) {
+        @if (!footerItemState?.preventCurrentItem) {
+          <span
+            [class]="footerItemState?.wrapperClass"
+            [smTooltip]="footerItem.disable || footerItemState.disable
+                                  ? footerItem.disableDescription || footerItemState.disableDescription
+                                  : footerItemState.description   || footerItem.description"
+          >
+            @if (footerItem.divider) {
+              <div class="divider" [attr.data-id]="'footer-' + footerItem.id"></div>
+            } @else if (footerItem.warning) {
+              <div class="warning">
+                <mat-icon fontSet="al" [fontIcon]="footerItem.icon"></mat-icon>
+                <span>{{footerItem.title ?? footerItemState.title}}</span>
+              </div>
+            } @else if (!footerItem.title && !footerItemState.title) {
+              <button
+                mat-icon-button
+                (click)="footerItem.emit && footerItemClick.emit({item: footerItem, emitValue: footerItemState?.emitValue })"
+                [disabled]="footerItemState?.disable"
+                [attr.data-id]="'footer-' + footerItem.id"
+              ><mat-icon fontSet="al" [fontIcon]="footerItem.icon ?? footerItemState.icon"></mat-icon></button>
+            } @else {
+              @if (footerItem.icon) {
+              <button
+                mat-stroked-button
+                (click)="footerItem.emit && footerItemClick.emit({item: footerItem, emitValue: footerItemState?.emitValue })"
+                [disabled]="footerItemState?.disable"
+                [attr.data-id]="'footer-' + footerItem.id"
+              >
+                <mat-icon fontSet="al" [fontIcon]="footerItem.icon"></mat-icon>
+                <span>{{footerItem.title ?? footerItemState.title}}</span>
+              </button>
+              } @else {
+                <button
+                  mat-button
+                  (click)="footerItem.emit && footerItemClick.emit({item: footerItem, emitValue: footerItemState?.emitValue })"
+                  [disabled]="footerItemState?.disable"
+                  [attr.data-id]="'footer-' + footerItem.id"
+                >
+                <span>{{footerItem.title ?? footerItemState.title}}</span>
+              </button>
+              }
+            }
+          </span>
+        }
+      } @else {
+        <span
+          class="tags-container"
+          [smTooltip]="footerItem.disable || footerItemState.disable ?
+             footerItem.disableDescription || footerItemState.disableDescription :
+             footerItemState.description   || footerItem.description"
+        >
+          <button
+            mat-icon-button
+            [matMenuTriggerFor]="tagsMenu.matMenu"
+            [disabled]="footerItemState.disable"
+            (menuOpened)="tagMenuOpened(tagMenu())"
+            (menuClosed)="tagMenuClosed(tagMenu())"
+            [attr.data-id]="'footer-' + footerItem.id"
+          >
+            <mat-icon fontSet="al" [fontIcon]="icons.TAG"></mat-icon>
+          </button>
+        </span>
+        <sm-tags-menu
+          #tagsMenu
+          [tags]="footerItemState.tags"
+          [tagsFilterByProject]="footerItemState.tagsFilterByProject"
+          [projectTags]="footerItemState.projectTags"
+          [companyTags]="footerItemState.companyTags"
+          (tagSelected)="tagSelected.emit({tag: $event, emitValue: footerItemState.emitValue})">
+        </sm-tags-menu>
+      }
+    }
+  </div>
+}

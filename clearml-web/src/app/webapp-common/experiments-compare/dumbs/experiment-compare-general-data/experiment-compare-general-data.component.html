@@ -1,0 +1,21 @@
+<header>
+  <div data-id="experimentFullPath" class="project ellipsis">{{experiment.project?.name}}</div>
+  <div class="d-flex align-items-center">
+    <div [smTooltip]="experiment.name"  class="experiment-name al-header" data-id="experimentName">
+      <a smEllipsisMiddleDirective [routerLink]="buildUrl()" [queryParams]="{archive: [$any(experiment).info?.archive, $any(experiment).general?.archive].includes('Yes') || undefined}">
+        {{experiment.name}}
+      </a>
+    </div>
+    <sm-id-badge class="ms-3" [id]="experiment.id" (copied)="copyToClipboard()"></sm-id-badge>
+  </div>
+</header>
+<sm-tag-list [tags]="tags"></sm-tag-list>
+<div class="general-info" data-id="generalInfo">
+    <sm-status-icon-label [status]="experiment.status"></sm-status-icon-label>
+  @if (experiment.last_iteration !== undefined) {
+    <span class="dot"></span>
+    <span class="flex-shrink-0">{{experiment.last_iteration | number | NA}} iterations</span>
+  }
+  <span class="dot"></span>
+  <span class="flex-shrink-1" [smTooltip]="(experiment.last_update | date : timeFormatString) || ''">Last updated {{experiment.last_update | timeAgo | NA}}</span>
+</div>

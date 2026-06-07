@@ -1,0 +1,102 @@
+@use "mixins/common";
+
+$reqWidth: 56px;
+
+.model-labels {
+  background-color: var(--color-warning);
+}
+
+.dataview-versions {
+  background-color: #00e3b9;
+}
+
+.dataview-enumeration {
+  background-color: var(--color-warning);
+}
+
+.counter-container {
+  text-align: center;
+  padding: 8px;
+
+  .circle-counter {
+    display: inline-block;
+    width: $reqWidth;
+    height: $reqWidth;
+    border-radius: 50%;
+    margin-bottom: 8px;
+    background-color: var(--color-inverse-primary);
+    border: 4px solid transparent;
+
+    .counter-tags {
+      background-color: var(--color-surface-dim);
+      border-radius: 30px;
+      display: flex;
+      padding: 0 28px;
+      width: 140px;
+    }
+
+    .wrapper {
+      gap: 24px;
+    }
+
+    &.multi {
+      display: flex;
+      padding: 0 28px;
+      border-radius: 30px;
+      width: unset;
+
+      .sub-counter {
+        font-size: 16px;
+        font-weight: bold;
+        color: var(--color-on-surface);
+      }
+
+      .sub-label {
+        font-size: 10px;
+        color: var(--color-on-surface-variant);
+      }
+    }
+
+    &.total {
+      background-color: var(--color-total);
+    }
+
+    &.empty {
+      background-color: var(--color-tint-14);
+    }
+
+    &.completed {
+      background-color: var(--color-completed-container);
+    }
+
+    &.published {
+      background-color: var(--color-published-container);
+    }
+
+    &.pending {
+      background-color: var(--color-pending-container);
+    }
+
+    &.running {
+      background-color: var(--color-running-container);
+    }
+
+    &.failed {
+      background-color: var(--color-error-container);
+    }
+
+    .counter {
+      @include common.vertical-align();
+      @include common.counter-title();
+    }
+  }
+
+  .counter-label {
+    @include common.counter-label();
+
+    &.leave-space {
+      min-height: 17px;
+      color: var(--color-outline);
+    }
+  }
+}

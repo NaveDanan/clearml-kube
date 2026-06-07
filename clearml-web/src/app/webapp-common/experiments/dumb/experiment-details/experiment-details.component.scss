@@ -1,0 +1,35 @@
+:host {
+  display: block;
+  position: relative;
+
+  .general-info {
+    padding: 24px 24px 64px 24px;
+  }
+
+
+
+  textarea {
+    border-radius: 4px;
+    padding: 12px;
+    color: var(--color-on-surface);
+    background-color: var(--color-surface);
+    border: solid 1px var(--color-outline-variant);
+    font: inherit;
+    resize: vertical;
+  }
+
+  .general-description {
+    white-space: pre-wrap;
+  }
+
+  a {
+    &:hover {
+      text-decoration: underline;
+    }
+    &.na{
+      text-decoration: none;
+      color: unset;
+      pointer-events: none;
+    }
+  }
+}

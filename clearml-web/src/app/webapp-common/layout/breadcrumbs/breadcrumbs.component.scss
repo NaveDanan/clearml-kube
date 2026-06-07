@@ -1,0 +1,203 @@
+@use '@angular/material' as mat;
+
+span {
+  font-size: 15px;
+}
+
+:host {
+  overflow: hidden;
+
+  .overflow-container {
+    display: inline-flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  .sub-projects-breadcrumbs {
+    display: flex;
+    overflow: hidden;
+    flex-shrink: 0;
+    align-items: center;
+
+    &.last {
+      flex-shrink: 1;
+    }
+  }
+
+  .crumb {
+    font-size: 15px;
+    color: var(--color-on-primary-container);
+
+    &:hover {
+
+      &.url {
+        text-decoration: underline;
+      }
+    }
+
+    &.first {
+      text-transform: uppercase;
+    }
+
+    &.last {
+      color: var(--color-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(40px, 1fr) auto auto;
+      align-items: center;
+      grid-gap: 8px;
+      .name {
+        font-weight: 500;
+      }
+    }
+  }
+
+  .menu-trigger-icon {
+    width: 34px;
+  }
+
+  .archive {
+    display: flex;
+    align-items: center;
+    margin-left: 12px;
+    padding: 0 6px;
+    line-height: 18px;
+    border-radius: 4px;
+    background-color: var(--color-surface-variant);
+    color: var(--color-on-surface-variant);
+    font-size: 12px;
+  }
+
+  .align-ghost {
+    height: 24px;
+    padding-top: 4px;
+  }
+  sm-tag-list {
+    display: inline-flex;
+    margin-left: 8px;
+  }
+
+
+  @include mat.badge-overrides((
+    background-color: var(--color-warning),
+    small-size-container-overlap-offset: -7px -3px,
+    small-size-container-padding: 0 3px,
+    small-size-container-size: 9px,
+  ));
+
+  .mat-badge-content {
+    border: 2px solid var(--color-surface-container);
+  }
+}
+
+.sub-project-menu-item {
+  max-width: 400px;
+
+
+  ::ng-deep .mat-mdc-menu-item-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+}
+
+.workspace {
+  white-space: nowrap;
+  max-width: 400px;
+}
+
+.share {
+  color: var(--color-on-neon-surface);
+  border: 1px solid var(--color-neon-surface);
+  height: 22px;
+  width: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  margin-left: 12px;
+}
+
+.close-icon {
+  margin-left: auto;
+}
+
+.share-menu-container {
+  width: 430px;
+  padding: 24px
+}
+
+.link-box {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  width: 372px;
+  height: 36px;
+  border-radius: 4px;
+  border: solid 1px var(--color-outline-variant);
+  font-size: 14px;
+  margin: 2px 0 24px;
+}
+
+.share-link-container {
+  &.hidden {
+    visibility: hidden;
+  }
+
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  border: solid 1px var(--color-outline-variant);
+  height: 36px;
+
+  .share-link {
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 12px;
+    flex: 1;
+  }
+
+  .copy {
+    padding: 12px;
+    display: flex;
+    flex: 0 0 36px;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-left: solid 1px var(--color-outline-variant);
+    color: var(--color-on-surface-variant);
+
+    :active {
+      color: var(--color-on-surface);
+    }
+  }
+}
+
+.share-title {
+  font-size: 16px;
+  font-weight: 500;
+  text-align: left;
+  color: #1a1e2b;
+}
+
+.top {
+  margin-bottom: 17px;
+}
+
+.copy-title {
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+}
+
+.badge {
+  margin-left: 12px;
+  background-color: var(--color-tertiary-fixed);
+  color: var(--color-on-tertiary-fixed);
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  text-transform: none;
+}

@@ -1,0 +1,50 @@
+<form [formGroup]="projectForm" class="d-flex flex-column">
+  <mat-form-field appearance="outline" class="mat-light">
+    <mat-label>Project name</mat-label>
+    <input name="projectName"
+           formControlName="name"
+           matInput
+           autocomplete="off"
+           pattern="^[^\/]*$"
+    >
+    @if (projectForm.controls.name.invalid && projectForm.controls.name.errors; as errors) {
+      <mat-error>
+        @if (errors?.required) {
+          Please add name.
+        }
+        @else if (errors?.uniqueProject) {
+          Project name in this path already exists.
+        }
+        @else if (errors?.minlength) {
+          Project name can't contain only spaces.
+        }
+        @else if (errors?.pattern &&  !errors?.minlength) {
+          Project name can't contain slash (/)
+        }
+      </mat-error>
+    }
+  </mat-form-field>
+<mat-form-field appearance="outline" class="mat-light">
+  <mat-label>Project path</mat-label>
+  <input matInput
+         name="parent"
+         formControlName="parent"
+  >
+</mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Default output destination</mat-label>
+    <input class="project-output-dest"
+           matInput
+           name="default_output_destination"
+           formControlName="default_output_destination"
+    >
+    @if (projectForm.controls.default_output_destination.invalid && projectForm.controls.default_output_destination.errors; as errors) {
+      <mat-error>
+        @if (errors?.pattern) {
+          Illegal output destination (e.g. s3://bucket. gs://bucket)
+        }
+      </mat-error>
+    }
+  </mat-form-field>
+</form>

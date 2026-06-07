@@ -1,0 +1,19 @@
+@forward "customizations/colors";
+@forward "customizations/form-fields";
+@forward "customizations/dialogs";
+@forward "customizations/scrollbar";
+@forward "customizations/tooltip";
+@forward "customizations/slide-toggle";
+@forward "customizations/slider";
+@use "customizations/colors";
+@use "customizations/dialogs";
+
+
+body {
+  color: var(--color-on-surface-variant);
+}
+
+@mixin components($theme) {
+  @include colors.generate-colors($theme);
+  @include dialogs.dialogs($theme);
+}

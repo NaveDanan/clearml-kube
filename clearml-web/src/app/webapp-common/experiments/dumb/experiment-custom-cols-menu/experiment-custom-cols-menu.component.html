@@ -1,0 +1,57 @@
+<sm-menu
+  #smMenu
+  [iconClass]="menuHeader() ? 'al-ico-dropdown-arrow' : 'al-ico-settings'"
+  [disabled]="disabled()"
+  [header]="menuHeader()"
+  [smMenuClass]="'custom-columns menu-secondary'"
+  data-id="CustomizeColumn"
+  [buttonTooltip]="menuTooltip() ?? topTitle()"
+  (mouseup)="!disabled() && getMetricsToDisplay.emit()"
+  (menuClosed)="customColumnMode.set(customColumnModeEnum.Standard)"
+>
+  @if (!customColumnMode()) {
+    <div (click)="$event.stopPropagation()" [class.dark]="darkTheme()">
+      <div class="sm-menu-header">{{topTitle() | uppercase}}</div>
+      <sm-custom-columns-list
+        [tableCols]="tableCols()"
+        [selectable]="selectable()"
+        (removeColFromList)="removeColFromList.emit($event)"
+        (selectedTableColsChanged)="selectedTableColsChanged.emit($event); !selectable() && smMenu.trigger().closeMenu()"
+        >
+      </sm-custom-columns-list>
+      <div class="loader" [class.d-none]="!isLoading()">
+        <mat-spinner class="m-auto" [diameter]="32" [strokeWidth]="4" color="accent"></mat-spinner>
+      </div>
+      <div [class.loading]="isLoading()"
+           [class.loaded]="!isLoading()">
+        @if (sections().length > 1) {
+          <div class="sm-menu-header">{{sectionsTitle()}}</div>
+        }
+        <div class="custom-column-buttons">
+          <button mat-button class="metrics-button"
+            [disabled]="!sections()[0]?.options?.length"
+            (click)="$event.stopPropagation(); sections()[0]?.options?.length && customColumnMode.set(customColumnModeEnum.Metrics)"
+          >
+            <mat-icon fontSet="al" fontIcon="al-ico-plus" data-id="AddCustomMetaDataButton"></mat-icon>
+            <span data-id="Metric Button" class="caption">{{sections()[0]?.title ?? sections()[0]?.name | uppercase}}</span>
+          </button>
+          @if (sections()[1]) {
+            <button mat-button class="metrics-button"
+              [disabled]="!hasSecondSection()"
+              (click)="$event.stopPropagation(); hasSecondSection() && customColumnMode.set(customColumnModeEnum.HyperParams)"
+            >
+              <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon>
+              <span data-id="Hyperparameters Button" class="caption">{{sections()[1]?.title ?? sections()[1]?.name | uppercase}}</span>
+            </button>
+          }
+        </div>
+      </div>
+    </div>
+  }
+  @if (customColumnMode() === customColumnModeEnum.Metrics) {
+    <ng-container *ngTemplateOutlet="sections()[0].template; context: {$implicit: sections()[0]}"></ng-container>
+  }
+  @if (customColumnMode() === customColumnModeEnum.HyperParams) {
+    <ng-container *ngTemplateOutlet="sections()[1].template; context: {$implicit: sections()[1]}"></ng-container>
+  }
+</sm-menu>

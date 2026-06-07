@@ -1,0 +1,52 @@
+:host {
+  padding: 0 24px;
+
+  .model-icon {
+    margin-right: 9px;
+  }
+
+  .middle-col {
+    flex-grow: 1;
+    overflow: hidden;
+  }
+
+  .model-name {
+    display: flex;
+    align-items: center;
+    font-size: 15px;
+    min-height: 32px;
+    width: 100%;
+    font-weight: 500;
+
+    span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .line-item {
+    display: flex;
+    align-items: center;
+  }
+
+  .tags-list {
+    height: 28px;
+    flex-grow: 1;
+    display: flex;
+    align-items: flex-end;
+    padding-left: 48px;
+    grid-area: tags;
+    overflow: hidden;
+  }
+  .model-name-cont{
+    overflow: hidden;
+    .edit-name {
+      overflow: hidden;
+    }
+  }
+
+  sm-tag-list {
+    max-width: 100%;
+  }
+}

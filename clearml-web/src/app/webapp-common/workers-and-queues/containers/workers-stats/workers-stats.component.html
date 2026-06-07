@@ -1,0 +1,45 @@
+<div class="header d-flex justify-content-between">
+  <div class="d-flex align-items-center">
+    @if (!activeWorker()) {
+      <div class="title">Workers Utilization</div>
+    }
+    @if (activeWorker()) {
+      <mat-form-field appearance="outline" class="param-selector no-bottom">
+        <mat-select
+          [ngModel]="currentParam()"
+          (ngModelChange)="chartParamChange($event)"
+          name="chart-param"
+        >
+          @for (chartParam of chartParamOptions; track chartParam.label) {
+            <mat-option [value]="chartParam.value">
+              {{ chartParam.label }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+    @if (statsError()) {
+      <mat-icon fontSet="al" fontIcon="al-ico-alert-outline" class="warning" smTooltip="Data temporarily not available"></mat-icon>
+    }
+  </div>
+  <mat-form-field appearance="outline" class="time-selector no-bottom">
+    <mat-select [ngModel]="currentTimeFrame()" (ngModelChange)="timeFrameChange($event)" name="time-frame">
+      @for (timeFrame of timeFrameOptions; track timeFrame.label) {
+        <mat-option [value]="timeFrame.value">
+          {{ timeFrame.label }}
+        </mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+</div>
+<div #chart class="line-chart-container">
+  <sm-line-chart
+    class="h-100"
+    [unit]="units[currentParam()]"
+    [yTickFormatter]="formatY()"
+    [colorScheme]="['#a4a1fb', '#ff8a15', '#1da9ff', '#a5dcff', '#3f3f3f','#464b37','#848871','#52489f','#4c7273', '#ffd4a8' ]"
+    [showLoadingOverlay]="chartState().refreshChart()"
+    [data]="chartData()"
+    [yLabel]="yAxisLabel()"
+  ></sm-line-chart>
+</div>

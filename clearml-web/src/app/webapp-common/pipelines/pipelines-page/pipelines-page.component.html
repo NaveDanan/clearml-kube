@@ -1,0 +1,65 @@
+<div class="sm-card-list-layout projects"
+  [class.in-empty-state]="!(((projectsList$ | ngrxPush)?.length !== 0 && (!allExamples || (showExamples$ | ngrxPush))) || searching)">
+  <sm-projects-header
+    (orderByChanged)="orderByChanged($event)"
+    [sortByField]="projectsOrderBy$ | ngrxPush"
+    [sortOrder]="projectsSortOrder$ | ngrxPush"
+    [enableTagsFilter]="true"
+    [tags]="projectsTags$ | ngrxPush"
+    >
+    <sm-button-toggle
+      left-items
+      [options]="[
+              {value: false, icon: 'al-ico-flat-view',  label: 'List view'},
+              {value: true, icon:'al-ico-project-path', label: 'Project view'}
+            ]"
+      [ngModel]="!!projectId"
+      (ngModelChange)="!(!!projectId && $event) && toggleNestedView($any($event))"
+    ></sm-button-toggle>
+    <div class="d-flex">
+      <button mat-flat-button (click)="createPipeline()" data-id="New Pipeline">
+        <mat-icon fontSet="al" fontIcon="al-ico-add"></mat-icon>
+        NEW PIPELINE
+      </button>
+    </div>
+  </sm-projects-header>
+  @if (((projectsList$ | ngrxPush)?.length !== 0 && (!allExamples || (showExamples$ | ngrxPush))) || searching) {
+    @for (project of projectsList$ | ngrxPush; track project.id + $index) {
+      <sm-pipeline-card
+        [hideMenu]="['All Tasks'].includes(project.name) || project['isRoot'] || isExample(project)"
+        [hideProjectPathIcon]="!!projectId"
+        [project]="project"
+        [allTags]="projectsTags$ | ngrxPush"
+        (projectCardClicked)="projectCardClicked($event)"
+        (projectNameChanged)="projectNameChanged({id: project.id, name: $event})"
+        (addTag)="addTag(project, $event)"
+        (removeTag)="removeTag(project, $event)"
+        (delete)="deleteProject(project)"
+      ></sm-pipeline-card>
+    }
+  } @else {
+    <div class="empty-state">
+      <div class="title-icon">
+        <mat-icon fontSet="al" fontIcon="al-ico-pipelines" class="xxl"></mat-icon>
+      </div>
+      <div class="title">NO PIPELINES TO SHOW</div>
+      <div class="sub-title">Run your first pipeline to see it displayed here
+        @if (allExamples) {
+          or <a href="" (click)="$event.preventDefault(); createExamples()">generate example</a>
+        }
+      </div>
+      <sm-pipelines-empty-state [initPipelineCode]="initPipelineCode" [createButton]="true"></sm-pipelines-empty-state>
+    </div>
+  }
+
+  @if ((noMoreProjects$ | ngrxPush) === false && (projectsList$ | ngrxPush)?.length > 0) {
+    <div class="load-more">
+      <sm-dots-load-more
+        [loading]="loading"
+        (loadMore)="loadMore()"
+        class="mx-auto my-2"
+      ></sm-dots-load-more>
+    </div>
+  }
+</div>
+

@@ -1,0 +1,115 @@
+:host {
+  height: 36px;
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .refresh-wrapper {
+    position: relative;
+
+    &.show-menu {
+      .tooltip-container {
+        padding: 4px 6px 4px 12px;
+      }
+    }
+  }
+
+  .mdc-icon-button {
+    .path_arrows {
+      fill: var(--color-primary);
+    }
+
+    .path_play, .path_pause {
+      fill: var(--color-tertiary);
+    }
+  }
+
+  .refresh {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    span {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: inherit;
+      width: inherit;
+      position: absolute;
+    }
+  }
+
+  .tooltip-container {
+    position: absolute;
+    right: 42px;
+    display: flex;
+    align-items: center;
+    border-radius: 48px;
+    background-color: var(--color-surface-container-low);
+    line-height: normal;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 10;
+
+    .toggle-label {
+      color: var(--color-on-surface);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+
+      &.enabled {
+        color: var(--color-primary);
+      }
+    }
+
+    .dot {
+      margin: 0 3px 0 12px;
+    }
+  }
+
+  .tip {
+    content: '';
+    width: 16px;
+    height: 16px;
+    position: absolute;
+    right: 38px;
+    transform: rotate(45deg);
+    background-color: var(--color-surface-container-low);
+    transition: opacity 0.3s 0.3s;
+  }
+}
+
+.rotate {
+  display: inline-block;
+  animation: rotation 1 0.5s linear;
+}
+
+@keyframes rotation {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(180deg);
+  }
+}
+
+.enter {
+  animation: fade-in ease-in 0.3s;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.leaving {
+  opacity: 0;
+  transition: opacity 0.3s ease-out;
+}

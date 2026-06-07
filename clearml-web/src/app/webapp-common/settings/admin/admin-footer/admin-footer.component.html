@@ -1,0 +1,11 @@
+<footer>
+  <sm-admin-footer-actions></sm-admin-footer-actions>
+  <div class="version float-right">
+    <span>WebApp: </span>
+    <span>{{version["docker-image"] || version.version}}</span>
+    @if (serverVersions(); as serverVersions) {
+      <span> • Server: {{serverVersions?.server}}</span>
+      <span> • API: {{serverVersions?.api}}</span>
+    }
+  </div>
+</footer>

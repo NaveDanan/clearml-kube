@@ -1,0 +1,8 @@
+<sm-model-info-labels-view
+  [model]="selectedModel()"
+  [isSharedAndNotOwner]="isSharedAndNotOwner()"
+  [saving]="saving()"
+  (saveFormData)="saveFormData($event)"
+  (cancelClicked)="cancelClicked()"
+  (activateEditClicked)="activateEditClicked()"
+></sm-model-info-labels-view>

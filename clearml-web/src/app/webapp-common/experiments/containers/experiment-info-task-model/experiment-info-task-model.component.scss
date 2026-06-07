@@ -1,0 +1,22 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  .label-rows-container{
+    display: block;
+    position: relative;
+    padding: 24px;
+  }
+  ::ng-deep sm-labeled-row .label-container {
+    width: 175px !important;
+  }
+  .editable-design {
+    flex: 1;
+    min-height: 250px;
+  }
+
+  sm-experiment-task-model-form {
+    height: 100%;
+  }
+}

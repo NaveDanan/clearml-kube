@@ -1,0 +1,16 @@
+:host {
+  display: flex !important;
+  flex-direction: column;
+  gap: 24px;
+  height: 100%;
+
+  sm-workers-graph {
+    margin: 0 48px;
+  }
+}
+
+@media (max-height: 750px) {
+  :host {
+    height: unset;
+  }
+}

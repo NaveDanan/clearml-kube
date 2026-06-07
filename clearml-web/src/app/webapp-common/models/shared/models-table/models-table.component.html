@@ -1,0 +1,234 @@
+<sm-model-menu-extended
+  #contextMenuExtended
+  [model]="contextModel()"
+  [tableMode]="!minimizedView()"
+  [selectedModel]="selectedModel()"
+  [selectedModels]="singleRowContext ? (selectedModel() ? [selectedModel()] : undefined ): checkedModels()"
+  [selectedDisableAvailableIsMultiple]="!singleRowContext"
+  [selectedDisableAvailable]="singleRowContext ? singleSelectedModelsDisableAvailable() : selectedModelsDisableAvailable()"
+  [numSelected]="singleRowContext ? 1 : checkedModels()?.length"
+  [tagsFilterByProject]="tagsFilterByProject()"
+  [projectTags]="modelsProjectTags() ?? projectTags()"
+  [companyTags]="companyTags()"
+  [activateFromMenuButton]="false"
+  [useCurrentEntity]="singleRowContext"
+  [backdrop]="menuBackdrop"
+  (tagSelected)="addTag($event)"
+></sm-model-menu-extended>
+<div class="table-container" [class.card-view]="minimizedView()">
+  <sm-table
+    [cardHeight]="114"
+    [cardsCollapsed]="cardsCollapsed()"
+    [initialColumns]="initialColumns"
+    [selectionMode]="selectionMode()"
+    [tableData]="models()"
+    [noMoreData]="noMoreModels()"
+    [resizableColumns]="enableMultiSelect()"
+    [columns]="columns()"
+    [reorderableColumns]="reorderableColumns() && enableMultiSelect()"
+    [scrollable]="true"
+    [columnsOrder]="colsOrder()"
+    [lazyLoading]="true"
+    [columnResizeMode]="columnResizeMode()"
+    [selection]="selectedModel()"
+    [checkedItems]="checkedModels()"
+    [activeContextRow]="contextModel()"
+    [contextMenuOpen]="contextMenuActive()"
+    [minimizedView]="minimizedView()"
+    [minimizedTableHeader]="'MODEL LIST'"
+    [sortFields]="tableSortFields()"
+    [keyboardControl]="true"
+    [autoLoadMore]="true"
+    (colReordered)="columnsReordered.emit($event)"
+    (rowSelectionChanged)="onRowSelectionChanged($event)"
+    (rowClicked)="tableRowClicked($event)"
+    (rowDoubleClicked)="modelSelectionChanged.emit({model: $event.data, openInfo: true, origin: 'table'})"
+    (loadMoreClicked)="onLoadMoreClicked()"
+    (rowRightClick)="openContextMenu($event)"
+    (sortChanged)="onSortChanged($event.isShift, $event.field)"
+    (columnResized)="columnResized.emit($event)"
+    (cardsCollapsedToggle)="cardsCollapsedChanged.emit()"
+    >
+    <ng-template pTemplate="cardFilter">
+      <sm-table-card-filter [options]="filtersOptions()"
+        [value]="filtersValues()"
+        [subValue]="filtersSubValues()[modelsTableColFields.TAGS]"
+        [columns]="initialColumns"
+        [filterMatch]="filtersMatch()"
+        fixedOptionsSubheader="System tags"
+        (subFilterChanged)="tableFilterChanged({id:'system_tags'}, $event)"
+        (filterChanged)="tableFilterChanged({id: $event.col}, $event)"
+        (menuOpened)="columnFilterOpened($event)"
+        (menuClosed)="columnFilterClosed($event)"
+        (clearAll)="clearAllFilters.emit(tableFilters())"
+      ></sm-table-card-filter>
+    </ng-template>
+    <!--CHECKBOX TEMPLATE-->
+    <ng-template let-col pTemplate="checkbox">
+<!--      @if (!hideSelectAll) {-->
+        <div class="d-flex align-items-center">
+          @if (col.id === modelsTableColFields.SELECTED) {
+            <mat-checkbox
+                          class="header-checkbox"
+                          data-id="Select All Loaded Tasks"
+                          [formControl]="selectionChecked"
+                          [indeterminate]="selectionIndeterminate()"
+                          [disableRipple]="true"
+                          smClickStopPropagation
+                          (change)="headerCheckboxClicked()">
+            </mat-checkbox>
+          }
+          <div class="al-icon al-ico-dropdown-arrow drop-down" data-id="Checkbox Dropdown" [matMenuTriggerFor]="selectionMenu"></div>
+        </div>
+<!--      }-->
+      <mat-menu class="light-theme" #selectionMenu="matMenu">
+        <div class="menu-title">Select from project</div>
+        <button mat-menu-item data-id="All Option" (click)="selectAll()">All</button>
+        <button mat-menu-item data-id="None Option" (click)="emitSelection([])">None</button>
+        <button mat-menu-item data-id="All Matching Filter Option" (click)="selectAll(true)">All matching filter</button>
+      </mat-menu>
+    </ng-template>
+
+    <!--SORT FILTER TEMPLATE-->
+
+    <ng-template let-col pTemplate="sort-filter">
+      <sm-table-filter-sort
+        [column]="col"
+        [value]="filtersValues()[col.id]"
+        [searchValue]="searchValues[col.id]"
+        [options]="filtersOptions()[col.id] | filter: searchValues[col.id]: 'label'"
+        [sortOrder]="tableSortFieldsObject()[col.id]"
+        [fixedOptionsSubheader]="col.id === modelsTableColFields.TAGS ? 'System tags' : ''"
+        [andFilter]="col.andFilter ? filtersMatch()[col.id] === 'AND' : null"
+        (sortOrderChanged)="onSortChanged($event, col.id)"
+        (filterChanged)="tableFilterChanged(col, $event);"
+        (searchValueChanged)="searchValueChanged($event, col.id, col.asyncFilter)"
+        (menuOpened)="columnFilterOpened(col)"
+        (menuClosed)="columnFilterClosed(col)"
+        >
+      </sm-table-filter-sort>
+    </ng-template>
+
+    <!--BODY TEMPLATE-->
+
+    <ng-template let-col
+      let-model="rowData"
+      pTemplate="body">
+      @switch (col.id) {
+        @case (modelsTableColFields.NAME) {
+          <div class="d-flex flex-row flex-nowrap ellipsis">
+            <div class="model-name" [smTooltip]="model.name" smShowTooltipIfEllipsis>{{model.name}}</div>
+            @if (model?.system_tags?.includes('shared')) {
+              <i class="al-icon al-ico-link sm ms-2"></i>
+            }
+          </div>
+        }
+        @case (modelsTableColFields.TAGS) {
+          <sm-tag-list [tags]="model.tags" [sysTags]="getSysTags(model)"></sm-tag-list>
+        }
+        @case (modelsTableColFields.USER) {
+          <span class="ellipsis" [smTooltip]="model.user?.name ? model.user?.name : 'Unknown User'"
+          smShowTooltipIfEllipsis>{{model.user?.name ? model.user?.name : 'Unknown User'}}</span>
+        }
+        @case (modelsTableColFields.PROJECT) {
+          <span class="ellipsis" smShowTooltipIfEllipsis [smTooltip]="model?.project?.name"
+            >
+            {{model?.project?.name}}
+          </span>
+        }
+        @case (modelsTableColFields.TASK) {
+          <span class="ellipsis" [smTooltip]="model.task?.name"
+            smShowTooltipIfEllipsis>
+            {{model.task?.name}}
+          </span>
+        }
+        @case (modelsTableColFields.READY) {
+          <sm-status-icon-label
+          [status]="model?.ready? 'published': 'created'"></sm-status-icon-label>
+        }
+        @case (modelsTableColFields.LAST_UPDATE) {
+          <span class="ellipsis"
+          [smTooltip]="model.last_update | date : timeFormatString">{{model.last_update | timeAgo}}</span>
+        }
+        @case (modelsTableColFields.SELECTED) {
+          <mat-checkbox #cb
+                        smClickStopPropagation
+                        [checked]="checkedModels() | isRowSelected:model"
+                        (click)="rowSelectedChanged({ value: cb.checked, event: $event}, model)">
+          </mat-checkbox>
+        }
+        @case (modelsTableColFields.COMMENT) {
+          <span class="ellipsis" smShowTooltipIfEllipsis [smTooltip]="model.comment">{{model.comment}}</span>
+        }
+        @default {
+          @if (col.type==='metadata') {
+            <span smShowTooltipIfEllipsis
+            [smTooltip]="model | colGetter: col">{{model | colGetter: col}}</span>
+          } @else {
+            <sm-hyper-param-metric-column [roundedMetricValue]="roundedMetricValues[col.id]"
+              [col]="col"
+              [experiment]="model"
+              (expandClicked)="columnsWidthChanged($event)">
+            </sm-hyper-param-metric-column>
+          }
+        }
+      }
+    </ng-template>
+
+    <ng-template let-model="rowData" let-selected="selected" pTemplate="card">
+      <sm-table-card
+        [selected]="selected"
+        [cardName]="model.name"
+        [columns]="columns()"
+        [rowData]="model"
+        [checked]="models() | isRowSelected:model"
+        [activeContextRow]="contextModel()"
+        [contextMenuOpen]="contextMenuActive()"
+        [entityType]="entityType()"
+        [tagsTemplate]="tagList"
+        [compactColDataTemplate]="compactCol"
+        [class.no-tags]="getSysTags(model).length === 0 && model?.tags.length === 0"
+        (click)="selected && cardClicked($event, model)"
+        >
+        <div sm-name-icon>@if (model?.system_tags.includes('shared')) {
+          <i class="al-icon al-ico-link sm-md ms-2"></i>
+        }
+      </div>
+        @if (cardsCollapsed() && model?.tags?.length > 0) {
+          <div sm-mini-tags class="d-flex align-items-center mini-tags-container">
+            <sm-mini-tags-list class="d-flex align-items-center" [tags]="model.tags?.slice(0,10)">
+            </sm-mini-tags-list>
+            @if (model?.tags?.length > 10) {
+              <span>+{{ model.tags?.length - 10 }}</span>
+            }
+          </div>
+        }
+      <sm-status-icon-label
+        [status]="model?.ready? 'published': 'created'"
+        [showLabel]="!cardsCollapsed()">
+      </sm-status-icon-label>
+        <mat-checkbox #cb
+                      smClickStopPropagation
+                      [checked]="checkedModels() | isRowSelected:model"
+                      [disableRipple]="true"
+                      (click)="rowSelectedChanged({value: cb.checked, event: $event}, model)">
+        </mat-checkbox>
+    </sm-table-card>
+    <ng-template #tagList>
+      @if (!cardsCollapsed()) {
+        <sm-tag-list animate.enter="enter" animate.leave="leaving" [sysTags]="getSysTags(model)" [tags]="model?.tags"></sm-tag-list>
+      }
+    </ng-template>
+    <ng-template #compactCol>
+      @if (!cardsCollapsed()) {
+        <div animate.enter="enter" animate.leave="leaving" class="ellipsis compact-columns-data" [class.selected]="selected">
+          Updated {{model.last_update | timeAgo}} by {{model.user?.name || 'Unknown User'}}
+          @if (model.task) {
+            <span class="dot">●</span>{{model.task.name}}
+          }
+        </div>
+      }
+    </ng-template>
+  </ng-template>
+</sm-table>
+</div>

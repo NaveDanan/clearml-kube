@@ -1,0 +1,19 @@
+<sm-dialog-template class="neat" [header]="title" headerClass="no-uppercase">
+  <div class="data-text">
+    <sm-code-editor
+      [code]="textData"
+      [mode]="mode"
+      [readonly]="readOnly"
+      [placeholder]="placeHolder"
+      [startPosition]="position()"
+    ></sm-code-editor>
+  </div>
+</sm-dialog-template>
+<mat-dialog-actions>
+  @if (!readOnly) {
+      <button mat-stroked-button (click)="closeDialog(false)" class="yes-button" data-id="cancelButton">
+        CANCEL
+      </button>
+    }
+    <button mat-flat-button (click)="closeDialog(!readOnly)" data-id="okButton">OK</button>
+</mat-dialog-actions>

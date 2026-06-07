@@ -1,0 +1,58 @@
+.custom-column-buttons {
+  display: flex;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 14px;
+  gap: 12px;
+  padding: 6px 12px;
+
+  .metrics-button {
+    flex: 1;
+    white-space: nowrap;
+
+    .caption {
+      margin-top: 4px;
+    }
+  }
+}
+
+.loading {
+  overflow: hidden;
+  height: 0;
+  opacity: 0;
+}
+
+.loaded {
+  height: initial;
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+
+.loader {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  height: 102px;
+}
+
+.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sm-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: normal;
+  color: var(--color-primary);
+  border-bottom: 1px solid var(--color-outline-variant);
+  font-size: 14px;
+  min-height: 48px;
+}
+
+sm-custom-columns-list {
+  display: block;
+  border-bottom: 1px solid var(--color-outline-variant);
+}

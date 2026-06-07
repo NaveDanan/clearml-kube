@@ -1,0 +1,29 @@
+:host {
+  display: block;
+  height: calc(100% - 34px);
+
+  .header {
+    display: flex;
+    position: relative;
+    justify-content: center;
+    background-color: var(--row-header-color);
+
+    sm-router-tab-nav-bar {
+      overflow: hidden;
+      flex-grow: 1;
+    }
+
+    .close-button {
+      position: absolute;
+      right: 24px;
+      top: 6px;
+      z-index: 1;
+    }
+  }
+
+  .serving-info-body {
+    height: calc(100% - 14px);
+    overflow: auto;
+    background-color: var(--color-surface-container-lowest);
+  }
+}

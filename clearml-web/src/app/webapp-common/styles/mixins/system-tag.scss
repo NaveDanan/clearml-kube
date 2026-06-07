@@ -1,0 +1,71 @@
+@use "../../assets/fonts/variables" as fonts;
+
+
+@mixin sm-system-tag() {
+  .sys-tag {
+    @include system-tag();
+
+    &:before {
+      font-family: '#{fonts.$icomoon-font-family}';
+      content: fonts.$al-ico-users;
+      width: 12px;
+      font-size: 24px;
+      text-align: left;
+      position: absolute;
+      left: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+  }
+
+  .tag-item {
+    @include shrinkable-tags();
+    padding-left: 16px;
+  }
+
+  .group-rest {
+    background: transparent;
+    border-color: transparent;
+    min-width: 0;
+    text-overflow: unset;
+    padding: 0 6px;
+    overflow: visible;
+
+    &:before {
+      content: '';
+    }
+  }
+  ::ng-deep tr.selected .group-rest {
+    color: var(--color-surface);
+  }
+}
+
+@mixin system-tag() {
+  --sys-tag-height: 18px;
+  display: inline-block;
+  position: relative;
+  min-width: 50px;
+  max-width: 180px;
+  height: var(--sys-tag-height);
+  line-height: calc(var(--sys-tag-height) - 2px);
+  font-size: 11px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--color-primary-container), var(--color-on-surface) 20%);
+  padding: 0 8px 0 14px;
+  margin-right: 5px;
+  background-color: var(--color-primary-container);
+  color: var(--color-on-surface);
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@mixin shrinkable-tags() {
+  margin-right: 5px;
+  flex: 0 2 content;
+  transition: flex-shrink 0.3s;
+
+  &:hover {
+    flex-shrink: 0;
+  }
+}

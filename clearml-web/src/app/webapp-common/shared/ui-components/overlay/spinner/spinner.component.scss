@@ -1,0 +1,12 @@
+@use "variables";
+
+.loader-container {
+  position: fixed;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999999;
+  top: 50%;
+  left: calc(50% + #{variables.$side-bar-close-width * 0.5});
+  transform: translate(-50%);
+}

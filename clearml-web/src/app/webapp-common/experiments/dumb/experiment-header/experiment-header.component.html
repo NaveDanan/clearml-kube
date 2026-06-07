@@ -1,0 +1,105 @@
+<div class="d-flex justify-content-between header-container align-items-center"
+     [class.archive-mode]="isArchived()">
+  <div class="d-flex-center">
+    <ng-container *ngTemplateOutlet="addButtonTemplate(); context: {smallScreen: (isSmallScreen$ | ngrxPush).matches}">
+    </ng-container>
+    <sm-toggle-archive
+      [class.hide-item]="sharedView()"
+      [showArchived]="isArchived()"
+      [minimize]="(isSmallScreen$ | ngrxPush).matches"
+      (toggleArchived)="isArchivedChanged.emit($event)"
+    ></sm-toggle-archive>
+    <sm-button-toggle
+      [disabled]="!tableMode() || noData()"
+      class="ms-3"
+      [options]="toggleButtons()"
+      [rippleEffect]="rippleEffect()"
+      [ngModel]="!noData() && tableMode()"
+      (ngModelChange)="tableModeChanged.emit($any($event))"></sm-button-toggle>
+    <sm-common-search class="ms-3"></sm-common-search>
+
+  </div>
+
+
+  <div class="d-flex justify-content-end align-items-center right-buttons gap-3">
+    @if (!minimizedView()) {
+      <sm-clear-filters-button
+        [tableFilters]="tableFilters()"
+        (clearTableFilters)="clearTableFilters.emit(tableFilters())"
+      ></sm-clear-filters-button>
+    }
+    @if (tableMode() !== 'compare') {
+      <div smTooltip="Download table as CSV">
+        <sm-menu
+          iconClass="al-ico-download"
+          [disabled]="noData()"
+          data-id="downloadCSV"
+        >
+          <sm-menu-item (itemClicked)="downloadTableAsCSV.emit()" itemLabel="Download on screen items"></sm-menu-item>
+          <sm-menu-item (itemClicked)="downloadFullTableAsCSV.emit()"
+                        [itemLabel]="'Download first '+ (maxDownloadItems$ | ngrxPush) +' items'"></sm-menu-item>
+        </sm-menu>
+      </div>
+    }
+
+    @if (tableMode() === 'compare') {
+      <mat-form-field appearance="outline" class="compare-view-select no-bottom">
+        <mat-select
+          name="compareView"
+          [ngModel]="compareView()"
+          (selectionChange)="compareViewChanged.emit($event.value)"
+        >
+          <mat-option value="scalars">Scalars</mat-option>
+          <mat-option value="plots">Plots</mat-option>
+        </mat-select>
+      </mat-form-field>
+    }
+
+    @if (tableMode() === 'compare' && compareView() === 'scalars') {
+      <button mat-icon-button (click)="toggleShowCompareSettings.emit()" [class.menu-opened]="showCompareScalarSettings()" smTooltip="Settings">
+        <mat-icon fontSet="al" fontIcon="al-ico-tune" [class.active]="showCompareScalarSettings()"></mat-icon>
+      </button>
+    }
+
+    @if (!minimizedView() || tableMode() === 'compare') {
+      <sm-custom-cols-menu
+        [sections]="tableMode() === 'compare' ? [{title: 'add metric', name: 'metrics', options: metricVariants(), template: metricsTemplate}] : [{title: 'add metric',name: 'metrics', options: metricVariants(), template: metricsTemplate}, {name: 'hyperparameters', options: hyperParams(), template: hyperParamsTemplate}]"
+        [topTitle]="tableMode() === 'compare' ? 'Customize charts view' : 'Customize columns'"
+        [menuTooltip]="tableMode() === 'compare' ? 'Customize charts view' : 'Customize table'"
+        [sectionsTitle]="'ADD CUSTOM COLUMN'"
+        [tableCols]="tableColsWithHeader()"
+        [isLoading]="isMetricsLoading()"
+        [disabled]="tableMode() === 'compare' && metricVariants()?.length === 0"
+        [(customColumnMode)]="customColumnMode"
+        (selectedTableColsChanged)="selectedTableColsChanged.emit($event)"
+        (getMetricsToDisplay)="getMetricsToDisplay.emit($event)"
+        (removeColFromList)="removeColFromList.emit($event)"
+      ></sm-custom-cols-menu>
+    }
+    <sm-refresh-button
+      [allowAutoRefresh]="true"
+      (setAutoRefresh)="setAutoRefresh.emit($event)"
+    ></sm-refresh-button>
+  </div>
+</div>
+
+<ng-template #metricsTemplate let-sectionData>
+  <sm-select-metric-for-custom-col
+    [tableCols]="tableColsWithHeader()"
+    [metricVariants]="sectionData.options"
+    [skipValueType]="tableMode() === 'compare'"
+    (goBack)="customColumnMode = customColumnModeEnum.Standard"
+    (selectedMetricToShow)="selectedMetricToShow.emit($event)">
+  </sm-select-metric-for-custom-col>
+</ng-template>
+
+<ng-template #hyperParamsTemplate let-sectionData>
+  <sm-select-hyper-params-for-custom-col
+    class="hyper-params-custom-col"
+    [tableCols]="tableCols()"
+    [hyperParams]="sectionData.options"
+    (goBack)="customColumnMode = customColumnModeEnum.Standard"
+    (selectedHyperParamToShow)="selectedHyperParamToShow.emit($event)"
+    (clearSelection)="clearSelection.emit()">
+  </sm-select-hyper-params-for-custom-col>
+</ng-template>

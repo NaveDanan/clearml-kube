@@ -1,0 +1,39 @@
+<form class="create-queue-form" [formGroup]="queueForm">
+  <mat-form-field class="mb-3">
+    <mat-label>Name</mat-label>
+    <input matInput type="text" formControlName="name">
+    @if (queueForm.controls.name.invalid && queueForm.controls.name?.errors; as errors) {
+      <mat-error>
+      @if (errors?.required) {
+        Required
+      } @else if (errors?.minlength) {
+        @if (errors.minlength > 0) {
+          Name should contain at least 3 characters
+        } @else {
+          Queue name can't contain only spaces
+        }
+      } @else if (errors?.uniqueName) {
+        Name should be unique
+      }
+      </mat-error>
+    }
+  </mat-form-field>
+  <mat-form-field>
+    <mat-label>Display Name</mat-label>
+    <input matInput type="text" formControlName="display_name">
+    @if (queueForm.controls.display_name.invalid && queueForm.controls.display_name?.errors; as errors) {
+      <mat-error>
+        @if (errors?.minlength) {
+          Display name should contain at least 3 characters
+        } @else if (errors?.uniqueName) {
+          Display name shouldn't use an existing queue name
+        }
+      </mat-error>
+    }
+  </mat-form-field>
+</form>
+  <mat-dialog-actions>
+    <button mat-flat-button [disabled]="queueForm.invalid || (isEdit() && queueForm.pristine)" (click)="send()">
+      {{isEdit() ? 'UPDATE' : 'CREATE'}}
+    </button>
+  </mat-dialog-actions>

@@ -1,0 +1,99 @@
+<sm-dialog-template
+  [iconClass]="extend ? 'al-ico-extend' : 'al-ico-clone'"
+  [header]="header"
+>
+  @if (!extend) {
+    <div class="reference">
+      A draft copy of @if (reference) {
+      <b
+        [smTooltip]="reference.length > 80 ? reference : undefined">{{reference.length > 80 ? (reference | slice:0:77) + '...' : reference }}</b>
+    }
+      will be created.
+    </div>
+  } @else {
+    <div class="reference">
+      A draft copy of @if (reference) {
+      <b [smTooltip]="reference.length > 80 ? reference : undefined">{{reference.length > 80 ? (reference | slice:0:77) + '...' : reference }}</b>
+    } will be created,
+      with its input model set to the output model of @if (reference) {
+      <b>{{reference}}</b>
+    }.
+    </div>
+  }
+  <form [formGroup]="cloneForm">
+    <div class="form-container">
+      <sm-paginated-entity-selector
+        formControlName="project"
+        [data]="projects()"
+        label="Project"
+        [isRequired]="true"
+        [createNewSuffix]="projectsNames() && cloneForm.controls.project.value &&
+        !isAutoCompleteOpen && !(cloneForm.controls.project.value | stringIncludedInArray: projectsNames())"
+        (getEntities)="searchChanged({value: $event});"
+        (loadMore)="loadMore()"
+        (createNewSelected)="createNewSelected($event)"
+      ></sm-paginated-entity-selector>
+      @if (readonlyProject()) {
+        <div class="extra-errors">
+          <mat-error>Read Only Project can't be used as the target location for the cloned {{data.type}}</mat-error>
+        </div>
+      }
+      @if (!cloneForm.controls.project.untouched && cloneForm.controls.project.errors; as errors) {
+        <div class="extra-errors">
+          @if (errors?.required) {
+            <mat-error>Please provide a Project</mat-error>
+          }
+          @else if (errors?.minlength < 0) {
+            <mat-error>Project name can't contain only spaces</mat-error>
+          }
+          @else if (errors?.uniqueName) {
+            <mat-error>Please provide a different name as this project name is
+              taken as an Example project
+            </mat-error>
+          }
+        </div>
+      }
+
+      <mat-form-field class="w-100" appearance="outline">
+        <mat-label>Name</mat-label>
+        <input
+          formControlName="name"
+          matInput
+          autocomplete="off"
+          name="ExperimentName"
+          cdkFocusInitial
+        />
+        @if (cloneForm.controls?.name?.errors?.required) {
+          <mat-error>Please provide a name</mat-error>
+        }
+      </mat-form-field>
+      @if (type === 'task') {
+        <mat-checkbox class="w-100"
+          formControlName="forceParent"
+        >Set@if (reference) {
+          <b [smTooltip]="reference.length > 80 ? reference : undefined"> {{reference.length > 80 ? (reference | slice:0:77) + '...' : reference }} </b>
+        }<span style="white-space: nowrap">as parent</span> </mat-checkbox>
+      }
+      @for (key of toggleKeys; track key) {
+        <mat-checkbox class="me-3" [formControlName]="key">{{extraToggles[key]}}</mat-checkbox>
+      }
+      <mat-form-field class="w-100" appearance="outline">
+        <mat-label>Description</mat-label>
+        <textarea
+          formControlName="comment"
+          class="clone-description"
+          rows="3"
+          name="ExperimentComment"
+          matInput
+        ></textarea>
+      </mat-form-field>
+    </div>
+  </form>
+</sm-dialog-template>
+<mat-dialog-actions>
+  <button mat-stroked-button [mat-dialog-close]="null" data-id="CancelButton">CANCEL</button>
+  <button mat-flat-button (click)="closeDialog()" [disabled]="!cloneForm.valid"
+          class="yes-button" data-id="CloneButton">
+    {{extend ? 'EXTEND' : 'CLONE'}}
+  </button>
+</mat-dialog-actions>

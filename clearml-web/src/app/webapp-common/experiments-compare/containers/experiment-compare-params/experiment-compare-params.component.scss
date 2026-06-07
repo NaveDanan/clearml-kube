@@ -1,0 +1,80 @@
+:host {
+  display: block;
+  height: 100%;
+  padding-top: 12px;
+
+  .section {
+    pre {
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .node-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+
+      .node-key {
+        //flex: 1;
+        position: relative;
+        cursor: pointer;
+        white-space: nowrap;
+        min-width: 150px;
+        //width: 220px;
+        &.ellipsis {
+          width: 200px;
+        }
+
+        &:hover {
+          i.extend-toggle {
+            visibility: visible;
+          }
+        }
+      }
+
+      .node-val {
+        flex: 1;
+        position: relative;
+        cursor: pointer;
+        white-space: nowrap;
+        min-width: 150px;
+
+        &.ellipsis {
+          //width: 150px;
+        }
+
+        &:hover {
+          .extend-toggle {
+            visibility: visible;
+          }
+        }
+      }
+    }
+
+  }
+
+  .title-key {
+    display: block;
+
+    &.ellipsis {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      width: 390px;
+    }
+  }
+
+  .no-ellipsis {
+    cursor: default !important;
+
+    .extend-toggle {
+      visibility: hidden !important;
+    }
+  }
+.section {
+  display: block !important;
+}
+  ::ng-deep .with-ellipsis .cdk-virtual-scroll-content-wrapper {
+    width: 100%;
+  }
+}

@@ -1,0 +1,112 @@
+@use "variables";
+
+:host {
+  display: block;
+
+  --mat-expansion-container-background-color: transparent;
+
+
+  .images-section {
+    margin-top: 0;
+
+    h5 {
+      margin-bottom: 20px;
+    }
+
+    .images-section:not(:first-child) {
+      margin-top: 20px;
+    }
+  }
+
+  .no-output-icon {
+    margin-top: 80px;
+  }
+
+  .no-output-inner {
+    background: var(--color-surface-container-lowest);
+    height: 100%;
+    color: var(--color-surface-container-lowest);;
+    text-align: center;
+    font-size: 20px;
+
+    .no-output-icon {
+      width: 100%;
+      height: 210px;
+    }
+  }
+
+  .experiment-name {
+    padding-left: 3px;
+    width: 450px;
+    word-break: break-word;
+    font-size: 1.50rem;
+    height: 80px;
+    overflow: auto;
+  }
+
+  .mat-expansion-panel {
+    width: 100%;
+    margin-bottom: 12px;
+    box-shadow: unset;
+    &:hover{
+      background:transparent;
+    }
+
+    ::ng-deep .mat-expansion-panel-content {
+      .mat-expansion-panel-body {
+        height: 420px;
+        padding: 12px 0;
+      }
+    }
+
+    &.short-list {
+      ::ng-deep .mat-expansion-panel-content {
+        .mat-expansion-panel-body {
+          height: 220px;
+        }
+      }
+    }
+
+    .mat-expansion-panel-header {
+      margin-bottom: 0;
+    }
+
+    .mat-expansion-panel-header-title {
+      margin: 10px 0;
+      font-family: variables.$font-family-base, sans-serif;
+      color: var(--color-on-surface-variant);
+
+
+    }
+
+    &-header {
+      padding: 0 8px;
+      height: 32px !important;
+      &:hover {
+        .mat-expansion-panel-header-title {
+          color: var(--color-on-surface);
+        }
+      }
+
+      &-title, ::ng-deep .mat-expansion-indicator::after {
+        flex: unset;
+      }
+    }
+
+    .details-body {
+      height: 200px;
+      overflow-y: scroll;
+      background-color: var(--color-surface-container-lowest);
+    }
+  }
+
+  .mat-expansion-panel {
+    &.dark-theme {
+      background: transparent;
+    }
+  }
+
+  .sample-row {
+    gap: 12px;
+  }
+}

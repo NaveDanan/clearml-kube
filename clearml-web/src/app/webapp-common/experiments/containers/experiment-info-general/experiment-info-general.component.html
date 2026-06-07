@@ -1,0 +1,8 @@
+<sm-experiment-details
+  data-id="infoPanelDetail"
+  [experiment]="selectedExperiment()"
+  [experimentComment]="experimentInfoData()?.comment"
+  [editable]="editable()"
+  [isExample]="isExample()"
+  (commentChanged)="commentChanged($event)"
+></sm-experiment-details>

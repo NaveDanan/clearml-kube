@@ -1,0 +1,15 @@
+@use "mixins/link";
+
+:host {
+  @include link.link();
+}
+
+.gcs-note {
+  font-weight: 500;
+  padding-left: 8px;
+}
+
+.bucket-name {
+  max-width: 400px;
+  display: inline-flex;
+}

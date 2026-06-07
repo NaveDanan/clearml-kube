@@ -1,0 +1,24 @@
+<sm-dialog-template header="Reset python packages"
+                    (xClicked)="closeDialog(false)"
+                    iconClass="al-ico-reset">
+  <div class="sub-header mb-3">Set Python Packages to:</div>
+  <div class="d-flex align-center">
+    <mat-radio-group [ngModel]="install"
+                     (change)="setInstalledOption($event)"
+                     name="installOption"
+                     aria-label="Select an option">
+      <mat-radio-button value="install"><span>Empty (Agent will install packages using 'requirements.txt' from repository). {{showReset? '*': ''}}</span></mat-radio-button>
+      <mat-radio-button value="dontInstall"><span>Empty (Agent will not install any packages). {{showReset? '*': ''}}</span></mat-radio-button>
+      @if (showReset){<mat-radio-button value="reset" class="mb-2">Set to originally recorded packages (original-pip).</mat-radio-button>}
+      <div class="mt-2">{{showReset? '* ':''}}This will clear all packages{{showReset? ' - Both originally recorded, and from latest execution.':'.'}}</div>
+    </mat-radio-group>
+  </div>
+  <div class="buttons">
+    <button mat-flat-button (click)="closeDialog(true)" class="yes-button" data-id="ClearButton">
+      RESET
+    </button>
+    <button mat-stroked-button (click)="closeDialog(false)" data-id="CancelButton">
+      CANCEL
+    </button>
+  </div>
+</sm-dialog-template>

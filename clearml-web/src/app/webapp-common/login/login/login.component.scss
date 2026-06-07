@@ -1,0 +1,201 @@
+:host {
+  .marketing-content-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+
+    .link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .community-links {
+      .link {
+        margin: 0 12px;
+        cursor: pointer;
+
+        i {
+          color: #8492c2 !important;
+        }
+      }
+    }
+
+    ntkme-github-button {
+      ::ng-deep a.gh-btn, ::ng-deep a.social-count {
+        text-decoration: none;
+
+        &:hover {
+          font-weight: bold;
+        }
+      }
+    }
+  }
+
+  .login-form {
+    color: rgba(0, 0, 0, 0.87);
+    flex-direction: column;
+    overflow: auto;
+
+    background: var(--login-bg, white);
+    flex: 1;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+
+    @media(max-width: 420px) {
+      max-width: unset;
+      height: 100vh;
+      width: 100vw;
+      padding-top: 30px;
+    }
+
+    .login-section {
+      display: flex;
+      flex: 1;
+      padding: 24px 0;
+      text-align: center;
+
+      @media(max-width: 655px) {
+        overflow: unset;
+      }
+
+      .logo {
+        width: 150px;
+      }
+
+      .login-title {
+        font-weight: 500;
+        font-size: 20px;
+        color: #ffffff;
+        max-width: 320px;
+        min-height: 30px;
+        white-space: pre-line;
+        margin-top: 24px;
+      }
+
+      .login-notice {
+        color: #fff;
+        margin-bottom: 5px;
+      }
+
+      section {
+        width: 320px;
+        margin: auto;
+      }
+
+      .login-section-inner {
+        background: #fff;
+        padding: 32px;
+        border-radius: 24px;
+      }
+
+      .login-error {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+      }
+    }
+
+    mat-form-field {
+      width: 100%;
+    }
+
+    button {
+      width: 100%;
+      margin: 16px 0 32px 0;
+
+      .spinner {
+        position: absolute;
+        left: 75px;
+      }
+    }
+
+    .separator {
+      display: flex;
+      justify-content: center;
+      color: var(--color-secondary-fixed-dim);
+      font-size: 11px;
+
+      .line {
+        width: 104px;
+        margin-bottom: 10px;
+      }
+    }
+
+    .terms-of-use {
+      display: inline-block;
+      color: rgba(0, 0, 0, 0.87);
+      font-size: 11px;
+      margin-left: -2px;
+    }
+
+    &.dark-theme {
+      color: rgba(255, 255, 255, 0.87);
+      background-image: url(../../assets/infinity_anim--on_light.svg), linear-gradient(100deg, #22408a 6%, #09173c 82%);
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+
+      .terms-of-use {
+        color: rgba(255, 255, 255, 0.87);
+
+        a[href] {
+          color: #A1C9FF;
+        }
+      }
+    }
+  }
+}
+
+
+.circle {
+  margin: 0 auto 40px;
+  width: 80px;
+  height: 80px;
+  border-radius: 100%;
+  border: 10px solid rgba(255, 255, 255, 0.5);
+  border-top-color: #FFFFFF;
+  animation: spin 1s infinite linear;
+  @keyframes spin {
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+
+}
+
+.errors {
+  width: 250px;
+  max-height: 100px;
+  overflow: auto;
+  color: var(--color-error);
+  text-align: left;
+}
+
+.other-email {
+  margin-top: 16px;
+  text-align: left;
+}
+
+:host-context(.mobile) {
+  .login-form {
+    padding-top: 64px;
+  }
+}
+
+:host-context(.dark-mode) {
+}
+
+input:-webkit-autofill {
+  background-color: transparent !important;
+  -webkit-box-shadow: 0 0 0 50px var(--color-surface-container) inset;
+  -webkit-text-fill-color: var(--color-on-surface);
+}

@@ -1,0 +1,158 @@
+@use "mixins/link";
+
+
+:host-context(.normal-size) {
+  display: block;
+  height: 480px;
+}
+
+:host {
+  @include link.link();
+
+  .actions {
+    display: block;
+    padding: 12px 0 0;
+    font-size: 12px;
+    height: 36px;
+  }
+
+  .metrics-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 320px;
+  }
+
+  .head {
+    margin-bottom: 12px;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 20px 1fr 20px;
+    gap: 6px;
+    align-items: center;
+    text-align: center;
+    border-bottom: 1px solid var(--color-outline-variant);
+    min-height: 48px;
+
+    h3 {
+      color: var(--color-primary);
+      font-size: 14px;
+      font-weight: normal;
+      margin: 0;
+    }
+  }
+
+  sm-search {
+    margin: 0 24px;
+  }
+
+  .variant-label {
+    display: flex;
+    align-items: center;
+    height: 36px;
+
+    .var-label {
+      color: var(--mat-menu-item-label-text-color);
+      letter-spacing: var(--mat-menu-item-label-text-tracking);
+    }
+  }
+
+  .value-type {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    margin-left: 24px;
+    padding-left: 18px;
+    font-size: 11px;
+    font-weight: bold;
+    mat-checkbox {
+      transform: scale(0.9);
+    }
+  }
+
+  mat-expansion-panel {
+    --mat-expansion-container-background-color: transparent;
+    box-shadow: none;
+    font-weight: bold;
+    color: var(--color-on-surface-variant);
+    margin-bottom: 2px;
+
+    mat-expansion-panel-header {
+      padding: 0 12px;
+
+      mat-panel-title {
+        max-width: calc(100% - 12px);
+      }
+
+      .panel-title {
+        padding-right: 12px;
+        font-size: 14px;
+        color: var(--color-on-surface-variant);
+      }
+
+      .has-selected {
+        margin-left: auto;
+        background-color: var(--color-tertiary);
+        width: 6px;
+        height: 6px;
+        flex: 0 0 6px;
+        border-radius: 6px;
+        align-self: center;
+      }
+
+      &.mat-expanded {
+        border-radius: 0;
+        border-bottom: none;
+        font-weight: 500;
+        background-color: var(--color-tint-8);
+
+        .panel-title {
+          color: var(--color-on-surface);
+
+        }
+      }
+    }
+  }
+
+  ::ng-deep .mat-expansion-panel-body {
+    padding: 0;
+  }
+
+  .metrics {
+    height: calc(100% - 34px);
+    width: 100%;
+    overflow-y: scroll;
+    padding: 0 12px 0 24px;
+  }
+
+  .metric-expansion-content {
+    border-radius: 4px;
+    margin: 1px 0;
+    &:hover {
+      background-color: color-mix(in srgb, var(--color-surface-container-highest), transparent 40%);
+      background-color: var(--color-tint-5);
+    }
+  }
+
+  .more-results {
+    padding: 12px;
+    font-weight: 500;
+  }
+
+  .spinner {
+    margin: auto;
+  }
+
+  .empty-container {
+    display: flex;
+    height: calc(100% - 36px);
+  }
+
+  .empty-state {
+    text-align: center;
+    margin: auto;
+    color: var(--color-on-surface-variant);
+    font-size: 14px;
+  }
+}

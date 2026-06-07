@@ -1,0 +1,88 @@
+@if (optionalMetricsDic() !== null) {
+<div class="images-container">
+  @for (experimentId of experimentIds() | slice :  0 : LIMITED_VIEW_LIMIT; track experimentId) {
+    <div class="single-debug-images-container" [class.separator]="experimentIds()?.length > 1">
+      @if (experimentIds()?.length > 1) {
+        <header>
+          @if ((tasks() | itemById: experimentId)?.name) {
+            <sm-experiment-compare-general-data
+              [experiment]="tasks() | itemById: experimentId"
+              [tags]="(tasks() | itemById: experimentId)?.tags"
+              (copyIdClicked)="copyIdToClipboard()"
+            ></sm-experiment-compare-general-data>
+          }
+        </header>
+      }
+      <div class="navigator-container" [class.active]="bindNavigationMode()" [class.first]="$first"
+        [class.last]="$last" [style.display]="hideNavigation() ? 'none' : 'flex'">
+        <div data-id="syncBrowsing" class="connector-icon-container pointer" smTooltip="Sync browsing" [matTooltipShowDelay]="500"
+          [class.active]="bindNavigationMode()" [class.hidden]="$last" (click)="toggleConnectNavigation()">
+          <i class="al-icon" [class.al-ico-connect]="bindNavigationMode()" [class.al-ico-disconnect]="!bindNavigationMode()"></i>
+        </div>
+        @if (!thereAreNoMetrics(experimentId) && !disableStatusRefreshFilter()) {
+          <div class="metric-bar" [class.minimized]="minimized()"
+            data-id="metricBar">
+            <label data-id="metricText">Metric:</label>
+            <mat-form-field appearance="outline" class="no-bottom" data-id="metricField">
+              <mat-select
+                #metricSelect
+                (selectionChange)="selectMetric($event, experimentId)"
+                [value]="selectedMetrics()[experimentId]"
+                >
+                @if (selectedMetrics()[experimentId]) {
+                  <mat-option [value]="allImages">{{allImages}}</mat-option>
+                }
+                @for (metric of optionalMetricsDic()[experimentId]; track metric) {
+                  <mat-option [value]="metric">{{metric}}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+            <label data-id="IterationText">Iterations:</label>
+            <div [class.disabled]="beginningOfTime()?.[experimentId]"
+              (click)="nextBatch({task: experimentId, metric: metricSelect.value})"
+              class="al-icon al-ico-next-batch"
+            smTooltip="Older images" data-id="OlderImages"></div>
+            <b class="text-right">{{debugImages?.[experimentId]?.data?.slice(-1)[0].iter}}</b>
+            <div class="al-icon al-ico-between"></div>
+            <b>{{debugImages?.[experimentId]?.data?.[0].iter}}</b>
+            <div [class.disabled]="timeIsNow()?.[experimentId]"
+              (click)="previousBatch({task: experimentId, metric: metricSelect.value})"
+              class="al-icon al-ico-prev-batch"
+            smTooltip="Newer images" data-id="NewerImages"></div>
+            <div [class.disabled]="timeIsNow()?.[experimentId] && !allowAutorefresh"
+              (click)="backToNow({task: experimentId, metric: metricSelect.value})"
+              class="al-icon al-ico-back-to-top"
+            smTooltip="Newest samples" data-id="NewestSamples"></div>
+          </div>
+        }
+      </div>
+      @if (optionalMetricsDic()?.[experimentId]?.length === 0 && shouldShowNoImagesForExperiment(experimentId)) {
+        <div class="no-images no-output">
+          <mat-icon fontSet="al" fontIcon="al-ico-debug-samples"></mat-icon>
+          <h4>NO DEBUG SAMPLES</h4>
+        </div>
+      }
+      @if (debugImages?.[experimentId]?.data) {
+        <sm-debug-images-view
+          [iterations]="debugImages[experimentId].data"
+          [experimentId]="experimentId"
+          [title]="experimentNames() && experimentNames()[experimentId]"
+          [isMergeIterations]="mergeIterations()"
+          [isDatasetVersionPreview]="disableStatusRefreshFilter()"
+          (imageClicked)="imageClicked($event, experimentId)"
+          (urlError)="urlError($event)"
+          (createEmbedCode)="createEmbedCode($event, experimentId)"
+        ></sm-debug-images-view>
+      }
+    </div>
+  }
+  @if (experimentIds()?.length>LIMITED_VIEW_LIMIT) {
+    <div
+      class="limit-message-container">
+      <div class="limit-message">
+        <i class="al-icon al-ico-info-circle mb-2"></i>Only the first 10 tasks are available for this view...
+      </div>
+    </div>
+  }
+</div>
+}

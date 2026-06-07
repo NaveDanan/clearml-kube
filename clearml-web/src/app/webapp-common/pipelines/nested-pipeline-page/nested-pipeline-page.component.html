@@ -1,0 +1,73 @@
+<sm-nested-project-view-page
+  [projectsList]="projectsList$ | ngrxPush"
+  [projectsOrderBy]="projectsOrderBy$ | ngrxPush"
+  [projectsSortOrder]="projectsSortOrder$ | ngrxPush"
+  [noMoreProjects]="noMoreProjects$ | ngrxPush"
+  [projectsTags]="projectsTags$ | ngrxPush"
+  [allExamples]="allExamples"
+  [cardContentTemplateRef]="cardContent"
+  [cardContentFooterTemplateRef]="cardFooterContent"
+  [entityType]="entityType"
+  [searching]="searching"
+  (cardClicked)="projectCardClicked($event)"
+  (deleteProjectClicked)="deleteProject($event)"
+  (projectNameChanged)="projectNameChanged($event)"
+  (removeTag)="removeTag($event.project, $event.tag)"
+  (orderByChanged)="orderByChanged($event)"
+  (loadMore)="loadMore()"
+  (toggleNestedView)="toggleNestedView($event)"
+  class="nested-project-view"
+  >
+  <button create-button mat-flat-button (click)="createPipeline()">
+    <mat-icon fontSet="al" fontIcon="al-ico-add"></mat-icon>
+    NEW PIPELINE
+  </button>
+
+  <div empty-state class="empty-state">
+    <div class="title-icon">
+      <mat-icon fontSet="al" fontIcon="al-ico-pipelines" class="xxl"></mat-icon>
+    </div>
+    <div class="title">NO PIPELINES TO SHOW</div>
+    <div class="sub-title">Run your first pipeline to see it displayed here
+      @if (allExamples) {
+        or <a href=""
+        (click)="$event.preventDefault(); createPipelineExamples()"
+        class="link">generate example
+      </a>
+    }
+  </div>
+  <sm-pipelines-empty-state [initPipelineCode]="initPipelineCode" [createButton]="true"></sm-pipelines-empty-state>
+</div>
+</sm-nested-project-view-page>
+
+<ng-template #cardContent let-project>
+  <sm-circle-counter
+    [counter]="project.id === '*' ? '∞' : project.stats?.active?.status_count?.in_progress ?? '0'"
+    label="RUNNING"
+  [type]="project.stats?.active?.status_count?.in_progress ===0 ? circleTypeEnum.empty : circleTypeEnum.running"></sm-circle-counter>
+  <sm-circle-counter [counter]="project.id === '*' ? '∞' : project.stats?.active?.completed_tasks_24h ?? '0'"
+    label="COMPLETED"
+    [type]="project.stats?.active?.completed_tasks_24h ===0 ? circleTypeEnum.empty : circleTypeEnum.completed"
+  underLabel="(24 hrs)"></sm-circle-counter>
+  <sm-circle-counter
+    [counter]="project.stats?.active?.status_count.failed"
+    label="FAILED"
+    [type]="project.stats?.active?.status_count.failed ? circleTypeEnum.failed : circleTypeEnum.empty"
+  ></sm-circle-counter>
+</ng-template>
+
+<ng-template #cardFooterContent let-project>
+  <div class="footer-tags">
+    @if (!hideMenu) {
+      <sm-tag-list
+        class="w-100"
+        [tags]="project.tags"
+        (remove)="removeTag(project, $event)"
+        smClickStopPropagation
+      ></sm-tag-list>
+    } @else {
+      <sm-tag-list [tags]="project.tags"></sm-tag-list>
+    }
+  </div>
+</ng-template>
+

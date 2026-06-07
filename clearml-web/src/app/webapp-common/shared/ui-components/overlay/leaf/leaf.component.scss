@@ -1,0 +1,15 @@
+@use "mixins/wizard-template";
+
+.choose-container {
+  @include wizard-template.choose-leaf;
+  padding: 0 24px;
+}
+
+.code-select{
+  position: absolute;
+  bottom: 5px;
+}
+
+:host {
+  height: 100%;
+}

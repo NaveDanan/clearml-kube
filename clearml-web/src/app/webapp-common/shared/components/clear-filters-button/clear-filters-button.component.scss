@@ -1,0 +1,11 @@
+:host {
+  i {
+    display: inline;
+
+    &.disabled {
+      .path2:before, .path1:before {
+        color: color-mix(in srgb, var(--color-surface), var(--color-on-surface) 40%);
+      }
+    }
+  }
+}

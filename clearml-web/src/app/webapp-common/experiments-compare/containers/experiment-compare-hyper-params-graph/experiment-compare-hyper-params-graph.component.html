@@ -1,0 +1,89 @@
+<div class="list-container">
+  @if (scatter) {
+    <div class="metric-title">Plot axes</div>
+    <div class="label">Y-axis</div>
+    <sm-metric-variant-selector
+      class="param-selector"
+      [title]="'Metric'"
+      [selectedMetricVariants]="selectedMetric ? [selectedMetric]: []"
+      [metricVariants]="metricsResults$ | ngrxPush"
+      (selectMetricVariant)="metricVariantSelected($event)"
+      (clearSelection)="clearMetricsSelection()"
+    ></sm-metric-variant-selector>
+  } @else {
+    <div class="metric-title">Coordinates</div>
+    <sm-metric-variant-selector
+      class="param-selector"
+      [title]="'Performance Metrics'"
+      [selectedMetricVariants]="selectedMetrics" [multiSelect]="true" [skipValueType]="false"
+      [metricVariants]="metricsResults$ | ngrxPush"
+      (selectMetricVariant)="multiMetricVariantSelected($event)"
+      (removeMetric)="multiMetricVariantSelected({addCol: false, variant: $event, valueType:$event.valueType})"
+      (clearSelection)="clearMetricsSelection()"
+    ></sm-metric-variant-selector>
+  }
+  @if (scatter) {
+    <div class="label">X-axis</div>
+  }
+  <sm-param-selector
+    class="param-selector"
+    [itemsList]="hyperParams"
+    [title]="'Hyperparameters'"
+    [selectedHyperParams]="encodedHyperParams"
+    [single]="scatter"
+    [selectFilteredItems]="selectHideIdenticalHyperParams$ | ngrxPush"
+    [selectedItemsListMapper]="decodeURIComponent"
+    (selectedItems)="selectedParamsChanged($event)"
+    (clearSelection)="clearParamsSelection()"
+  ></sm-param-selector>
+  @if (scatter) {
+    <hr class="separate-margins">
+    <div class="metric-title">Additional data point information</div>
+    <sm-metric-variant-selector class="param-selector"
+                                [title]="'Metrics'"
+                                [selectedMetricVariants]="(selectedMetricsHoverInfo$ | ngrxPush)"
+                                [multiSelect]="true"
+                                [skipValueType]="true"
+                                [metricVariants]="metricsResults$ | ngrxPush"
+                                (selectMetricVariant)="metricVariantForHoverSelected($event)"
+                                (removeMetric)="metricVariantForHoverSelected({addCol: false, variant: $event, valueType:null})"
+                                (clearSelection)="clearMetricsSelectionForHover()"
+    ></sm-metric-variant-selector>
+    <sm-param-selector class="param-selector"
+                       [title]="'Hyperparameters'"
+                       [itemsList]="hyperParams"
+                       [selectedHyperParams]="selectedParamsHoverInfoEncoded$ | ngrxPush"
+                       [single]="false"
+                       [selectFilteredItems]="selectHideIdenticalHyperParams$ | ngrxPush"
+                       [selectedItemsListMapper]="decodeURIComponent"
+                       (selectedItems)="selectedParamsForHoverChanged($event)"
+                       (clearSelection)="clearParamsForHoverSelection()"></sm-param-selector>
+  }
+</div>
+
+<div class="graphs-container h-100">
+  @if ((experiments$ | ngrxPush).length > 1) {
+    @if (scatter && !!selectedMetric && selectedHyperParams?.length > 0) {
+      <sm-compare-scatter-plot [params]="selectedHyperParams"
+                               [metric]="selectedMetric | metricVariantToPath: true"
+                               [metricName]="selectedMetric | metricVariantToName: true"
+                               [experiments]="experiments$ | ngrxPush"
+                               [extraHoverInfoParams]="selectedParamsHoverInfo$ |ngrxPush"
+                               [extraHoverInfoMetrics]="selectedMetricsHoverInfo$ | ngrxPush"></sm-compare-scatter-plot>
+    }
+    @else if (!scatter && selectedMetrics.length > 0 && selectedHyperParams?.length > 0) {
+      @if (plotlyReady$ | ngrxPush) {
+        <sm-parallel-coordinates-graph [experiments]="experiments$ | ngrxPush"
+                                       [metrics]="selectedMetrics"
+                                       [parameters]="selectedHyperParams"
+                                       (createEmbedCode)="createEmbedCode($event)"></sm-parallel-coordinates-graph>
+      }
+    } @else if (selectedHyperParams) {
+      <div class="d-flex align-items-center justify-content-center flex-column h-100 no-data">
+        <mat-icon fontSet="al" fontIcon="al-ico-no-data-graph" class="xxl"></mat-icon>
+        <h4 class="no-data-title">NO DATA TO SHOW</h4>
+        <div class="sub-title">Please select hyperparameters & metrics</div>
+      </div>
+    }
+  }
+</div>

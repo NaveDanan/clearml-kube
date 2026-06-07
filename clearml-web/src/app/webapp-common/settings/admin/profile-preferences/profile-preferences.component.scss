@@ -1,0 +1,31 @@
+:host {
+  display: block;
+
+  .reload {
+    color: var(--color-primary);
+    &:hover {
+      color: var(--color-primary);;
+    }
+  }
+
+  .al-icon {
+    color: var(--color-outline);
+    &:hover {
+      color: var(--color-on-surface-variant);
+    }
+  }
+
+  .toggles {
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    margin-top: 0;
+    mat-slide-toggle {
+      margin-bottom: 12px;
+    }
+  }
+
+  .info {
+    height: 18px;
+  }
+}

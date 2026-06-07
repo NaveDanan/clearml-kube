@@ -1,0 +1,86 @@
+:host {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--row-default-color);
+
+  .worker-info-container {
+    display: grid;
+    grid-template-columns: minmax(100px, 2fr) minmax(100px, 1fr);
+    gap: 12px;
+    padding: 12px 24px;
+  }
+
+  .queues-table-container {
+    flex: 1;
+    overflow: auto;
+  }
+
+  ::ng-deep .table-row {
+    height: 40px;
+    padding: 0 !important;
+    display: flex;
+    &:last-of-type {
+      border-bottom-color: var(--color-surface-container-high) !important;
+    }
+  }
+
+  ::ng-deep {
+    .mat-mdc-tab-header {
+      background-color: var(--row-header-color);
+      border-bottom: 1px solid var(--row-border-color);
+    }
+    .mat-mdc-tab {
+      --mat-tab-container-height: 39px;
+    }
+  } 
+
+  sm-simple-table-2 ::ng-deep .headers, .body {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: 30% 50% 15%;
+    grid-gap: 12px;
+    padding: 0 12px;
+    line-height: 40px;
+  }
+
+  .close {
+    position: absolute;
+    right: 12px;
+    top: 8px;
+    z-index: 5;
+  }
+
+  .id-cell {
+    .value {
+      flex: 1;
+    }
+
+    .copy-btn {
+      min-width: 30px;
+      margin-left: 5px;
+      visibility: hidden;
+
+      ::ng-deep .btn {
+        padding: 0;
+      }
+    }
+
+    &:hover {
+      .copy-btn {
+        visibility: visible;
+      }
+    }
+  }
+
+  .empty-state {
+    flex-grow: 1;
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--color-empty-state);
+  }
+}

@@ -1,0 +1,29 @@
+<sm-reports-list
+  [reports]="reports$ | ngrxPush"
+  [archive]="archive$ | ngrxPush"
+  [noMoreReports]="noMoreReports$ | ngrxPush"
+  [allTags]="reportsTags$ | ngrxPush"
+  [projectId]="selectedProjectId$ | ngrxPush"
+  (reportSelected)="reportSelected($event)"
+  (reportCardUpdateName)="reportCardUpdateName($event)"
+  (moveTo)="moveTo($event)"
+  (delete)="delete($event)"
+  (share)="share($event)"
+  (newReport)="openCreateReportDialog($event)"
+  (loadMore)="loadMore()"
+  (addTag)="addTag($event)"
+  (removeTag)="removeTag($event)"
+  (moveToArchive)="moveToArchive($event)"
+>
+  <sm-reports-header
+    [archive]="archive$ | ngrxPush"
+    [allTags]="reportsTags$ |ngrxPush"
+    [sortOrder]="reportsSortOrder$ | ngrxPush"
+    [sortByField]="reportsOrderBy$ | ngrxPush"
+    [projectId]="selectedProjectId$ | ngrxPush"
+    (toggleNestedView)="toggleNestedView($event)"
+    (createReportClicked)="openCreateReportDialog($event)"
+    (archiveToggled)="toggleArchive($event)"
+    (orderByChanged)="orderByChanged($event)"
+  ></sm-reports-header>
+</sm-reports-list>

@@ -1,0 +1,86 @@
+@if (metricValuesView()) {
+  <sm-experiment-metric-data-table
+    [selectedMetricsScalar]="tableSelectedMetrics()"
+    [lastMetrics]="lastMetricsValues()"
+    (selectedMetricsChanged)="selectedMetricsChanged($event)"
+  ></sm-experiment-metric-data-table>
+} @else {
+  <mat-drawer-container [hasBackdrop]="false" autosize class="light-theme">
+    <mat-drawer #drawer [opened]="!minimized" [mode]="minimized ? 'over' : 'side'" [disableClose]="!minimized">
+      <div class="list-container">
+        @if (!minimized) {
+          <sm-graph-settings-bar
+            class="drawer-settings-bar"
+            [verticalLayout]="true"
+            [smoothWeight]="smoothWeight()"
+            [smoothSigma]="smoothSigma()"
+            [smoothType]="smoothType()"
+            [xAxisType]="xAxisType()"
+            [groupBy]="groupBy()"
+            [groupByOptions]="groupByOptions"
+            [showOrigin]="showOriginals()"
+            [clearable]="!isProjectLevel()"
+            (changeWeight)="changeSmoothness($event)"
+            (changeSigma)="changeSigma($event)"
+            (toggleSettings)="toggleSettingsBar()"
+            (changeXAxisType)="changeXAxisType($event)"
+            (changeGroupBy)="changeGroupBy($event)"
+            (changeShowOrigin)="changeShowOriginals($event)"
+            (changeSmoothType)="changeSmoothType($event)"
+            (setToProject)="setToProject()"
+          ></sm-graph-settings-bar>
+        }
+
+        <sm-selectable-grouped-filter-list
+          [list]="scalarList()"
+          [nested]="groupBy() === 'none'"
+          [checkedList]="selectedMetrics()"
+          [searchTerm]="searchTerm()"
+          (itemSelect)="metricSelected($event)"
+          (selectedChanged)="hiddenListChanged($event)"
+          (searchTermChanged)="searchTermChanged($event)"
+        ></sm-selectable-grouped-filter-list>
+        @if (minimized) {
+          <button mat-icon-button class="close sm" (click)="drawer.close()" data-id="closeToggleGraph">
+            <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+          </button>
+        }
+      </div>
+    </mat-drawer>
+    <mat-drawer-content class="overflow-hidden">
+      <div class="graphs-container" [class.maximized]="!minimized">
+        @if (metricValuesView() === false && minimized) {
+          <div class="hover-button">
+            <button mat-flat-button class="icon-only" (click)="drawer.open()" smTooltip="Toggle Graphs" data-id="eyeIcon">
+              <mat-icon fontSet="al" fontIcon="al-ico-eye-outline"></mat-icon>
+            </button>
+          </div>
+        }
+        <sm-experiment-graphs
+          [class.with-settings]="!!showSettingsBar() && minimized"
+          #experimentGraphs
+          [isGroupGraphs]="groupBy() === 'none'"
+          [metrics]="graphs()"
+          [list]="scalarList()"
+          [singleValueData]="singleValueData()"
+          [experimentName]="experiment()?.name"
+          [hiddenList]="selectedMetrics()"
+          [smoothWeight]="smoothWeightDelayed()"
+          [smoothSigma]="smoothSigmaDelayed()"
+          [smoothType]="smoothType()"
+          [showOriginals]="showOriginals()"
+          [legendStringLength]="minimized ? 14 : 19"
+          [minimized]="minimized"
+          [xAxisType]="xAxisType()"
+          [groupBy]="groupBy()"
+          [splitSize]="splitSize()"
+          [breakPoint]="900"
+          [exportForReport]="exportForReport"
+          (createEmbedCode)="createEmbedCode($event)"
+          (resetGraphs)="resetMetrics()"
+          (chartSettingsChanged)="changeChartSettings($event)"
+        ></sm-experiment-graphs>
+      </div>
+    </mat-drawer-content>
+  </mat-drawer-container>
+}

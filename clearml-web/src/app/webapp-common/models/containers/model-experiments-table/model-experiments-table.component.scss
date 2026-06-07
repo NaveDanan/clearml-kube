@@ -1,0 +1,31 @@
+@use 'variables';
+
+:host {
+  .search-experiment-for-compare {
+    margin-bottom: 12px;
+  }
+
+  .select-experiments-container {
+    height: calc(100% - 50px);
+    width: 100%;
+  }
+
+  .hide-table {
+    height: 0;
+    overflow: hidden;
+    transition: variables.$transition-fast;
+
+    &.show-table {
+      height: calc(100% - 30px);
+      margin: 0 -24px;
+      overflow-y: auto;
+    }
+  }
+
+  ::ng-deep sm-table p-table {
+    .p-datatable-hoverable-rows .p-datatable-selectable-row  .cursor-default{
+      cursor: pointer;
+    }
+  }
+}
+

@@ -1,0 +1,110 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  ::ng-deep .mat-mdc-tab-body-wrapper {
+    display: none;
+  }
+
+  ::ng-deep .mat-mdc-tab-labels {
+    gap: 8px;
+    .mdc-tab {
+      padding: 0 12px;
+      min-width: 40px;
+    }
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-toggle-filters.has-filter {
+  background-color: var(--color-surface-container-highest);
+  .al-ico-filter-on .path2:before {
+    color: var(--color-primary);
+  }
+}
+
+.mat-mdc-tab-group {
+  flex: 1;
+  --mat-tab-label-text-size: 11px;
+  --mat-tab-container-height: 32px;
+  --mat-tab-divider-height: 1px;
+
+  .dot {
+    position: absolute;
+    top: 8px;
+    right: -8px;
+    display: block;
+    width: 5px;
+    height: 5px;
+    border-radius: 5px;
+    background-color: var(--color-primary);
+  }
+}
+
+.list {
+  flex-grow: 1;
+  overflow: auto;
+  height: calc(100vh - 400px);
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 12px 0 0;
+  &__category {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--color-surface-container-high);
+    &:last-child {
+      border: none;
+    }
+    &__title {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      padding: 6px 0;
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--color-primary);
+      background: var(--mat-dialog-container-color);
+    }
+  }
+
+  &__view-all-link {
+    margin: 6px 0 12px;
+    display: inline-block;
+  }
+  &__load-more {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 15px;
+  }
+
+  .no-data {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-empty-state);
+  }
+}
+
+.mat-drawer-container {
+  --mat-sidenav-container-divider-color: var(--color-outline-variant);
+}
+
+.mat-drawer {
+  width: 280px;
+  --mat-sidenav-container-background-color: transparent;
+}
+
+.mat-mdc-progress-spinner {
+  --mat-progress-spinner-active-indicator-color: var(--color-primary);
+}

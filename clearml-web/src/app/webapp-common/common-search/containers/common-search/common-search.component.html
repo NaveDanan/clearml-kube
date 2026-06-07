@@ -1,0 +1,43 @@
+<div class="search-icon-container">
+  <button
+    mat-icon-button
+    class="search-icon"
+    [class.open]="isSearching()"
+    [disabled]="isSearching() && !searchElem().searchBarInput().nativeElement.value"
+    (click)="isSearching() ? clearSearch() : openSearch()"
+    data-id="searchIcon"
+  >
+    <mat-icon
+      fontSet="al"
+      [fontIcon]="searchElem().searchBarInput().nativeElement.value ? 'al-ico-dialog-x' : 'al-ico-search'"
+    ></mat-icon>
+  </button>
+</div>
+<span class="search-container" [class.open]="isSearching()">
+  <sm-search
+    #searchComponent
+    class="outline contained-icon"
+    [class.regex-error]="regexError"
+    [value]="(searchQuery$ | ngrxPush)?.original"
+    [placeholder]="searchPlaceholder()"
+    [hideIcons]="true"
+    [minimumChars]="minChars"
+    (focusout)="onSearchFocusOut()"
+    (valueChanged)="search($event)"
+  >
+    @if (regexError) {
+      <mat-icon class="error regexp" fontSet="al" fontIcon="al-ico-error-circle" inline [smTooltip]="regexError" [matTooltipPosition]="'below'"></mat-icon>
+    }
+    @if (showRegex$ | ngrxPush) {
+      <button mat-icon-button
+              class="regexp sm"
+              [class.active]="regExp()"
+              smClickStopPropagation
+              [smTooltip]="'Regex'" [matTooltipPosition]="'below'"
+              (click)="toggleRegExp(); searchComponent.searchBarInput().nativeElement.focus();"
+      >
+        <mat-icon fontSet="al" fontIcon="al-ico-regex" data-id="enableRegexButton"></mat-icon>
+      </button>
+    }
+  </sm-search>
+</span>

@@ -1,0 +1,9 @@
+.error {
+  color: var(--color-error);
+  font-size: 12px;
+  line-height: 1.2;
+  &.is-full-width {
+    max-width: 215px;
+  }
+  max-width: 124px;
+}

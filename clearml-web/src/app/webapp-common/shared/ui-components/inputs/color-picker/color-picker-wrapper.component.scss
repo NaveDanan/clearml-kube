@@ -1,0 +1,57 @@
+$z-index-colorpicker: 1001;
+
+:host {
+  ::ng-deep color-picker .color-picker {
+    z-index: $z-index-colorpicker;
+    border-radius: 4px;
+    box-shadow: 0 3px 6px 0 rgba(0, 0, 0, 0.16);
+    border-color: var(--color-outline-variant);
+    background-color: var(--color-surface-container-low);
+
+    .cursor {
+      box-shadow: 0 0 0 2px #fff;
+    }
+
+    .saturation-lightness {
+      border-radius: 3px 3px 0 0;
+    }
+    .preset-area {
+      hr {
+        margin: 0 0 12px;
+        border: none;
+        border-top: 1px solid var(--color-outline-variant);
+      }
+      .preset-color {
+        margin: 4px;
+        border-color: var(--color-surface-container-lowest);
+        box-shadow: 0 0 0 1px var(--color-outline-variant);
+
+        &:hover {
+          box-shadow: 0 0 0 1px var(--color-outline);
+        }
+      }
+      .preset-label {
+        color: var(--color-primary);
+      }
+    }
+    .button-area {
+      padding: 0 16px;
+    }
+    .arrow {
+      display: none;
+    }
+  }
+
+  .color-picker-wrapper {
+    position: absolute;
+  }
+  ::ng-deep .cp-preset-colors-class .preset-color:last-child {
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M12,16V12H8V8h4v4h4v4ZM4,16V12H8v4ZM0,12V8H4v4ZM12,8V4H8V0h4V4h4V8ZM4,8V4H0V0H4V4H8V8Z' fill='%23ccc'/%3E%3C/svg%3E");
+  }
+}
+
+.buttons {
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+}

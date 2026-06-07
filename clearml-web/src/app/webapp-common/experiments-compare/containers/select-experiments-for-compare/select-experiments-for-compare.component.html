@@ -1,0 +1,74 @@
+<sm-dialog-template [header]="'Select compared '+ data.entityType + 's'">
+  <div class="select-experiments-container light-theme" (click)="closeSearch()">
+    <div class="search-experiment-for-compare d-flex justify-content-between mb-3">
+      <sm-search
+        #search
+        class="search outline"
+        placeholder="Start typing task name or ID to add to your comparison"
+        [value]="searchTerm()"
+        (valueChanged)="searchTermChanged($event)">
+      </sm-search>
+      <div class="d-flex-center">
+        <mat-slide-toggle
+          class="me-2"
+          [checked]="showArchived$ | ngrxPush"
+          (change)="showArchived($event)"
+        >Include Archived</mat-slide-toggle>
+        <sm-clear-filters-button
+          [tableFilters]="(tableFilters$ | ngrxPush)"
+          (clearTableFilters)="clearTableFilters()"
+        ></sm-clear-filters-button>
+      </div>
+    </div>
+    <div class="hide-table show-table">
+      <sm-experiments-table
+        class="align-self-stretch"
+        [currentUserId]="currentUser()?.id"
+        [selectionReachedLimit]="reachedCompareLimit"
+        [selectionMode]="null"
+        [reorderableColumns]="false"
+        [minimizedView]="false"
+        [colsOrder]="(tableColsOrder$ | ngrxPush)"
+        [tableCols]="tableCols$| ngrxPush"
+        [users]="users$ | ngrxPush"
+        [projects]="projects$ | ngrxPush"
+        [checkedExperiments]="selectedExperimentsIds | idToObjectsArray"
+        [experiments]="experiments$ | ngrxPush"
+        [experimentTypes]="types$ | ngrxPush"
+        [tableFilters]="(tableFilters$ | ngrxPush)"
+        [tableSortFields]="(tableSortFields$ | ngrxPush)"
+        [tableSortOrder]="(tableSortOrder$ | ngrxPush)"
+        [tags]="tags$ | ngrxPush"
+        [hyperParamsOptions]="hyperParamsOptions$ | ngrxPush"
+        [activeParentsFilter]="activeParentsFilter$ | ngrxPush"
+        [parents]="parent$ | ngrxPush"
+        [noMoreExperiments]="noMoreExperiments$ | ngrxPush"
+        [systemTags]="systemTags$ | ngrxPush"
+        [entityType]="entityTypes.experiment"
+        (tagsMenuOpened)="refreshTagsList()"
+        (typesMenuOpened)="refreshTypesList()"
+        (experimentsSelectionChanged)="experimentsSelectionChanged($event)"
+        (loadMoreExperiments)="getNextExperiments()"
+        (sortedChanged)="sortedChanged($event)"
+        (filterChanged)="filterChanged($event)"
+        (filterSearchChanged)="filterSearchChanged($event)"
+        (columnResized)="resizeCol($event)"
+      ></sm-experiments-table>
+    </div>
+  </div>
+  <div class="buttons">
+    <button
+      mat-flat-button
+      [disabled]="selectedExperimentsIds.length===0"
+      type="submit"
+            (click)="applyChanges()"
+            class="yes-button" data-id="ApplyButton">
+      APPLY
+    </button>
+    <button
+      mat-stroked-button
+      (click)="closeDialog()" data-id ="CancelButton">
+      CANCEL
+    </button>
+  </div>
+</sm-dialog-template>

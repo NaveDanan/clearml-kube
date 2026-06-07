@@ -1,0 +1,61 @@
+<span class="search-input-container"
+      [class.expand]="true"
+      [class.active]="active"
+      [class.animate]="!disableAnimation()"
+      [class.with-counter]="enableNavigation()"
+      [class.with-results]="searchResultsCount() > 0 && !empty()"
+      [class.focused]="focused"
+      (dblclick)="$event.stopPropagation()"
+      [delay]="400"
+      [action]="'leave'"
+      (smHesitate)="updateActive(false)"
+      (mouseover)="updateActive(true)">
+  <span class="search-input" [class.expand]="expandOnHover()">
+    <input
+      [class.active]="active"
+      data-id="searchInputField"
+      #searchBar
+      [placeholder]="placeholder()"
+      (focusin)="focusInput(true)"
+      (focusout)="focusInput(false)"
+      (input)="enableSearchOnSubmit()? validateValue() :onValueChange()"
+      (keydown)="onKeyDown($event)"
+    >
+
+    @if (enableSearchOnSubmit() && valueHasChanged() && !disabled()) {
+      <button mat-icon-button (click)="onValueChange()">
+        <mat-icon class="sm" fontSet="al" fontIcon="al-ico-success" data-id="searchIcon"></mat-icon>
+      </button>
+    } @else if (hideIcons()) {
+      <ng-content></ng-content>
+    } @else {
+      @if (searchBar.value.length === 0) {
+        <button mat-icon-button class="pointer-events-none">
+        <mat-icon fontSet="al" fontIcon="al-ico-search" data-id="searchIcon"></mat-icon>
+      </button>
+      } @else {
+        <button mat-icon-button (click)="clear()">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x" data-id="searchCrossButton"></mat-icon>
+      </button>
+      }
+    }
+    <ng-content select="[infoIcon]"></ng-content>
+
+    @if (enableNavigation()) {
+      @if (!searchResultsCount()) {
+        <div class="separator"></div>
+      }
+      @if (searchResultsCount() > 0 && !empty()) {
+        <div class="separator"></div>
+        <div class="match">{{ searchCounterIndex() + 1 }} of {{ searchResultsCount() }}</div>
+        <div class="separator"></div>
+      }
+      <button mat-icon-button [disabled]="empty() || searchCounterIndex() < 1" (click)="findNext(true)">
+        <mat-icon fontSet="al" fontIcon="al-ico-ico-chevron-up" data-id="previousSearchResultButton"></mat-icon>
+      </button>
+      <button class="me-1" mat-icon-button [disabled]="empty() || searchCounterIndex() + 1 === searchResultsCount() || !searchResultsCount()" (click)="findNext()">
+        <mat-icon fontSet="al" fontIcon="al-ico-ico-chevron-down" data-id="nextSearchResultButton"></mat-icon>
+      </button>
+    }
+  </span>
+</span>

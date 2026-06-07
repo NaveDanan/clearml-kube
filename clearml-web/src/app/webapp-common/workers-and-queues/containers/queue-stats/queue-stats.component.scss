@@ -1,0 +1,55 @@
+@use "../../../../webapp-common/layout/layout";
+
+:host {
+  display: flex;
+
+  > div {
+    height: layout.$graph-height;
+  }
+
+  .chart-container {
+    padding: 20px 20px 0;
+    background-color: var(--color-surface-container-lowest);
+    border: 1px solid var(--color-outline-variant);
+    width: 50%;
+    border-radius: 4px;
+
+    &.right {
+      margin-left: 20px;
+    }
+
+    .line-chart-container {
+      height: calc(100% - 48px);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      white-space: nowrap;
+      margin-bottom: 12px;
+
+      .title {
+        display: flex;
+        align-items: center;
+        margin-right: 16px;
+        font-size: 15px;
+        text-transform: uppercase;
+        white-space: nowrap;
+        overflow: hidden;
+        color: var(--color-on-secondary-container);
+      }
+
+      .time-selector {
+        width: 150px;
+        flex-shrink: 0;
+      }
+    }
+
+    .warning {
+      margin-left: 10px;
+      --mat-icon-color: var(--color-warning)
+    }
+  }
+}

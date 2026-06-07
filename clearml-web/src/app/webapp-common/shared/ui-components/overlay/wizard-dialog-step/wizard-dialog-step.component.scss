@@ -1,0 +1,111 @@
+@use "variables";
+
+@keyframes hide-step {
+  0% {
+    opacity: 1;
+    height: 88px;
+  }
+  100% {
+    margin-top: 0;
+    margin-bottom: 0;
+    opacity: 0;
+    height: 0;
+  }
+}
+
+@keyframes show-step {
+  100% {
+    opacity: 1;
+  }
+  33% {
+    opacity: 1;
+  }
+  0% {
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+  }
+}
+
+.icon-image {
+  opacity: 1;
+  padding-top: 5vh;
+  padding-bottom: 2vh;
+  animation: show-step variables.$transition-slow;
+  animation-fill-mode: forwards;
+  &.hide-step {
+    animation: hide-step variables.$transition-slow;
+    animation-fill-mode: forwards;
+
+  }
+}
+
+.label {
+  font-size: 28px;
+  font-weight: 300;
+}
+
+.sub-label {
+  font-size: 14px;
+  line-height: 1.29;
+  color: var(--color-on-surface-variant);
+  white-space: pre-line;
+  padding: 2vh;
+}
+
+.step-number {
+  margin-top: 2vh;
+  font-size: 10vh;
+  font-weight: 900;
+  color: color-mix(in srgb, var(--color-secondary), transparent 50%);
+  animation: show-step variables.$transition-slow;
+  animation-fill-mode: forwards;
+  &.hide-step {
+    animation: hide-step variables.$transition-slow;
+    animation-fill-mode: forwards;
+  }
+}
+
+.divider {
+  padding: 24px;
+  width: 100%;
+  height: 2px;
+  border-bottom: solid 2px var(--color-outline);
+}
+
+.step-icon {
+  margin-top: 4vh;
+  margin-bottom: 4vh;
+  width: 10vh;
+  height: 10vh;
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
+  &.hide-step {
+    animation: hide-step variables.$transition-slow;
+    animation-fill-mode: forwards;
+  }
+}
+
+.choose-box {
+  visibility: hidden;
+  height: calc(100% - 200px);
+  overflow-y: auto;
+  padding: 2px 8px;
+
+  &.hide-step {
+    visibility: visible;
+    transition-delay: variables.$transition-slow;
+  }
+}
+
+.buttons-footer-content {
+  padding: 2.5vh;
+}
+.step{
+  &.hide-step{
+    transition-delay: variables.$transition-slow;
+  }
+}
+
+

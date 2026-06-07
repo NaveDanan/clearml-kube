@@ -1,0 +1,53 @@
+$dot-size: 8px;
+
+:host {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  position: relative;
+  &.hidden {
+    display: none;
+  }
+}
+
+.load-more {
+  &__dot {
+    --dot-color: var(--color-outline);
+    position: relative;
+    width: $dot-size;
+    height: $dot-size;
+    border-radius: $dot-size;
+    background-color: var(--dot-color);
+    animation: dot 1s infinite linear alternate;
+    animation-delay: 0.5s;
+  }
+  &__dot::before,
+  &__dot::after {
+    content: "";
+    display: inline-block;
+    position: absolute;
+    top: 0;
+    width: inherit;
+    height: inherit;
+    border-radius: inherit;
+    background-color: inherit;
+    animation: dot 1s infinite alternate;
+  }
+  &__dot::before {
+    left: calc(-#{$dot-size} * 2);
+    animation-delay: 0s;
+  }
+  &__dot::after {
+    left: calc(#{$dot-size} * 2);
+    animation-delay: 1s;
+  }
+}
+
+@keyframes dot {
+  0% {
+    background-color: var(--dot-color);
+  }
+  50%, 100% {
+    background-color: rgba(var(--dot-color), 0.5);
+  }
+}

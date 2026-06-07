@@ -1,0 +1,24 @@
+:host {
+  .description-tooltip {
+    margin: -4px 0;
+    max-width: 300px;
+    background-color: var(--mat-tooltip-container-color);
+    padding: 0 12px 8px 12px;
+    &.add-description {
+      padding-top: 8px;
+    }
+    border-radius: 4px;
+    box-shadow: 0 3px 6px 0 rgba(0, 0, 0, 0.16);
+    font-size: 11px;
+    overflow: hidden;
+    div, p {
+      color: var(--color-surface);
+    }
+    div.copy-button {
+      color: var(--color-surface);
+    }
+    a {
+      color: var(--color-primary-container);
+    }
+  }
+}

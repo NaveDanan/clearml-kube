@@ -1,0 +1,24 @@
+:host {
+  display: flex !important;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+
+  .queues-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 24px 0;
+  }
+
+  sm-queue-stats {
+    margin: 0 24px;
+  }
+}
+
+@media (max-height: 750px) {
+  :host {
+    height: unset;
+  }
+}

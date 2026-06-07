@@ -1,0 +1,7 @@
+import {HeaderNavbarTabConfig} from '@common/layout/header-navbar-tabs/header-navbar-tabs-config.types';
+
+export const ORCHESTRATION_ROUTES = [
+  {header: 'workers', featureName: 'workers', link: 'workers-and-queues/workers'},
+  {header: 'queues', featureName: 'queues', link: 'workers-and-queues/queues'},
+  {header: 'autoscaler', featureName: 'autoscalers', link: 'workers-and-queues/autoscalers'},
+] as HeaderNavbarTabConfig[];

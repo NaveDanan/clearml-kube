@@ -1,0 +1,33 @@
+.filter{
+  font-size: 14px;
+  font-weight: 500;
+
+  &::placeholder {
+    font-size: 14px;
+  }
+}
+
+.buttons-container {
+  height: 300px;
+  max-width: 450px;
+  overflow: auto;
+  margin-top: 4px;
+}
+
+:host {
+  mat-form-field {
+    width: 100%;
+  }
+}
+
+.project-tags-filter {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+
+::ng-deep .tags-menu .mat-mdc-menu-content .mat-mdc-menu-item .mat-mdc-menu-item-text {
+  display: unset;
+  white-space: nowrap;
+}

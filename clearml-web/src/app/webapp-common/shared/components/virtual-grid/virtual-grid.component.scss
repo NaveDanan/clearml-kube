@@ -1,0 +1,32 @@
+:host {
+  display: block;
+  height: 100%;
+  width: 100%;
+
+  .card-container {
+    height: 100%;
+  }
+  .card-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, var(--cardWidth));
+    grid-gap: var(--gridGap);
+    padding-bottom: var(--gridGap);
+    justify-content: center;
+
+    &.snippets-mode {
+      grid-template-columns: repeat(auto-fit, minmax(var(--cardWidth), 1fr));
+      padding: 0 var(--padding);
+    }
+  }
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 15px;
+}
+
+.mat-mdc-progress-spinner {
+  --mat-progress-spinner-active-indicator-color: var(--color-on-primary);
+}

@@ -1,0 +1,28 @@
+<div class="sm-card-list-layout">
+  <div #header class="sm-card-list-header">
+    <div class="recent-title">RECENT PROJECTS
+      <button mat-button class="view-all" (click)="router.navigateByUrl('/projects')">VIEW ALL</button>
+    </div>
+    <button
+      mat-flat-button
+      data-id="New Project"
+      (click)="openCreateProjectDialog()">
+      <mat-icon fontSet="al" fontIcon="al-ico-add"></mat-icon>
+      NEW PROJECT
+    </button>
+  </div>
+  @if (recentProjectsList$(); as recentProjectsList) {
+    @for(project of recentProjectsList; track project.id) {
+      <sm-project-card
+        [project]="project" (projectCardClicked)="projectCardClicked($event)"
+        [hideMenu]="true"
+      ></sm-project-card>
+    }
+    @if (recentProjectsList.length < cardsInRow) {
+      <sm-plus-card
+        [folder]="true"
+        (plusCardClick)="openCreateProjectDialog()"
+      ></sm-plus-card>
+    }
+  }
+</div>

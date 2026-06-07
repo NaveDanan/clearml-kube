@@ -1,0 +1,41 @@
+:host {
+  height: 18px;
+  user-select: none;
+  display: flex;
+
+  .id-number {
+    display: flex;
+    align-items: center;
+    color: var(--color-on-surface);
+    background-color: var(--color-surface-container-high);
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+
+    .hash {
+      padding: 0 6px;
+      font-family: var(--font-family-monospace);
+      font-size: 12px;
+
+      .three-dots {
+        font-family: initial;
+        margin-left: 2px;
+      }
+    }
+
+    .id-rect {
+      fill: var(--color-primary);
+    }
+
+    .id-text {
+      fill: var(--color-on-primary);
+    }
+
+    &:hover {
+      .id-rect {
+        fill: var(--color-secondary);
+      }
+    }
+  }
+}
+

@@ -1,0 +1,86 @@
+
+:host {
+  cursor: pointer;
+
+  .card-name {
+    height: 32px;
+  }
+
+  .al-ico-project-path {
+    color: var(--color-primary);
+  }
+
+  .project-name {
+    max-width: 240px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .last-run {
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: color-mix(in srgb, var(--color-on-surface), transparent 40%);
+  }
+
+  .title {
+    font-weight: 500;
+  }
+
+  .footer-tags {
+    display: flex;
+    min-height: 38px;
+    padding: 0 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .rename-state .last-run {
+    visibility: hidden;
+    height: 18px;
+  }
+
+  .sub-projects-list {
+    height: 100%;
+    padding: 6px 0;
+
+    a {
+      color: var(--color-on-primary-container);
+      display: flex;
+      align-items: center;
+      margin: 0 12px;
+      padding: 0 12px;
+      border-radius: 3px;
+      line-height: 30px;
+      text-decoration: none;
+
+      ::ng-deep .sub-path {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 120px;
+
+        &.double-width {
+          max-width: 260px;
+        }
+      }
+
+      &:hover {
+        background-color: var(--color-primary-container);
+      }
+    }
+  }
+}
+
+::ng-deep .project-card {
+  cursor: pointer;
+  height: 228px;
+  overflow: hidden;
+}
+
+.project-name {
+  max-width: 280px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}

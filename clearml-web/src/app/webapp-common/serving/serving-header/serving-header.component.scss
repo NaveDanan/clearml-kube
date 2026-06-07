@@ -1,0 +1,28 @@
+:host {
+
+  .header-container {
+    padding: 0 24px;
+    height: 48px;
+    transition: background-color 0.5s;
+
+    .hide-item {
+      visibility: hidden;
+    }
+
+    ::ng-deep button {
+      border-color: var(--color-outline);
+      box-shadow: none;
+    }
+
+    &.archive-mode {
+      transition: background-color 0.5s;
+      background-color: var(--color-surface-variant);
+    }
+  }
+}
+
+sm-select-metric-for-custom-col {
+  display: block;
+  height: 640px;
+  max-height: calc(100vh - 120px);
+}

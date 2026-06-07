@@ -1,0 +1,78 @@
+<sm-dialog-template iconClass="al-ico-tag" header="TAG COLORS">
+  <form class="filter-form">
+    <mat-form-field appearance="fill" class="w-100">
+      <input smClickStopPropagation  matInput placeholder="Search" name="filter" [(ngModel)]="filterText" autocomplete="off">
+      @if (filterText) {
+        <button matSuffix mat-icon-button (click)="clearSearch()">
+          <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+        </button>
+      } @else {
+        <mat-icon matIconSuffix fontSet="al" fontIcon="al-ico-search"></mat-icon>
+      }
+    </mat-form-field>
+  </form>
+
+  <mat-menu #colorMenu="matMenu">
+    <ng-template matMenuContent let-tag="tag" let-colors="colors">
+      <button mat-menu-item (click)="openColorPicker(tag, colors.background)" data-id="backgroundOption">Background</button>
+      <button mat-menu-item [matMenuTriggerFor]="subMenu" [matMenuTriggerData]="{tag: tag, color: colors.foreground}" data-id="foregroundOption">Foreground</button>
+    </ng-template>
+  </mat-menu>
+
+  <mat-menu #subMenu="matMenu">
+    <ng-template matMenuContent let-tag="tag" let-color="color">
+      <button mat-menu-item (click)="setForeground(tag, 'black')">
+        <mat-icon fontSet="al" [fontIcon]="color === 'black' && 'al-ico-success'"></mat-icon>
+        Black
+      </button>
+      <button mat-menu-item (click)="setForeground(tag, 'white')">
+        <mat-icon fontSet="al" [fontIcon]="color === 'white' && 'al-ico-success'"></mat-icon>
+        White
+      </button>
+    </ng-template>
+  </mat-menu>
+
+  <div class="color-picker-wrapper">
+    <div
+      cpPosition="right"
+      [(colorPicker)]="currColor"
+      [cpOKButton]="false"
+      [cpCancelButton]="false"
+      [cpSaveClickOutside]="false"
+      [cpDisableInput]="true"
+      [cpPresetColors]="presetColors"
+      [cpExtraTemplate]="buttons"
+      cpWidth="340"
+      cpAlphaChannel="disabled"
+    ></div>
+    <ng-template #buttons>
+      <div class="buttons">
+        <button mat-stroked-button (click)="picker().closeDialog()">CLOSE</button>
+        <button mat-flat-button (click)="setBackground()">APPLY</button>
+      </div>
+    </ng-template>
+  </div>
+
+  <cdk-virtual-scroll-viewport itemSize="32" class="tags-list">
+    <div *cdkVirtualFor="let tag of (tags$ | ngrxPush) | filter:filterText:'caption'" class="tag-line">
+      <div data-id="tagOption" class="caption ellipsis">{{tag.caption}}</div>
+      @if ((tag.colorObservable | ngrxPush); as colors) {
+        <div
+          #trigger="matMenuTrigger"
+          [class.menu-opened]="trigger.menuOpen"
+          class="tag pointer"
+          data-id="tagColorButton"
+          [style.backgroundColor]="$any(colors)?.background"
+          [style.color]="$any(colors)?.foreground"
+          [matMenuTriggerFor]="colorMenu"
+          [matMenuTriggerData]="{tag: tag.caption, colors: colors}"
+        >a</div>
+      }
+    </div>
+  </cdk-virtual-scroll-viewport>
+
+
+  <div class="btn-row">
+    <button mat-stroked-button class="center" (click)="close()" data-id="closeButton">CLOSE</button>
+  </div>
+</sm-dialog-template>

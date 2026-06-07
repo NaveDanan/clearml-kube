@@ -1,0 +1,25 @@
+@if (notification.template) {
+  <ng-container [ngTemplateOutlet]="notification.template" [ngTemplateOutletContext]="{ notification: notification }">
+  </ng-container>
+} @else {
+
+  <div class="notification-container">
+    <div class="notifier__icon-type">
+      <mat-icon fontSet="al" [fontIcon]="icons[notification.type]"></mat-icon>
+    </div>
+    <div class="notifier__notification-message">
+      <div class="message">{{ notification.message }}</div>
+      @for (action of notification.actions; track action) {
+        <a href="" class="user-action" (click)="$event.preventDefault(); onActionClick(action)">{{action.name}}</a>
+      }
+    </div>
+
+    @if (config.behaviour.showDismissButton) {
+      <div class="notifier__notification-button">
+        <button mat-icon-button title="Dismiss" (click)="onClickDismiss()">
+          <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+        </button>
+      </div>
+    }
+  </div>
+}

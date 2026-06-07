@@ -1,0 +1,47 @@
+@for (kpi of kpis; track kpi.label) {
+  <div>
+    <sm-labeled-row label="{{kpi.label}}:">
+      @if (!kpi.href) {
+        <div [class.preserve-spaces]="kpi.downloadable">
+          <span class="value">{{kpi.value}}</span>
+          @if (kpi.downloadable) {
+            <span>
+              @if (isLocalFile) {
+                <sm-copy-clipboard [clipboardText]="kpi.value" label=""></sm-copy-clipboard>
+              }
+              @if (model?.uri && !isLocalFile) {
+                <button mat-icon-button (click)="downloadModelClicked()" data-id="downloadIcon" class="ms-2">
+                  <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
+                </button>
+              }
+            </span>
+          }
+        </div>
+      }
+      @if (kpi.href && kpi.value) {
+        <div>
+          <a [routerLink]="kpi.href">
+            {{kpi.value}}
+          </a>
+          <sm-copy-clipboard  [clipboardText]="kpi.task" label=""></sm-copy-clipboard>
+        </div>
+      }
+      @if (kpi.href && (!kpi.value) ) {
+        <div>N/A</div>
+      }
+    </sm-labeled-row>
+  </div>
+}
+
+<sm-labeled-row label="DESCRIPTION:" labelClass="align-self-start">
+  <sm-inline-edit
+    [originalText]="model?.comment"
+    [editable]="model?.company?.id"
+    [multiline]="true"
+    (textChanged)="commentValueChanged($event)"
+    (inlineActiveStateChanged)="editExperimentComment($event)"
+    (cancelEdit)="cancelEdit()"
+    >
+    <span class="preserve-spaces value me-3">{{!model? '-': (model?.comment | NA)}}</span>
+  </sm-inline-edit>
+</sm-labeled-row>

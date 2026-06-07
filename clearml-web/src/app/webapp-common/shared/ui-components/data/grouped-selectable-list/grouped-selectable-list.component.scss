@@ -1,0 +1,82 @@
+:host {
+  display: block;
+  padding: 0 12px 0 24px;
+  margin: 0;
+  overflow: scroll;
+  --mat-tree-container-background-color: transparent;
+  --mat-tree-node-min-height: 36px;
+}
+
+.gray {
+  color: gray;
+}
+
+.item-key {
+  font-size: 14px;
+}
+
+.list-item-key {
+  font-size: 12px;
+}
+
+.al-ico-hide {
+  opacity: 0;
+}
+
+mat-tree-node {
+  cursor: pointer;
+}
+
+mat-tree-node:hover .al-ico-hide {
+  opacity: 0.4;
+}
+
+.unchecked {
+  opacity: 0.65;
+}
+
+.toggle-icon {
+  transition: transform 0.1s ease-in, color 0.1s ease-in;
+}
+
+.last-child {
+  margin-bottom: 16px;
+}
+
+.child-node {
+  gap: 12px;
+  height: 32px;
+  line-height: 32px;
+  padding: 0 4px 0 12px;
+}
+
+.parent-node {
+  line-height: 36px;
+  padding: 0 4px;
+}
+
+.parent-node2 {
+  height: 36px;
+  padding: 0 4px 0 8px;
+}
+
+.panel {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  gap: 6px;
+  align-items: center;
+  border-radius: 4px;
+  &:hover {
+    background-color: var(--color-surface-container-high);
+    transition: background-color 0.2s;
+  }
+
+  &.expanded {
+    background-color: var(--color-surface-container-high);
+
+    .toggle-icon {
+      transform: rotate(90deg);
+    }
+  }
+}

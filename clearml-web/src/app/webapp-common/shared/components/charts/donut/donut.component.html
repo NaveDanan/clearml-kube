@@ -1,0 +1,57 @@
+<div class="content">
+  <div class="donut-container">
+    <canvas
+      [style.height.px]="(resizing()) ? 0 : null"
+      [style.width.px]="(resizing()) ? 0 : null"
+      baseChart
+      class="donut-container"
+      [data]="donutData()"
+      [type]="doughnutChartType"
+      [options]="donutOptions()"
+      (chartHover)="chartHovered($event)"
+    ></canvas>
+    <div class="percent" [style.opacity]="(resizing()) !== true && highlightedData() !== null ? 1 : null">
+      @if (highlightedData(); as highlighted) {
+        @if (Number.isFinite(highlighted.percent)) {
+          <div class="caption">
+            <div>{{ highlighted.caption }}</div>
+            <div class="caption-value">({{ highlighted.value | humanizeResult:units() }})</div>
+          </div>
+          <div>{{ highlighted.percent }}%</div>
+        }
+      }
+    </div>
+  </div>
+  <div class="donut-legend" data-id="annotationPieChart">
+    @for (slice of donutData().datasets[0].data; track $index) {
+      <div
+        class="slice"
+        [class.highlight]="$index === highlight()"
+        [style.--sliceColor]="colors()[$index]"
+        (mouseenter)="hoverLegend($index)"
+        (mouseleave)="leaveLegend()"
+      >
+        @if (showPicker()) {
+          @defer (on viewport) {
+            <div
+              #colorButton
+              [smChooseColor]="colors()[$index]"
+              [stringToColor]="$any(donutData().labels[$index])"
+              [colorButtonRef]="colorButton"
+              class="circle action"
+              data-id="annotationColorButton"
+            ></div>
+          } @placeholder {
+            <div class="circle" data-id="annotationColorButton"></div>
+          }
+        } @else {
+        <div class="circle" data-id="annotationColorButton"></div>
+      }
+        {{ donutData().labels[$index] }}
+        <span class="quantity" data-id="annotationCount">
+          ({{ slice | humanizeResult: units() }})
+        </span>
+      </div>
+    }
+  </div>
+</div>

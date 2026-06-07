@@ -1,0 +1,21 @@
+<sm-dialog-template [displayX]="true"
+  [header]="title"
+  [closeOnX]="true"
+  [iconClass]="iconClass">
+
+  @if (failed > 0) {
+    <div class="errors-title">The following {{failed === 1 ? '' : failed}} {{action.entityType}}{{failed > 1 ? 's' : ''}} failed to {{action.operationName}}:</div>
+  }
+  <ul class="list-container">
+    @for (fail of failedList; track fail) {
+      <li>
+        <div>{{getName(fail)}}</div>
+        <div class="error-reason">{{fail.error.msg}} </div>
+      </li>
+    }
+  </ul>
+</sm-dialog-template>
+<div mat-dialog-actions>
+  <button mat-flat-button mat-dialog-close>Close</button>
+</div>
+

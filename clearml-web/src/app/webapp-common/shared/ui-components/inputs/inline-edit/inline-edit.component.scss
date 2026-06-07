@@ -1,0 +1,114 @@
+@use "variables";
+
+:host {
+  --mat-icon-button-icon-size: 20px;
+  --mat-icon-button-state-layer-size: 30px;
+  ::ng-deep .ui-inplace .ui-inplace-display {
+    background-color: transparent;
+    padding: 0;
+  }
+
+
+  .inline-edit-form {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+
+    &.multiline {
+      flex-direction: column;
+      align-items: flex-end;
+      padding-right: unset;
+
+      .inline-edit-close,
+      .inline-edit-approve {
+        line-height: 20px;
+        font-size: 20px;
+      }
+    }
+    input.warn {
+      padding-right: 32px;
+    }
+    .al-ico-alert {
+      position: absolute;
+      right: 100px;
+      color: var(--color-warning);
+    }
+
+    .buttons {
+      display: flex;
+      gap: 6px;
+    }
+  }
+}
+
+.editable-div {
+  position: relative;
+  .value {
+    display: flex;
+    align-items: start;
+    padding-right: 32px;
+  }
+  .input {
+    display: none;
+  }
+  &.edit-mode {
+    .value {
+      display: none;
+    }
+    .input {
+      display: block;
+    }
+    .inline-edit-input {
+      // width: 100%;
+      padding: 2px 6px;
+      color: var(--color-on-surface);
+      background-color: var(--color-surface-container-lowest);
+      border: 1px solid color-mix(in srgb, var(--color-outline) 20%, transparent);
+      font-family: variables.$font-family-base, sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 4px;
+
+      &.ng-invalid {
+        color: var(--color-error);
+      }
+    }
+
+    .inline-edit-textarea {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--color-outline-variant);
+      border-radius: 4px;
+      color: var(--color-on-surface);
+      font-family: variables.$font-family-base, sans-serif;
+      font-size: 14px;
+      padding: 12px;
+      resize: vertical;
+    }
+  }
+
+  .editable-pen {
+    position: absolute;
+    right: 0;
+    top: 0;
+    opacity: 0;
+    transition: opacity 0.35s;
+  }
+
+  &:hover {
+    .editable-pen {
+      opacity: 1;
+    }
+  }
+
+  &.is-description {
+    .value {
+      padding-right: 0;
+    }
+    .editable-pen {
+      position: sticky;
+    }
+  }
+}

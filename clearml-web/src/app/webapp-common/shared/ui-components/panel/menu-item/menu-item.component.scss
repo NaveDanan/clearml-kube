@@ -1,0 +1,25 @@
+.item-container {
+  display: flex;
+  align-items: center;
+}
+
+.item-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.place-for-icon {
+  width: 85%;
+}
+
+.remove-button {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+:host:hover {
+  .remove-button {
+    opacity: 1;
+  }
+}

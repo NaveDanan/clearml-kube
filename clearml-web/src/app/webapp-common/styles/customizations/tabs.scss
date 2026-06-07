@@ -1,0 +1,23 @@
+@use '@angular/material' as mat;
+
+.mat-mdc-tab-nav-bar,
+.mat-mdc-tab-group {
+  @include mat.tabs-overrides((
+    divider-height: 0,
+    active-ripple-color: transparent,
+    inactive-ripple-color: transparent,
+    active-label-text-color: var(--color-primary),
+    active-hover-label-text-color: var(--color-primary),
+    active-focus-label-text-color: var(--color-primary),
+    inactive-focus-label-text-color: var(--color-primary),
+    inactive-hover-label-text-color: var(--color-primary),
+    inactive-label-text-color: var(--color-outline),
+  ));
+}
+
+.mat-mdc-tab-group.with-border {
+  mat-tab-header {
+    border-bottom: solid 1px var(--mat-tab-divider-color, var(--mat-sys-surface-variant));
+  }
+}
+

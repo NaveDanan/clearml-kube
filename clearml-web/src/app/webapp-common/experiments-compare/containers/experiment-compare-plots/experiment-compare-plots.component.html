@@ -1,0 +1,33 @@
+<div class="d-flex h-100">
+  @if (!minimized) {
+    <div class="list-container">
+      <sm-selectable-grouped-filter-list
+        placeHolder="Find plots"
+        [list]="graphList"
+        [checkedList]="settings.selectedMetricsPlot"
+        [searchTerm]="searchTerm$ | ngrxPush"
+        (itemSelect)="metricSelected($event)"
+        (selectedChanged)="selectedListChanged($event)"
+        (searchTermChanged)="searchTermChanged($event)"
+      ></sm-selectable-grouped-filter-list>
+    </div>
+  }
+  <div class="graphs-container h-100 w-100">
+    <sm-experiment-graphs
+      [metrics]="graphs"
+      [hideLegend]="minimized"
+      [list]="graphList"
+      [isCompare]="true"
+      [isGroupGraphs]="true"
+      [hiddenList]="settings.selectedMetricsPlot"
+      [exportForReport]="!modelsFeature"
+      [splitSize]="splitSize$ | ngrxPush"
+      (createEmbedCode)="createEmbedCode($event)"
+      (resetGraphs)="resetMetrics()"
+      [defaultHoverMode]="'x unified'"
+      (chartSettingsChanged)="changeChartSettings($event)"
+      >
+    </sm-experiment-graphs>
+  </div>
+</div>
+

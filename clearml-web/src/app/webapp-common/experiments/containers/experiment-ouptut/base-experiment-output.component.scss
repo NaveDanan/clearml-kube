@@ -1,0 +1,80 @@
+@use "../../../layout/layout";
+
+$output-tabs-height: 64px;
+:host {
+  --mat-sidenav-container-width: 361px;
+  display: block;
+  height: 100%;
+  background-color: var(--color-surface-container-lowest);
+
+  .experiment-output-container {
+    height: calc(100% - 32px);
+
+    &.minimized {
+      height: calc(100% - 38px);
+    }
+  }
+
+  ::ng-deep .no-output {
+    text-align: center;
+    color: var(--color-on-surface-variant);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translateY(-50%) translateX(-50%);
+    display: block;
+  }
+
+  ::ng-deep .no-output-icon {
+    height: 100px;
+    width: 150px;
+  }
+
+  sm-experiment-settings.maximized {
+    display: block;
+    padding-top: 6px;
+  }
+
+  .close-button,
+  .refresh-position{
+    display: flex;
+    align-items: center;
+    margin-right: 24px;
+    margin-left: auto;
+  }
+
+  .close-button-fake {
+    margin-right: 24px;
+    margin-left: auto;
+    width: 84px;
+  }
+
+  .scalar-buttons {
+    gap: 12px;
+    display: flex;
+    align-items: center;
+  }
+
+  .refreshIcon {
+    margin-right: 10px;
+  }
+
+  .table-graph-toggle {
+
+
+    &.maximized {
+      align-items: center;
+      display: flex;
+      margin-right: 14px;
+    }
+  }
+
+  .output-body {
+    position: relative;
+    height: calc(100% - #{$output-tabs-height + layout.$experiment-info-header-height + 10px});
+
+    &.minimized {
+      height: calc(100% - #{layout.$experiment-info-header-height + layout.$experiment-info-tabs-height + 3px});
+    }
+  }
+}

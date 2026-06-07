@@ -1,0 +1,93 @@
+<button mat-icon-button class="close sm" (click)="deselectQueueClicked()">
+  <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+</button>
+
+<mat-tab-group [mat-stretch-tabs]="false" mat-align-tabs="center" class="h-100">
+  <mat-tab label="TASKS" class="tab-link">
+    @if (selectedQueue()?.entries?.length === 0) {
+      <div class="empty-state">No tasks currently enqueued</div>
+    }
+    @else {
+      <sm-simple-table-2
+        [cols]="experimentsCols"
+        [rowsData]="selectedQueue()?.entries"
+        [enableDragAndDrop]="true"
+        noDataMessage=" "
+        (entryDropped)="experimentDropped($event)"
+        class="experiments-table"
+      >
+        <ng-template let-i="rowIndex" let-row="row">
+          <div class="body">
+            <mat-icon fontSet="al" fontIcon="al-ico-drag"></mat-icon>
+            <div>{{i + 1}}</div>
+            <a class="ellipsis" [smTooltip]="row?.task?.name" smShowTooltipIfEllipsis [matTooltipShowDelay]="500"
+               [routerLink]="['/projects', ((row?.task?.project?.id) ? row?.task?.project?.id : '*'), 'tasks', row?.task?.id]"
+            >{{row?.task?.name}}</a>
+            <button class="menu" mat-icon-button (click)="openContextMenu($event, row?.task)">
+              <mat-icon fontSet="al" fontIcon="al-ico-dots-v-menu"></mat-icon>
+            </button>
+          </div>
+        </ng-template>
+      </sm-simple-table-2>
+    }
+  </mat-tab>
+  <mat-tab label="WORKERS" class="tab-link">
+    @if (selectedQueue()?.workers?.length === 0) {
+      <div class="empty-state">No workers currently assigned to this queue</div>
+    }
+    @else {
+      <sm-simple-table-2
+        class="workers-table dark-theme"
+        [cols]="workersCols"
+        [rowsData]="selectedQueue()?.workers"
+        noDataMessage=" "
+      >
+        <ng-template let-row="row">
+          <div class="body">
+            <a class="link ellipsis" [smTooltip]="row?.name" smShowTooltipIfEllipsis [matTooltipShowDelay]="500" [routerLink]="['../workers']" [queryParams]="{id: row.name}">{{row?.name}}</a>
+            <div class="ellipsis" [smTooltip]="row.ip" [matTooltipShowDelay]="500" smShowTooltipIfEllipsis>{{row.ip}}</div>
+            <a class="link ellipsis"
+               [smTooltip]="row?.task?.name" smShowTooltipIfEllipsis
+               [matTooltipShowDelay]="500"
+               [class.cursor-default]="!row?.task?.id"
+               [routerLink]="row?.task?.id ? ['/projects', row?.task?.project?.id ?? '*', 'tasks', row?.task?.id] : null"
+            >{{row?.task?.name}}</a>
+          </div>
+        </ng-template>
+      </sm-simple-table-2>
+    }
+  </mat-tab>
+</mat-tab-group>
+
+@if (menuOpen()) {
+  <sm-menu
+  smMenuClass="experiments-in-queue-list"
+  panelClasses="dark"
+  [position]="menuPosition()"
+  [header]=""
+  [showCart]="false"
+  [showOverlay]="false"
+  [openOnInit]="true"
+>
+  <sm-menu-item itemLabel="Move to top"
+                [disabled]="selectedQueue().entries.length <= 0"
+      (itemClicked)="moveToTop()"
+      iconClass="al-ico-arrow-to-top">
+    </sm-menu-item>
+    <sm-menu-item itemLabel="Move to bottom"
+      [disabled]="selectedQueue().entries.length <= 0"
+      (itemClicked)="moveToBottom()"
+      iconClass="al-ico-arrow-to-bottom">
+    </sm-menu-item>
+    <sm-menu-item itemLabel="Move to queue..."
+      [disabled]="selectedQueue().entries.length <= 0"
+      (itemClicked)="moveToQueue()"
+      iconClass="al-ico-arrow-from-left">
+    </sm-menu-item>
+    <sm-menu-item itemLabel="Remove from queue"
+      [disabled]="selectedQueue().entries.length <= 0"
+      (itemClicked)="removeFromQueue()"
+      iconClass="al-ico-trash">
+    </sm-menu-item>
+  </sm-menu>
+}

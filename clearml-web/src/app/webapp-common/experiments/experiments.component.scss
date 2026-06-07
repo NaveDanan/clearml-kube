@@ -1,0 +1,17 @@
+@use "./../layout/layout";
+
+:host {
+  .experiment-body {
+    width: 100%;
+    height: calc(100% - #{layout.$project-header-height});
+    transition: height 0.3s;
+  }
+
+  .info-disabled {
+    pointer-events: none;
+  }
+
+  .button-label {
+    margin-left: 12px;
+  }
+}

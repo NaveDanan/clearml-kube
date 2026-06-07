@@ -1,0 +1,10 @@
+:host {
+  .label {
+    font-size: 12px;
+  }
+  .input-duration.disabled {
+    ::ng-deep input {
+      color: var(--color-outline) !important;
+    }
+  }
+}

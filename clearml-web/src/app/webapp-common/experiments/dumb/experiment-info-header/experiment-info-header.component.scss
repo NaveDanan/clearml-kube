@@ -1,0 +1,105 @@
+::ng-deep .mat-mdc-menu-panel.line-item.description-info-edit{
+  border: none;
+  box-shadow: none;
+  background: none;
+}
+
+:host {
+  display: block;
+  padding: 0 24px;
+
+
+
+  .tags {
+    grid-area: tags;
+    overflow: hidden;
+  }
+
+  .line-item {
+    display: flex;
+    align-items: center;
+  }
+
+  .comment {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
+  }
+
+  .middle-col {
+    height: 28px;
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    padding-left: 48px;
+  }
+
+  .experiment-name {
+    display: flex;
+    align-items: center;
+    font-size: 15px;
+    min-height: 32px;
+    width: 100%;
+    font-weight: 500;
+
+    span {
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+  }
+
+  .experiment-type {
+    white-space: nowrap;
+    font-size: 15px;
+    margin-right: 12px;
+  }
+
+  .experiment-id {
+    margin-right: 6px;
+  }
+  .experiment-name-cont{
+    max-width: calc(100% - 320px);
+    .edit-name {
+      overflow: hidden;
+    }
+  }
+
+
+
+  .menu-button, .menu-button &:hover, .menu-button &:focus {
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 12px;
+    text-decoration: none;
+  }
+
+  .shared {
+    margin: 0 24px;
+    display: flex;
+    align-items: center;
+  }
+
+  .right-buttons {
+    display: flex;
+    align-items: center;
+    margin-right: 24px;
+    margin-left: auto;
+
+    sm-experiment-menu {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+    }
+  }
+
+  sm-tag-list {
+    max-width: 100%;
+  }
+}

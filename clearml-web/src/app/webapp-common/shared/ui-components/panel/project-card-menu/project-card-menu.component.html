@@ -1,0 +1,20 @@
+<sm-menu iconClass="al-ico-bars-menu">
+  <sm-menu-item itemLabel="Project Settings"
+                data-id="Edit"
+                iconClass="al-ico-settings"
+                [disabled]="!project().company?.id"
+                (itemClicked)="projectSettingsClicked.emit(project())"></sm-menu-item>
+  <sm-menu-item itemLabel="New Project"
+                data-id="New Project"
+                iconClass="al-ico-add"
+                (itemClicked)="newProjectClicked.emit(project())"></sm-menu-item>
+  <sm-menu-item itemLabel="Move to"
+                data-id="Move To"
+                iconClass="al-ico-move-to"
+                (itemClicked)="moveToClicked.emit(project())"></sm-menu-item>
+  <sm-menu-item itemLabel="Delete"
+                data-id="Delete"
+                iconClass="al-ico-trash"
+                (itemClicked)="deleteProjectClicked.emit(project())"></sm-menu-item>
+  <ng-content select="[extendedCardMenu]"></ng-content>
+</sm-menu>

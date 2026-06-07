@@ -1,0 +1,17 @@
+<div class="dashboard-body">
+  <div class="recent">
+    <sm-dashboard-projects (width)="width.set($event)"></sm-dashboard-projects>
+    <sm-dashboard-reports></sm-dashboard-reports>
+    <sm-dashboard-experiments
+      [style.width]="width() && width() > 900 ? width() + 'px' : '100%'"
+      [recentTasks]="recentTasks()"
+    >
+      <div header-buttons>
+        <button mat-flat-button data-id="Manage Workers And Queues" (click)="redirectToWorkers()">
+          <mat-icon fontSet="al" fontIcon="al-ico-queues"></mat-icon>
+          MANAGE WORKERS AND QUEUES
+        </button>
+      </div>
+    </sm-dashboard-experiments>
+  </div>
+</div>

@@ -1,0 +1,39 @@
+@use "mixins/link";
+
+:host-context(.normal-size){
+  display: block;
+  height: 480px;
+}
+:host {
+  @include link.link();
+
+
+  display: block;
+  height: 640px;
+  max-height: calc(100vh - 120px);
+}
+
+.head {
+  margin-bottom: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 20px 1fr 20px;
+  gap: 6px;
+  align-items: center;
+  text-align: center;
+  border-bottom: 1px solid var(--color-outline-variant);
+  min-height: 48px;
+  h3 {
+    color: var(--color-primary);
+    font-size: 14px;
+    font-weight: normal;
+    margin: 0;
+  }
+}
+
+sm-grouped-checked-filter-list {
+  height: calc(100% - 58px);
+  ::ng-deep .actions {
+    padding-top: 10px;
+  }
+}

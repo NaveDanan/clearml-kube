@@ -1,0 +1,74 @@
+@use "../layout/layout";
+
+:host{
+  overflow: auto;
+  padding: 24px 24px 0 24px;
+}
+.header-container {
+  height: layout.$project-header-height;
+}
+
+.info-content {
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+
+  .metric-panel {
+    max-height: 340px;
+    min-height: 48px;
+    width: 100%;
+    max-width: 960px;
+    margin: 0 auto 16px;
+    overflow: hidden;
+    border-radius: var(--mat-expansion-container-shape);
+
+    &.open {
+      min-height: 340px;
+    }
+
+    mat-expansion-panel {
+      height: 100%;
+      background-color: var(--color-surface-container-low);
+
+      .mat-expansion-panel-header-title {
+        font-size: 16px;
+      }
+    }
+
+    sm-project-stats {
+      min-height: 300px;
+      height: 300px;
+    }
+  }
+
+  .overview-placeholder {
+    min-height: 320px;
+    flex: 1;
+    color: var(--color-empty-state);
+
+    .no-data-title {
+      margin: 24px 0;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .no-data-button {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+  }
+
+  sm-markdown-editor {
+    flex: 1;
+    width: 100%;
+    min-height: 300px;
+    max-width: 960px;
+    margin: 0 auto;
+
+    &.editor {
+      max-width: 1856px;
+    }
+  }
+}
+

@@ -1,0 +1,190 @@
+import {ChangeDetectionStrategy, Component, computed, effect, forwardRef, input, output, signal} from '@angular/core';
+import {
+  ControlValueAccessor,
+  FormControl,
+  NG_VALIDATORS,
+  NG_VALUE_ACCESSOR,
+  ReactiveFormsModule,
+  ValidationErrors,
+  Validator,
+  Validators
+} from '@angular/forms';
+import {MatAutocompleteModule} from '@angular/material/autocomplete';
+import {MatInputModule, MatLabel} from '@angular/material/input';
+import {MatProgressSpinner} from '@angular/material/progress-spinner';
+import {SearchTextDirective} from '@common/shared/ui-components/directives/searchText.directive';
+import {DotsLoadMoreComponent} from '@common/shared/ui-components/indicators/dots-load-more/dots-load-more.component';
+import {rootProjectsPageSize} from '@common/constants';
+import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
+import {uniqueNameValidator} from '@common/shared/ui-components/template-forms-ui/unique-name-validator.directive';
+import {MatIconButton} from '@angular/material/button';
+import {MatIconModule} from '@angular/material/icon';
+import {minLengthTrimmed} from '@common/shared/validators/minLengthTrimmed';
+
+export interface baseEntity {
+  id?: string;
+  name?: string;
+  disabled?: boolean;
+}
+
+@Component({
+    selector: 'sm-paginated-entity-selector',
+    templateUrl: './paginated-entity-selector.component.html',
+    styleUrls: ['./paginated-entity-selector.component.scss'],
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    providers: [
+        {
+            provide: NG_VALUE_ACCESSOR,
+            useExisting: forwardRef(() => PaginatedEntitySelectorComponent),
+            multi: true
+        },
+        {
+            provide: NG_VALIDATORS,
+            useExisting: forwardRef(() => PaginatedEntitySelectorComponent),
+            multi: true
+        }
+    ],
+  imports: [
+    MatInputModule,
+    MatAutocompleteModule,
+    ReactiveFormsModule,
+    SearchTextDirective,
+    MatProgressSpinner,
+    DotsLoadMoreComponent,
+    MatIconButton,
+    MatIconModule,
+    MatLabel,
+  ]
+})
+export class PaginatedEntitySelectorComponent implements ControlValueAccessor, Validator {
+  protected control = new FormControl<string>(null);
+  protected noMoreOptions = signal(false);
+  protected error: string = null;
+  private previousLength: number;
+  data = input<baseEntity[]>([]);
+  displayField = input('name');
+  label = input();
+  placeHolder = input('');
+  createNewSuffix = input<boolean>(false);
+  isRequired = input<boolean>(false);
+  minLength = input<number>();
+  emptyNameValidator = input<boolean>();
+  embeddedErrors = input<boolean>(true);
+
+
+  getEntities = output<string>();
+  loadMore = output<string>();
+  createNewSelected = output<string>();
+  protected onTouched: () => void;
+  private onChange: (value) => void;
+  protected onValidation: (value) => void;
+  protected state = computed(() => ({
+    data: this.data(),
+    loading: signal(false),
+  }))
+
+  constructor() {
+    this.control.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(value => {
+        this.onChange && this.onChange(value);
+        this.onValidation && this.onValidation(value);
+      });
+
+    effect(() => {
+      if (this.data()) {
+        const length = this.data().length;
+        this.noMoreOptions.set(length === this.previousLength || length < rootProjectsPageSize);
+        this.previousLength = length;
+      }
+    });
+
+    effect(() => {
+      if(this.isRequired()) {
+        this.control.addValidators([Validators.required]);
+      } else {
+        this.control.removeValidators([Validators.required]);
+      }
+      if(this.minLength()) {
+        this.control.addValidators([minLengthTrimmed(this.minLength())]);
+      } else {
+        this.control.removeValidators([minLengthTrimmed(this.minLength())]);
+      }
+      if(this.emptyNameValidator()) {
+        this.control.addValidators([uniqueNameValidator([])]);
+      } else {
+        this.control.removeValidators([uniqueNameValidator([])]);
+      }
+      this.control.updateValueAndValidity();
+    });
+  }
+
+  displayFn(item: string | baseEntity): string {
+    if (this.displayField() !== 'name') {
+      return this.data()?.find(i => i.name === item)?.[this.displayField()] ?? item;
+    }
+    return typeof item === 'string' ? item : item?.name;
+  }
+
+  getEntitiesFn(value: string) {
+    setTimeout(() => this.state().loading.set(true)); //skip immediate data = [] => loading=false
+    this.getEntities.emit(value);
+  }
+
+  loadMoreEntities(value: string) {
+    setTimeout(() => this.state().loading.set(true)); //skip immediate data = [] => loading=false
+    this.loadMore.emit(value);
+  }
+
+  writeValue(value: string) {
+    this.control.patchValue(value, {emitEvent: false});
+  }
+
+  registerOnChange(fn: () => void) {
+    this.onChange = fn
+  }
+
+  registerOnTouched(fn: () => void) {
+    this.onTouched = fn;
+  }
+
+  setDisabledState?(isDisabled: boolean) {
+    if (isDisabled) {
+      this.control.disable()
+    } else {
+      this.control.enable();
+    }
+  }
+
+  validate(/*control: AbstractControl*/): ValidationErrors | null {
+    const value = this.control.value;
+
+    // 1. Check Required
+    if (this.isRequired() && !value) {
+      return { required: true };
+    }
+
+    // Guard: If value is empty (and wasn't caught by required),
+    // stop here to prevent errors accessing .length below.
+    if (!value) {
+      return null;
+    }
+
+    // 2. Check Min Length
+    if (this.minLength() && value.length < this.minLength()) {
+      return { minlength: true };
+    }
+
+    // 3. Check Empty Name (Whitespace only)
+    // We already know value exists, so we just check if trimmed length is 0
+    if (this.emptyNameValidator() && value.trim().length === 0) {
+      return { emptyName: true };
+    }
+
+    return null;
+  }
+
+  registerOnValidatorChange(fn) {
+    this.onValidation = fn
+  }
+}

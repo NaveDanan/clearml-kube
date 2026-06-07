@@ -1,0 +1,47 @@
+<mat-drawer-container [hasBackdrop]="false" autosize class="light-theme h-100">
+  <mat-drawer #drawer [opened]="!minimized" [mode]="minimized ? 'over' : 'side'" [disableClose]="!minimized" [autoFocus]="true">
+    <div class="list-container">
+      @if (plotsList !== undefined) {
+        <sm-selectable-grouped-filter-list
+          placeHolder="Find plots"
+          [list]="plotsList"
+          [checkedList]="selectedMetrics"
+          [searchTerm]="searchTerm"
+          (itemSelect)="metricSelected($event)"
+          (selectedChanged)="hiddenListChanged($event)"
+          (searchTermChanged)="searchTermChanged($event)"
+        ></sm-selectable-grouped-filter-list>
+      }
+    </div>
+    @if (minimized) {
+      <button mat-icon-button class="close sm" (click)="drawer.close()" data-id="closeFindPlot">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    }
+  </mat-drawer>
+  <mat-drawer-content class="overflow-hidden">
+    @if (minimized) {
+      <div class="hover-button">
+        <button mat-flat-button class="icon-only" (click)="drawer.open()" smTooltip="Toggle Graphs" data-id="eyeIcon">
+          <mat-icon fontSet="al" fontIcon="al-ico-eye-outline"></mat-icon>
+        </button>
+      </div>
+    }
+    <sm-experiment-graphs
+      [class.dark-theme]="dark"
+      [isGroupGraphs]="true"
+      [hiddenList]="selectedMetrics"
+      [metrics]="graphs"
+      [list]="plotsList"
+      [legendStringLength]="minimized ? 14 : 19"
+      [minimized]="minimized"
+      [splitSize]="splitSize$ | ngrxPush"
+      [isDarkTheme]="dark"
+      [exportForReport]="!modelsFeature"
+      (createEmbedCode)="createEmbedCode($event)"
+      (resetGraphs)="resetMetrics()"
+      (chartSettingsChanged)="changeChartSettings($event)"
+      >
+    </sm-experiment-graphs>
+  </mat-drawer-content>
+</mat-drawer-container>

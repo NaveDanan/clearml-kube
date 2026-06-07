@@ -1,0 +1,96 @@
+:host {
+  .status-icon-container {
+    display: grid;
+    grid-template-columns: 14px 70px;
+    align-items: center;
+    grid-column-gap: 6px;
+
+    &.show-spinner {
+      grid-template-columns: 14px 70px 18px;
+    }
+
+    &.hide-label {
+      grid-template-columns: 14px;
+
+      &.show-spinner {
+        grid-template-columns: 14px 18px;
+      }
+    }
+
+    .mat-icon.inline {
+      width: 14px;
+      height: 14px;
+      font-size: 12px;
+
+      &:before {
+        line-height: 14px;
+      }
+    }
+
+    &.created, &.queued, &.draft, &.pending {
+      color: var(--color-draft);
+    }
+
+    &.completed, &.Final, &.available {
+      color: var(--color-completed);
+
+    }
+
+    &.aborted {
+      color: var(--color-aborted);
+    }
+
+    &.running {
+      color: var(--color-running);
+    }
+
+    &.failed {
+      color: var(--color-failed);
+    }
+
+    &.in_progress, &.Uploading, &.active, &.routing {
+      color: var(--color-running);
+    }
+
+    &.published {
+      color: var(--color-published);
+    }
+
+    &.closed {
+      color: var(--color-completed);
+    }
+
+    &.stopped {
+      color: var(--color-completed);
+    }
+  }
+
+  .label {
+    line-height: 16px;
+
+    &.with-spinner {
+      min-width: 50px;
+    }
+  }
+}
+
+:host-context(.selected) {
+  :host {
+    .status-icon-container {
+      color: var(--color-surface-container-highest);
+    }
+
+    .spinner {
+      --mat-progress-spinner-active-indicator-color: var(--row-selected-text-color);
+    }
+  }
+}
+
+.spinner {
+  opacity: 0;
+
+  &.show {
+    opacity: 1;
+  }
+}
+

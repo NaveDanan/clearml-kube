@@ -1,0 +1,33 @@
+@if (contextNavbar() !== null) {
+  <mat-tab-group mat-stretch-tabs="false"
+                 mat-align-tabs="center"
+                 disableRipple
+                 [selectedIndex]="index()"
+                 (selectedIndexChange)="setFeature($event)">
+    @for (route of contextNavbar(); track route.header) {
+      <mat-tab *smCheckPermission="route.permissionCheck" [labelClass]="'data-id-' + (route?.id ?? route.header)">
+        <ng-template mat-tab-label>
+          <div class="label-container" [attr.data-id]="route?.id ?? route.header">
+            <div>
+              <span>{{ route.header | uppercase }}</span>
+              @if (route.badge) {
+                <span class="trial-badge" [smTooltip]="route.badgeTooltip" [matTooltipShowDelay]="300" [innerHTML]="route.badge | safeHtml"></span>
+              }
+            </div>
+            @if (route.subHeader) {
+              <div class="sub-header">{{ route.subHeader }}</div>
+            } @else if (route.counters) {
+              <span class="counter">
+                <span class="counter__data">
+                  @for (counter of route.counters; track counter) {
+                    <span [smTooltip]="counter.tooltip" [matTooltipClass]="'break-line'">{{counter.value}}@if(counter.icon){<i class="al-icon xs" [class]="counter.icon"></i>}</span>
+                  }
+                </span>
+              </span>
+            }
+          </div>
+        </ng-template>
+      </mat-tab>
+    }
+  </mat-tab-group>
+}

@@ -1,0 +1,106 @@
+@use "../../../layout/layout";
+
+::ng-deep sm-models footer.d-flex.justify-content-center {
+  align-items: center;
+  height: 100px;
+}
+
+:host {
+  sm-table {
+    display: block;
+    height: 100%;
+  }
+  .header-checkbox {
+    ::ng-deep .mat-mdc-checkbox-touch-target {
+      width: 18px;
+    }
+  }
+  .mini-tags-container {
+    margin-right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    sm-mini-tags-list {
+      padding: 2px;
+      border-radius: 6px;
+      gap: 2px;
+      background-color: var(--color-surface-container-lowest);
+    }
+  }
+
+  .table-container {
+    height: 100%;
+    width: 100%;
+  }
+
+  .model-name {
+    font-weight: 500;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .checkbox-col {
+    display: block;
+    position: relative;
+    z-index: 1;
+    float: left;
+
+    &:not(.header) {
+      padding-right: 24px;
+    }
+
+    &.header.minimised {
+      padding-left: 5px;
+    }
+  }
+
+  .drop-down {
+    padding-left: 4px;
+    pointer-events: initial;
+    cursor: pointer;
+  }
+
+  .compact-columns-data {
+    color: var(--color-on-surface-variant);
+    font-size: 12px;
+    &.selected {
+      color: var(--color-primary-container);
+    }
+  }
+
+  sm-table-card-filter {
+    margin-left: 1em;
+  }
+}
+
+.menu-title {
+  font-size: 15px;
+  font-weight: 500;
+  padding: 6px 12px 0;
+  height: 32px;
+  line-height: 32px;
+}
+
+.dot {
+  padding: 0 6px;
+}
+
+.enter {
+  animation: fade-in ease-in 0.25s;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.leaving {
+  opacity: 0;
+  transition: opacity 0.2s ease-in;
+}

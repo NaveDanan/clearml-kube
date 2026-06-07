@@ -1,0 +1,10 @@
+@if (model() !== null) {
+  <sm-model-view-network
+    [model]="model()"
+    [isSharedAndNotOwner]="isSharedAndNotOwner()"
+    [saving]="saving()"
+    (saveFormData)="saveFormData($event)"
+    (cancelClicked)="cancelClicked()"
+    (activateEditClicked)="activateEditClicked()"
+  ></sm-model-view-network>
+}

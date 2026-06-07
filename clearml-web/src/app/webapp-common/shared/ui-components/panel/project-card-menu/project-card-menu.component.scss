@@ -1,0 +1,52 @@
+@use "mixins/common";
+
+hr {
+  margin: 0 !important;
+}
+
+.project-tag {
+  @include common.card-header-tag();
+  color: var(--color-tertiary);
+}
+
+.footer-title {
+  @include common.counter-label();
+  text-align: center;
+  font-size: 10px;
+  padding: 12px
+}
+
+.card-sp-list {
+  height: inherit;
+  overflow: auto;
+
+  ul {
+    margin: 6px 0;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+}
+
+::ng-deep .project-card {
+  cursor: pointer;
+  height: 228px;
+  overflow: hidden;
+}
+
+::ng-deep .project-card {
+
+
+  .project-name {
+    max-width: 280px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  :host {
+    ::ng-deep .mat-mdc-menu-content {
+      background-color: var(--color-on-surface-variant);
+    }
+  }
+}
+

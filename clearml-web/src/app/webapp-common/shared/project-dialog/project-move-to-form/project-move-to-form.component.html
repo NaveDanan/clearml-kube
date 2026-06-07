@@ -1,0 +1,59 @@
+<div class="dynamic-subtitle">
+  <div>Move</div>
+  <div><span class="p-name">{{ projectName | shortProjectName }}</span> from
+    <span class="p-name">{{ projectName | projectLocation }}</span></div>
+  <div>To</div>
+  <div>
+    @if (project.parent) {
+      <span class="p-name">{{ project.parent }}</span>
+    } @else {
+      <span class="p-holder">Project…</span>
+    } </div>
+</div>
+<form #moveToForm="ngForm" (submit)="send()">
+  <sm-paginated-entity-selector
+    #projectInput="ngModel"
+    name="projectName"
+    [(ngModel)]="project.parent"
+    [data]="allProjects()"
+    label="Destination"
+    placeHolder="Search for project path"
+    [isRequired]="true"
+    [createNewSuffix]="projectsNames && (projectName !== project.parent) && projectInput.value &&
+    (!isAutoCompleteOpen) && !(projectInput.value | stringIncludedInArray:projectsNames)"
+    (getEntities)="loadMore($event, false)"
+    (loadMore)="loadMore($event, true)"
+    (createNewSelected)="createNewSelected($event)"
+    smUniquePathValidator [currentName]="projectName | shortProjectName" [existingPaths]="projectsNames"
+    smUniqueNameValidator [existingNames]="[projectName | projectLocation]"
+    smInvalidPrefixValidator [invalidPrefix]="projectName"
+    required
+  ></sm-paginated-entity-selector>
+  @if (projectInput.touched && projectInput?.errors; as errors) {
+    <div class="extra-errors">
+      @if (errors?.required) {
+        <mat-error>Please provide a Project</mat-error>
+      }
+      @if (errors?.uniqueName && !projectInput?.errors?.required) {
+        <mat-error>Can't move a project to its current location</mat-error>
+      }
+      @if (errors?.invalidPrefix) {
+        <mat-error>Can't move a project to its nested projects</mat-error>
+      }
+      @if (errors?.uniquePath) {
+        <mat-error>{{ projectInput.value }} already contains a project named {{ projectName | shortProjectName }}</mat-error>
+      }
+      @if (errors?.emptyName && !errors?.minlength) {
+        <mat-error>Project name can't contain only spaces.</mat-error>
+      }
+    </div>
+  }
+</form>
+<div class="mt-5 d-flex justify-content-center gap-3">
+  <button mat-stroked-button (click)="closeDialog()" data-id="CancelButton">CANCEL</button>
+  <button mat-flat-button
+          [disabled]="projectName === project?.parent || moveToForm.invalid"
+          (click)="send()"
+          cdkFocusInitial data-id="MoveButton"
+  >MOVE</button>
+</div>

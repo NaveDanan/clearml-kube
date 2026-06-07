@@ -1,0 +1,199 @@
+
+:host {
+  .modal-container {
+    background-color: var(--color-surface-container-lowest);
+    height: 100%;
+    width: 100%;
+
+    .graph-container {
+      padding: 0 64px;
+      background-color: var(--color-surface-container-lowest);
+    }
+
+
+  }
+
+  .graph-viewer-header {
+    border-bottom: solid 1px var(--color-surface-container-high);
+    position: relative;
+    z-index: 1;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    &.has-tags {
+      height: 76px;
+      sm-tag-list {
+        margin-top: 6px;
+      }
+    }
+
+    .header-actions {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+    }
+
+
+    .load-spinner {
+      display: inline-block;
+      vertical-align: middle;
+      background-image: url("../../../assets/icons/Spinner.svg");
+      background-repeat: no-repeat;
+      background-size: 18px;
+      width: 36px;
+      height: 36px;
+      background-position: center;
+    }
+
+    .chart-title {
+      width: 33%;
+      font-size: 18px;
+      color: var(--color-on-surface-variant);
+    }
+
+    .title-color {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 6px;
+      cursor: pointer;
+      border: 1px solid var(--color-on-surface-variant);
+    }
+  }
+
+  .smooth-options {
+    margin-left: 24px;
+    align-items: center;
+
+    .weight{
+      display: inline-flex;
+      width: 36px;
+    }
+
+    &.separator {
+      border-left: 1px solid var(--color-outline-variant);
+      padding-left: 12px;
+    }
+  }
+
+  .smooth-selector {
+    margin-right: 12px;
+    width: 180px;
+  }
+
+
+  .axis-type-field {
+    width: 142px;
+  }
+
+  .graph-container {
+    padding-top: 16px;
+    @media (max-width: 1740px) {
+      padding-top: 24px;
+    }
+
+    .navigation {
+      position: fixed;
+      top: 50%;
+
+      .next {
+        right: 45px;
+      }
+
+      .previous {
+        left: 45px;
+      }
+    }
+
+    .controller {
+      position: fixed;
+      width: 36px;
+      height: 36px;
+      border-radius: 36px;
+      box-shadow: 0 3px 6px 0 var(--color-surface-container-highest);
+      color: var(--color-on-primary);
+      background-color: var(--color-primary);
+      transition: background-color 0.35s ease, box-shadow 0.35s ease;
+
+      &:hover {
+        background-color: color-mix(in srgb, var(--color-primary) 90%, var(--color-on-primary));
+        box-shadow: none;
+      }
+    }
+
+    .icon-container {
+      display: inherit;
+
+      &.disabled {
+        opacity: 0.5;
+      }
+
+      &:not(.disabled) {
+        cursor: pointer;
+      }
+    }
+  }
+
+  .graph-controls {
+    position: absolute;
+    z-index: 1;
+    top: 64px;
+    display: flex;
+    padding: 8px 24px 8px 80px;
+    .mat-mdc-slider{
+      min-width: 50px;
+    }
+
+    .label-text {
+      white-space: nowrap;
+      padding-right: 12px;
+    }
+    .smooth-options .label-text {
+      padding-right: 16px;
+    }
+    @media (max-width: 1740px) {
+      top: 64px;
+      padding: 0 24px;
+
+      .smooth-slide-field {
+        line-height: 36px;
+      }
+    }
+  }
+
+  ::ng-deep .js-plotly-plot .plotly .modebar {
+    top: 24px !important;
+    z-index: 11;
+  }
+
+
+  .field {
+    align-items: center;
+    @media (max-width: 1740px) {
+      align-items: unset;
+      flex-direction: column;
+      .label-text {
+        font-size: 12px;
+      }
+    }
+  }
+}
+
+.viewer-iteration {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--color-on-surface-variant);
+  font-size: 18px;
+  line-height: 1.5;
+  margin-right: 16px;
+
+  .number {
+    color: var(--color-on-surface-variant);
+  }
+
+  .mat-mdc-slider {
+    min-width: 280px;
+  }
+}

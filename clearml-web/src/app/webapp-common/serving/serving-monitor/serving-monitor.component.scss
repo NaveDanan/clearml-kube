@@ -1,0 +1,39 @@
+:host {
+  display: block;
+  height: 100%;
+
+  sm-selectable-grouped-filter-list{
+    padding: 24px 16px;
+  }
+}
+
+mat-drawer-container {
+  --mat-sidenav-container-background-color: var(--color-surface-container-lowest);
+  padding-top: 24px;
+  width: 100%;
+  height: 100%;
+}
+
+.close {
+  cursor: pointer;
+  position: absolute;
+  right: 12px;
+  top: 6px;
+  z-index: 1;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px 12px;
+
+  .time-selector {
+    margin-left: auto;
+  }
+}
+
+.charts-container {
+  overflow-y: auto;
+  height: calc(100% - 64px);
+}

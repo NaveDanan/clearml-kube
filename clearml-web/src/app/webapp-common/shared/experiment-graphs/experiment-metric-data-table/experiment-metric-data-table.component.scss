@@ -1,0 +1,25 @@
+:host {
+  display: block;
+  height: 100%;
+  flex-grow: 1;
+  --cell-width: 120px;
+
+  .experiment-header {
+    font-size: 12px;
+    color: var(--color-on-surface-variant);
+  }
+
+  .no-output {
+    text-align: center;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translateY(-50%) translateX(-50%);
+    display: block;
+    color: var(--color-empty-state);
+    h4 {
+      font-weight: 500;
+      font-size: 16px;
+    }
+  }
+}

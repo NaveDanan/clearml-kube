@@ -1,0 +1,40 @@
+<div class="table-card" data-id="cardPanel"
+     [style.border-left-color]="color()"
+     [class.item-color]="color()"
+     [class.two-columns]="!hasTypeIcon() && !noSelection()"
+     [class.no-selection]="noSelection()"
+     [class]="{'selected':selected(), 'checked':checked(), 'context-menu-open': activeContextRow()?.id ===rowData()?.id && contextMenuOpen()}">
+
+  @if(!noSelection()) {
+    <div class="cbx">
+      <ng-content select="mat-checkbox"></ng-content>
+    </div>
+  }
+  @if(hasTypeIcon()) {
+    <div class="type-icon">
+      <ng-content select="sm-experiment-type-icon-label"></ng-content>
+    </div>
+  }
+  <div class="card-name">
+    <div class="name-container">
+      <div class="name">{{cardName()}}</div>
+      <ng-content select="[sm-name-icon]"></ng-content>
+      <ng-content select="[sm-name-version]"></ng-content>
+    </div>
+    <div class="d-flex ms-auto align-items-center">
+      <ng-content select="[sm-mini-tags]"></ng-content>
+      <ng-content select="sm-status-icon-label"></ng-content>
+      <ng-content select=".uptime"></ng-content>
+    </div>
+  </div>
+  @if(tagsTemplate()) {
+    <div class="tags">
+      <ng-container *ngTemplateOutlet="tagsTemplate()"></ng-container>
+    </div>
+  }
+  @if(compactColDataTemplate()) {
+    <div class="data">
+      <ng-container *ngTemplateOutlet="compactColDataTemplate()"></ng-container>
+    </div>
+  }
+</div>

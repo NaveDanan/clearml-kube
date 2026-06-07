@@ -1,0 +1,23 @@
+<div
+  class="color-picker-wrapper"
+  [style.top.px]="state()?.props?.top"
+  [style.left.px]="state()?.props?.left">
+  @if (props()) {
+    <div
+      [(colorPicker)]="state().color"
+      [cpOKButton]="false"
+      [cpCancelButton]="false"
+      [cpSaveClickOutside]="false"
+      [cpAlphaChannel]="props()?.alpha ? 'forced' : 'disabled'"
+      [cpDisableInput]="true"
+      [cpPresetColors]="props()?.alpha ? alphaPresetColors : presetColors"
+      [cpExtraTemplate]="buttons"
+    ></div>
+  }
+  <ng-template #buttons>
+    <div class="buttons">
+      <button mat-stroked-button (click)="closeColorPicker()">CLOSE</button>
+      <button mat-flat-button (click)="selectColor()">APPLY</button>
+    </div>
+  </ng-template>
+</div>

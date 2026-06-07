@@ -1,0 +1,44 @@
+@use "mixins/common";
+
+.top-labels {
+  @include common.counter-label();
+  text-align: left;
+  padding-top: 8px;
+}
+
+.sub-title {
+  @include common.counter-label();
+  padding-right: 10px;
+}
+
+.experiment-tag {
+  @include common.card-header-tag();
+  color: var(--color-surface-container-low);
+}
+
+.experiment-footer {
+  font-size: 10px;
+  padding: 5px 10px;
+}
+
+::ng-deep .experiment-card {
+  cursor: pointer;
+  height: 228px;
+  overflow: hidden;
+  .chips{
+    margin-top: 4px;
+    margin-bottom: 20px;
+    padding-top: 8px;
+  }
+}
+
+.brio-footer {
+  height: 60px;
+  overflow: hidden
+}
+
+:host{
+  .content-subtitle{
+    font-size: 10px;
+  }
+}

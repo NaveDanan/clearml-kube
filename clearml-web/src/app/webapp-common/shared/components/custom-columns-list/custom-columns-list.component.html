@@ -1,0 +1,16 @@
+<div class="list-container">
+  @for (col of tableCols(); track col.id) {
+    <sm-menu-item
+      [itemLabel]="col.header"
+      [checked]="!(col?.hidden)"
+      [selectable]="selectable()"
+      [removable]="!!col.metric_hash || col.isParam || col.type==='metadata'  || col.type==='hdmd'"
+      [itemValue]="col.id"
+      [enableIcon]="!selectable()"
+      [iconClass]="$any(col).sort ? 'al-ico-success' : 'al-icon'"
+      [enableTooltip]="true"
+      (removeItemClicked)="removeColFromList.emit($event)"
+      (itemClicked)="selectedTableColsChanged.emit(col)">
+    </sm-menu-item>
+  }
+</div>

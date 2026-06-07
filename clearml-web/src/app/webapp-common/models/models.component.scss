@@ -1,0 +1,21 @@
+@use "../layout/layout";
+
+:host {
+  .models-body {
+    width: 100%;
+    height: calc(100% - #{layout.$project-header-height});
+    transition: height 0.3s;
+  }
+
+  .model-table-container {
+    transition: all 0.3s;
+
+  }
+  .model-info-container {
+    transition: 0.3s;
+    &.hide-model-info {
+      width: 0 !important;
+      max-width: 0 !important;
+    }
+  }
+}

@@ -1,0 +1,134 @@
+<mat-drawer-container autosize class="h-100">
+  <mat-drawer #drawer [opened]="filterOpen" mode="over" (closedStart)="filterOpen = false; filterValue = ''" class="mat-elevation-z0">
+    <div class="head">
+      <button mat-icon-button (click)="drawer.close(); filterValue = ''" data-id="closeToggleGraph" class="close">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    </div>
+    <div class="list-container">
+      @if (settings) {
+        <sm-selectable-grouped-filter-list
+          [list]="metricVariantList"
+          [nested]="true"
+          [checkedList]="settings.selectedMetricsScalar"
+          [searchTerm]="listSearchTerm"
+          (selectedChanged)="selectedMetricsChanged($event)"
+          (searchTermChanged)="searchTermChanged($event)"
+        ></sm-selectable-grouped-filter-list>
+      }
+    </div>
+  </mat-drawer>
+
+  <mat-drawer-content>
+
+    @if (dataTable?.length === 0) {
+      <div class="no-output">
+        <mat-icon fontSet="al" fontIcon="al-ico-no-data-table" class="xxl"></mat-icon>
+        <h4>NO METRICS</h4>
+      </div>
+    }
+
+    @if (dataTable?.length > 0 && dataTableFiltered?.length === 0) {
+      <div class="no-output all-filtered-message">
+        All metrics hidden. <a class="link" (click)="clear(); showAll()">Clear filters</a>
+      </div>
+    }
+
+    <p-table
+      [value]="dataTableFiltered"
+      [scrollable]="true"
+      [virtualScroll]="true"
+      [virtualScrollItemSize]="50"
+      [rowTrackBy]="trackByFunction"
+      scrollHeight="flex"
+      [class.empty-state]="dataTable?.length < 1"
+      [class.no-rows]="dataTableFiltered?.length < 1">
+      <ng-template pTemplate="header">
+        <tr>
+          <th class="filter-header-cell" [class.freeze-divider]="scrolled" pFrozenColumn [colSpan]="2">
+            <div class="filter-header">
+              <button mat-icon-button
+                      [class.is-filtered]="dataTable?.length > dataTableFiltered?.length"
+                      (click)="filterOpen = !filterOpen"
+              >
+                <mat-icon fontSet="al"
+                  [fontIcon]="dataTable?.length > dataTableFiltered?.length ? 'al-ico-filter-on' : 'al-ico-filter-off'"
+                  [smTooltip]="dataTableFiltered?.length + '/' + dataTable?.length + ' filtered'"
+                  [matTooltipDisabled]="dataTableFiltered?.length === dataTable?.length"
+                  [showTooltip]="showFilterTooltip"
+                >
+                  <span class="path1"></span><span class="path2"></span>
+                </mat-icon>
+              </button>
+              <mat-form-field appearance="outline" class="light-theme mat-light no-bottom">
+                <input #filterRef
+                  name="filter"
+                  [formControl]="variantFilter"
+                  placeholder="Search metric"
+                  matInput
+                  autocomplete="off">
+                @if (variantFilter.value) {
+                  <button matSuffix mat-icon-button (click)="clear(); filterRef.focus()">
+                    <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+                  </button>
+                } @else {
+                  <mat-icon matIconSuffix fontSet="al" fontIcon="al-ico-search"></mat-icon>
+                }
+              </mat-form-field>
+            </div>
+          </th>
+          @for (exp of experiments; track exp.id) {
+            <th class="experiment-header">
+              <span #dot class="experiment-color"
+                [style.background-color]="experimentsColor[exp.id]"
+                [colorButtonRef]="dot"
+                [smChooseColor]="experimentsColor[exp.id]"
+              [stringToColor]="(exp.orgName ?? exp.name) + '-' + exp.id"></span>
+              <span class="experiment-name"
+                [smEllipsisMiddleDirective]="exp.name"
+                [smTooltip]="exp.name"
+                [delay]="0"
+                [triggerEllipsis]="experiments.length"
+              >{{ exp.name }}</span>
+            </th>
+          }
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-metricVariant>
+        <tr
+          [class.first-row]="metricVariant.firstMetricRow"
+          [class.last-row]="metricVariant.lastInGroup"
+        >
+          <td class="metrics-column" pFrozenColumn>
+            <span class="ellipsis" [smTooltip]="metricVariant.firstMetricRow ? metricVariant.metric : ''" smShowTooltipIfEllipsis>{{ metricVariant.firstMetricRow ? metricVariant.metric : '' }}</span>
+          </td>
+          <td class="variants-column" [class.freeze-divider]="scrolled" pFrozenColumn>
+            <div class="variant-cell">
+              <span class="ellipsis variant-name" [smTooltip]="metricVariant.variant" smShowTooltipIfEllipsis>{{ metricVariant.variant }}</span>
+              @if (metricVariant.min === metricVariant.max) {
+                <mat-icon fontSet="al" fontIcon="al-ico-equal-outline" class="sm row-info-icon"
+                          smTooltip="All scalars have the same value in this row"></mat-icon>
+              }
+            </div>
+          </td>
+          @for (exp of experiments; track exp.id) {
+            <td class="value-cell">
+              <div class="value">
+                <span class="value-text" smShowTooltipIfEllipsis [smTooltip]="metricVariant.values[exp.id]?.[valuesMode.key]">{{ metricVariant.values[exp.id]?.[valuesMode.key] }}</span>
+                @if ((selectShowRowExtremes$ | ngrxPush) && metricVariant.min !== metricVariant.max) {
+                  @if (metricVariant.values[exp.id]?.[valuesMode.key] === metricVariant.max) {
+                    <span class="tag tag-max">MAX</span>
+                  }
+                  @if (metricVariant.values[exp.id]?.[valuesMode.key] === metricVariant.min) {
+                    <span class="tag tag-min">MIN</span>
+                  }
+                }
+              </div>
+            </td>
+          }
+        </tr>
+      </ng-template>
+    </p-table>
+
+  </mat-drawer-content>
+</mat-drawer-container>

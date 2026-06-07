@@ -1,0 +1,123 @@
+:host {
+  display: block;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: auto;
+
+  &.maximized{
+    position: fixed;
+    top: 25px;
+    left: 25px;
+    width: calc(100% - 50px);
+    height: calc(100% - 50px);
+    background-color: var(--color-surface-container);
+    z-index: 100;
+    border-radius: 12px;
+
+  }
+  .actions {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dot {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    margin: auto;
+    height: 8px;
+    width: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    vertical-align: middle;
+    transition: width 0.2s ease-in-out, height 0.2s ease-in-out;
+    cursor: url(../../../../webapp-common/assets/icons/pallete-cursor.svg) 6 0, pointer;
+  }
+
+  .dot-container {
+    position: relative;
+    display: inline-block;
+    width: 9px;
+    height: 0.5rem;
+    padding-right: 10px;
+  }
+
+  .experiment-name {
+    padding: 4px 12px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .graph-container {
+    height: 100%;
+    padding: 20px;
+  }
+
+  .legend-container {
+    padding: 0 64px;
+    flex-wrap: wrap;
+    background-color: var(--color-surface-container-lowest);;
+    font-size: 14px;
+    max-height: 25%;
+    min-height: 30px;
+    overflow: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    @media(max-width: 1300px) {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    @media(max-width: 1080px) {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .task-name {
+    padding-left: 5px;
+    &.hide{
+      opacity: 0.5;
+    }
+  }
+
+  .graph-title {
+    width: 100%;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--color-on-surface-variant);
+  }
+  ::ng-deep .parcoords-control-view .y-axis.metric-column {
+    text.axis-title {
+      font-weight: bold;
+    }
+
+    path.domain {
+      stroke-width: 2px;
+      stroke: var(--color-on-surface);
+      stroke-opacity: 1;
+    }
+  }
+
+
+}
+
+
+  .graph-container {
+    background-color: var(--color-surface-container-lowest);
+  }
+
+
+.graph-container.downloading {
+  height: unset !important;
+
+  .legend-container {
+    overflow: visible;
+  }
+}

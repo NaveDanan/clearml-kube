@@ -1,0 +1,84 @@
+:host {
+  flex: 0 0 200px;
+  padding: 2px;
+  color: var(--color-on-surface);
+}
+.title {
+  flex: 1;
+  max-width: 108px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console-button {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.step-container {
+  border-radius: 4px;
+  padding: 2px;
+  transform: scale(1);
+  opacity: 1;
+  transition: transform 0.4s ease, opacity 0.6s ease;
+
+  &:hover {
+    box-shadow: 0 0 0 2px rgba(from var(--color-inverse-surface) r g b / 0.4);
+    .console-button {
+      visibility: visible;
+      pointer-events: all;
+    }
+  }
+  &.selected {
+    box-shadow: 0 0 0 2px rgba(from var(--color-inverse-surface) r g b / 1);
+  }
+
+  &.open {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+.step-part {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 12px;
+}
+
+//  STEP TITLE
+.step-title {
+  border-radius: 4px 4px 0 0;
+  height: 48px;
+  background-color: var(--status-color, var(--color-draft-container));
+  &.stage-step{
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+    .mat-mdc-button-base{
+      --mat-icon-button-icon-color: var(--color-on-primary);
+      --mat-icon-button-state-layer-color: var(--color-on-primary);
+    }
+  }
+}
+
+//  STEP FOOTER
+.step-footer {
+  border-radius: 0 0 4px 4px;
+  .footer-container{ --as-gutter-background-color: ;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    div{
+      display: flex;
+      align-items: center;
+    }
+  }
+
+  height: 26px;
+  background-color: color-mix(in oklab, var(--status-color, var(--color-draft-container)), black 20%);
+  &.stage-step{
+    background-color: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+}

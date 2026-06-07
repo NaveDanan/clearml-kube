@@ -1,0 +1,116 @@
+<div class="header-container">
+  <div class="actions-container">
+    <span class="d-flex">
+      <button
+        mat-flat-button
+        class="add-experiment"
+        data-id="entity"
+        (click)="showGlobalLegend()"
+      >{{ entityType | uppercase }}S</button>
+      <button
+        mat-flat-button
+        class="add-experiment plus icon-only"
+        [smTooltip]="(allowAddExperiment$ | ngrxPush) ?
+          'Add/Remove ' + entityType + 's to comparison' :
+          compareLimitations + ' or fewer ' + entityType + 's can be compared'"
+        (click)="openAddExperimentSearch()"
+      >
+        <mat-icon fontSet="al" fontIcon="al-ico-add" data-id="addExperimentButton"></mat-icon>
+      </button>
+    </span>
+    @if (viewMode) {
+      <mat-form-field appearance="outline" class="no-bottom view-mode-select">
+        <mat-select
+          class="view-mode"
+          panelClass="light-theme"
+          [value]="viewMode"
+          [disableOptionCentering]="true"
+          (selectionChange)="changeView($event)"
+          >
+          <mat-select-trigger class="d-flex">
+            <mat-icon fontSet="al" [fontIcon]="viewModeToIcon[viewMode] ?? 'al-ico-description'" data-id="viewTypeMenuOption" class="me-2"></mat-icon>
+            @switch (true) {
+              @case (currentPage === 'hyper-params' && viewMode === 'graph') {
+                <span>Parallel Coordinates</span>
+              }
+              @case (currentPage === 'hyper-params' && viewMode === 'scatter') {
+                <span>Scatter Plot</span>
+              }
+              @case (currentPage === 'scalars' && viewMode === 'graph') {
+                <span>Graph</span>
+              }
+              @case (currentPage === 'scalars' && viewMode === 'values') {
+                <span>Last Values</span>
+              }
+              @default {
+                <span>{{ (queryParamsViewMode$ | ngrxPush) || viewMode | noUnderscore | titlecase }}</span>
+              }
+            }
+          </mat-select-trigger>
+          @if (currentPage === 'scalars') {
+            <mat-option value="values" class="compare-mat-option">
+              <mat-icon fontSet="al" fontIcon="al-ico-description" class="me-2"></mat-icon>Last Values
+            </mat-option>
+            @if (currentPage === 'scalars') {
+              <mat-option value="min-values" class="compare-mat-option">
+                <mat-icon fontSet="al" fontIcon="al-ico-description" class="me-2"></mat-icon>Min Values
+              </mat-option>
+            }
+            @if (currentPage === 'scalars') {
+              <mat-option value="max-values" class="compare-mat-option">
+                <mat-icon fontSet="al" fontIcon="al-ico-description" class="me-2"></mat-icon>Max Values
+              </mat-option>
+            }
+          } @else {
+            <mat-option value="values" class="compare-mat-option">
+              <mat-icon fontSet="al" fontIcon="al-ico-description" class="me-2"></mat-icon>Values
+            </mat-option>
+          }
+          <mat-option value="graph" class="compare-mat-option">
+            <mat-icon fontSet="al" fontIcon="al-ico-charts-view" class="me-2"></mat-icon>{{ currentPage === 'hyper-params' ? 'Parallel Coordinates' : 'Graph' }}
+          </mat-option>
+          @if (currentPage === 'hyper-params') {
+            <mat-option value="scatter" class="compare-mat-option">
+              <mat-icon fontSet="al" fontIcon="al-ico-scatter-view" class="me-2"></mat-icon>Scatter Plot
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    }
+
+    <div id="nextDiff" class="next-diff"></div>
+
+    @if (['hyper-params', 'details', 'models-details', 'network'].includes(currentPage)) {
+      <mat-slide-toggle
+        (change)="hideIdenticalFieldsToggled($event)"
+        [checked]="selectHideIdenticalFields$ | ngrxPush">Hide Identical {{ (viewMode === 'graph' || viewMode === 'scatter') ? 'Parameters' : 'Fields' }}
+      </mat-slide-toggle>
+    }
+
+    @if (['scalars'].includes(currentPage) && viewMode !== 'graph') {
+      <mat-slide-toggle color="primary"
+        (change)="showExtremesToggled($event)"
+        [checked]="selectShowRowExtremes$ | ngrxPush">Show row extremes
+      </mat-slide-toggle>
+    }
+
+  </div>
+
+  <div id="searchDiff"></div>
+
+  <div class="settings gap-3">
+    @if (['scalars'].includes(currentPage) && viewMode !== 'graph') {
+      <button
+      mat-icon-button
+        (click)="exportCSV()"
+        smTooltip="Export to CSV">
+        <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
+      </button>
+    }
+  <sm-refresh-button
+    (setAutoRefresh)="setAutoRefresh($event)"
+    class="light-theme"
+    >
+  </sm-refresh-button>
+</div>
+</div>

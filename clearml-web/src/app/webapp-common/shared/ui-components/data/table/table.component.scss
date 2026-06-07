@@ -1,0 +1,390 @@
+:host {
+  th.resize-disabled {
+    ::ng-deep span.p-datatable-column-resizer {
+      cursor: auto;
+    }
+  }
+
+  .has-header {
+    ::ng-deep .p-datatable-thead {
+      z-index: 20;
+
+      &:after {
+        content: "";
+        position: absolute;
+        z-index: -1;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: var(--table-row-height);
+        background-color: var(--row-header-color);
+      }
+    }
+  }
+
+  ::ng-deep .p-datatable-table-container {
+
+    .p-datatable-tbody {
+      height: calc(100% - var(--table-row-height, 48px));
+
+      .p-datatable-frozen-column-right {
+        background-color: transparent;
+        right: 24px;
+      }
+    }
+
+    .p-datatable-frozen-column-left {
+      background-color: inherit;
+      left: 0;
+    }
+  }
+
+  .card-view {
+    ::ng-deep .p-datatable-table-container {
+      overflow-x: hidden;
+    }
+  }
+
+  .card-header {
+    box-shadow: var(--mat-app-elevation-shadow-level-2);
+  }
+
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .table-header-title {
+    font-weight: 500;
+    text-transform: uppercase;
+    padding-left: 8px;
+    margin-right: 12px;
+  }
+
+  .collapse-button {
+    cursor: pointer;
+    margin-right: auto;
+    margin-top: -2px;
+
+    &.active {
+      color: var(--color-tertiary);
+    }
+
+    &:hover:not(.active) {
+      color: var(--color-primary);
+    }
+  }
+
+  .table-actions {
+    padding-top: 1px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-right: 6px;
+  }
+
+  .selected-col-header {
+    pointer-events: none;
+  }
+
+
+  .table-load-more {
+    background-color: transparent !important;
+    border-bottom: none !important;
+    height: 100px;
+
+    &.hidden {
+      height: 0;
+    }
+  }
+
+  .load-more-wrapper-wrapper {
+    position: absolute;
+    width: 100%;
+    height: inherit;
+  }
+
+  .load-more-wrapper {
+    position: absolute;
+    width: 100%;
+    bottom: 32px;
+
+    button, sm-dots-load-more {
+      padding: 8px 40px;
+      width: 175px;
+      position: sticky;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .load-spinner {
+      display: inline-block;
+      vertical-align: middle;
+      background-image: url("../../../../assets/icons/Spinner.svg");
+      background-repeat: no-repeat;
+      background-size: 16px;
+      width: 16px;
+      height: 16px;
+      margin-right: 6px;
+
+    }
+  }
+
+  .no-data-wrapper {
+    display: flex;
+    position: absolute;
+    width: 100%;
+
+    span {
+      position: sticky;
+      left: 50%;
+      transform: translateX(-50%);
+      color: var(--color-empty-state);
+    }
+  }
+
+  tr:not(.cards-table) {
+    &:not(.no-data-row):not(.load-more-wrapper) {
+      border-bottom: 1px solid var(--row-border-color);
+    }
+
+    &:not(.header):not(.selected):not(.checked):not(.no-data-row):not(.simple):not(.load-more-wrapper) {
+      background-color: var(--row-default-color);
+      &:hover, &.context-menu-opened, &.context-menu-opened-row {
+        background-color: var(--row-default-hover-color);
+        border-bottom: 1px solid var(--row-border-color);
+
+        .p-frozen-column {
+          background-color: var(--row-default-hover-color) !important;;
+          z-index: 1;
+        }
+      }
+    }
+
+    &.checked:not(.header):not(.selected):not(.no-data-row):not(.simple) {
+      background-color: var(--row-selection-color);
+      color: var(--row-selection-text-color);
+
+      .card-wrapper {
+        border-bottom: none;
+      }
+
+      &:hover, &.context-menu-opened, &.context-menu-opened-row {
+        &:not(.cards-table) {
+          background-color: var(--row-selection-hover-color);
+        }
+
+        .card-wrapper {
+          background-color: var(--row-selection-hover-color);
+        }
+      }
+    }
+
+    &.selected {
+      .card-wrapper {
+        border-bottom-color: var(--row-border-color);
+      }
+
+      background-color: var(--row-selected-color);
+      color: var(--row-selected-text-color);
+
+      --mat-checkbox-unselected-icon-color: var(--color-on-surface);
+
+      ::ng-deep mat-checkbox:not(.mat-mdc-checkbox-checked) {
+        .mdc-checkbox:hover .mdc-checkbox__background {
+          background-color: var(--color-surface);
+        }
+      }
+
+      .context-button {
+        border: 1px solid var(--color-on-primary);
+      }
+
+      &:hover {
+        background-color: var(--row-selected-hover-color);
+        color: var(--row-selected-text-color);
+      }
+    }
+  }
+
+  tr {
+    position: relative;
+    transition: height 0.35s ease-in-out;
+    color: var(--row-default-text-color);
+
+    &.header {
+      height: var(--table-row-height, 48px);
+      background-color: var(--row-header-color);
+    }
+
+    &:not(.card-header) th:hover {
+      background-color: var(--row-header-hover-color);
+    }
+
+    th {
+      border-bottom: none;
+      padding: 0 8px;
+
+      &:first-child {
+        padding-left: 24px;
+      }
+
+      &.disable-drag {
+        cursor: initial !important;
+      }
+
+      .col-header {
+        text-align: left;
+        font-size: 12px !important;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+
+    }
+
+    td {
+      align-items: center;
+      font-size: 1rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 8px;
+
+      &:first-child {
+        padding-left: 24px;
+      }
+
+      &.p-frozen-column {
+        background-color: var(--row-default-color);
+        z-index: 1;
+      }
+    }
+
+    &:hover,
+    &.context-menu-opened {
+      .context-button {
+        opacity: 1;
+      }
+    }
+
+    .context-button-wrapper {
+      width: 100%;
+      height: 0;
+      position: absolute;
+      left: 0;
+    }
+
+    .context-button {
+      position: sticky;
+      z-index: 2;
+      left: calc(100% - 56px);
+      opacity: 0;
+      transition: opacity 0.35s ease-in-out;
+      margin-top: calc(var(--table-row-height) * 0.166);
+      width: calc(var(--table-row-height) * 0.666);
+      min-width: calc(var(--table-row-height) * 0.666);
+      height: calc(var(--table-row-height) * 0.666);
+    }
+
+    &.cards-table {
+
+      .card-wrapper {
+        margin: 6px 2px 6px 12px;
+        border: 1px solid var(--row-border-color);
+        background-color: var(--row-default-color);
+        border-radius: 4px;
+        overflow: hidden;
+        animation-name: expand;
+        animation-duration: 0.35s;
+        animation-timing-function: ease-in-out;
+
+        .collapse-animation {
+          transition: max-height 0.35s ease;
+        }
+      }
+
+      &:first-child {
+        .card-wrapper {
+          margin-top: 12px;
+        }
+      }
+
+      &:hover:not(.selected):not(.simple) .card-wrapper {
+        background-color: var(--row-default-hover-color);
+      }
+
+      &.selected {
+        .card-wrapper {
+          background-color: var(--row-selected-color);
+          color: var(--row-selected-text-color);
+        }
+
+        &:hover .card-wrapper {
+          background-color: var(--row-selected-hover-color);
+        }
+      }
+
+      &.checked:not(.selected):not(.simple) {
+        .card-wrapper {
+          background-color: var(--row-selection-color);
+          color: var(--row-selection-text-color);
+          border-color: var(--row-selection-border-color);
+        }
+
+        &:hover, &.context-menu-opened, &.context-menu-opened-row {
+          .card-wrapper {
+            background-color: var(--row-selection-hover-color);
+          }
+        }
+      }
+      td {
+        border: none;
+      }
+    }
+  }
+
+
+  @supports (-moz-appearance:none) {
+    tr.cards-table .card-wrapper {
+      margin: 6px 12px;
+    }
+
+    tr:not(.cards-table):not(.no-data-row):not(.load-more-wrapper) td:first-child::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 100%;
+      border-bottom: 1px solid var(--row-border-color);
+      bottom: 0;
+    }
+  }
+
+  @supports (-webkit-box-reflect:unset) {
+    ::ng-deep .p-datatable-table {
+      border-collapse: collapse;
+    }
+  }
+}
+
+.no-data-row {
+  height: 60px!important;
+}
+
+
+:host-context(.snippets-sources-container) {
+  tr td.p-frozen-column {
+    background-color: transparent;
+  }
+}
+
+@keyframes expand {
+  from {
+    height: var(--table-row-height);
+  }
+
+  to {
+    height: var(--card-height, 90px);
+  }
+}
+

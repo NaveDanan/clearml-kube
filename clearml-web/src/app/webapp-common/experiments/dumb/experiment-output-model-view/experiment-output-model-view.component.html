@@ -1,0 +1,21 @@
+<div class="input-model-container">
+  @if (!editable) {
+    <sm-labeled-row label="MODEL NAME">
+      <a [href]="'/projects/'+ ((model?.project?.id) ? model?.project?.id : '*')  + '/models/' + model?.id" target="_blank">
+        {{model?.name}}
+      </a>
+      @if (model?.uri && !isLocalFile) {
+        <button mat-icon-button class="sm-md- ms-2" (click)="artifactFilePathClicked(model.uri)">
+          <mat-icon fontSet="al" fontIcon="al-ico-download "></mat-icon>
+        </button>
+      }
+      @if (model?.uri && isLocalFile) {
+        <sm-copy-clipboard
+          label=""
+          class="ps-2"
+          [clipboardText]="model.uri"
+        ></sm-copy-clipboard>
+      }
+    </sm-labeled-row>
+  }
+</div>

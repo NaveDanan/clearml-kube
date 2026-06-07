@@ -1,0 +1,26 @@
+@use "./../layout/layout";
+
+:host {
+  .experiment-body {
+    width: 100%;
+    height: calc(100% - #{layout.$project-header-height});
+    transition: height 0.3s;
+  }
+
+  .info-disabled {
+    pointer-events: none;
+  }
+
+  .experiment-info-container {
+    transition: 0.3s;
+    &.hide-experiment-info {
+      width: 0 !important;
+      max-width: 0 !important;
+    }
+  }
+
+  sm-experiment-compare-scalar-charts {
+    height: 100%;
+  }
+}
+

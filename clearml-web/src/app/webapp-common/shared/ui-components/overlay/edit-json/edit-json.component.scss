@@ -1,0 +1,15 @@
+.data-text {
+  width: 70vw;
+  height: calc(90vh - 200px);
+  resize: none;
+}
+
+.buttons {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+
+  button {
+    margin: 0 6px;
+  }
+}

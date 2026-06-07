@@ -1,0 +1,144 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  background-color: var(--color-surface-container-lowest);
+
+  .connector-icon-container {
+    width: 32px;
+    height: 32px;
+    background: var(--color-surface-container-low);
+
+    &.active {
+      background: var(--color-surface);
+    }
+
+    border-radius: 32px;
+    position: absolute;
+    right: -16px;
+    top: 174px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-on-surface-variant);
+
+    &.hidden {
+      display: none;
+    }
+  }
+
+  .navigator-container {
+    height: 60px;
+    padding: 8px 24px;
+
+    &.active {
+      background: var(--color-surface-container-low);  ;
+    }
+  }
+
+  header {
+    margin: 24px;
+    padding: 0 24px;
+
+    .experiment-name {
+      font-size: 18px;
+      max-width: 93%;
+      display: inline-block;
+      white-space: nowrap;
+
+      a {
+        text-decoration: unset;
+        display: block;
+        width: 100%;
+        color: inherit;
+      }
+    }
+  }
+
+  .al-icon.disabled {
+    pointer-events: none;
+  }
+}
+
+sm-debug-images-view {
+  display: block;
+  padding: 12px 12px 0 18px;
+}
+
+
+.images-container {
+  display: flex;
+  min-height: 100%;
+
+  .limit-message-container {
+    width: 360px;
+    flex: 0 0 360px;
+    display: flex;
+
+    .limit-message {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 48px;
+      text-align: center;
+
+      i {
+        color: var(--color-primary);
+      }
+    }
+  }
+}
+
+.no-images {
+  text-align: center;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translateY(-50%) translateX(-50%);
+  display: block;
+  line-height: 1.2;
+  color: var(--color-empty-state);
+  h4 {
+    font-weight: 500;
+    font-size: 16px;
+    transform: translate(0, -36px);
+  }
+  .al-icon {
+    width: 160px;
+    height: auto;
+    font-size: 160px;
+  }
+}
+
+.metric-bar {
+  grid-gap: 12px;
+  display: inline-grid;
+  grid-template-columns: auto 200px auto auto auto auto auto auto auto;
+  align-items: center;
+
+  &.minimized {
+    margin: 0 0 24px;
+  }
+}
+
+.single-debug-images-container {
+  display: block;
+  position: relative;
+  flex: 1;
+  min-width: 640px;
+  min-height: 100%;
+  color: var(--color-on-surface-variant);
+
+  &.separator:not(:last-child) {
+    border-right: 1px solid var(--color-outline-variant);
+  }
+
+}
+
+.bordered-experiments {
+  .single-debug-images-container {
+    border: 1px solid var(--color-surface-container-highest);
+    border-radius: 6px;
+  }
+}

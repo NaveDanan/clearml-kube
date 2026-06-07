@@ -1,0 +1,30 @@
+<div [id]="stepData().stepId"
+     class="step-container pointer"
+     [style.--status-color]="'var(--color-' + stepData().data.status + '-container)'"
+     [class.selected]="selected()"
+     data-id="processSteps"
+>
+  <div class="step-part step-title">
+    <div
+      class="title"
+      smShowTooltipIfEllipsis
+      [smTooltip]="stepData()?.data?.name ?? stepData().name + stepData()?.data?.version ? ' v' + stepData().data.version : ''"
+      matTooltipPosition="above"
+      >{{stepData()?.data?.name ?? stepData().name}}@if (stepData()?.data?.version) {
+      v{{stepData().data.version}}
+    }</div>
+    <button class="console-button" mat-icon-button (click)="openConsole.emit()" data-id="consoleIcon">
+      <mat-icon fontSet="al" fontIcon="al-ico-console"></mat-icon>
+    </button>
+  </div>
+  <div class="step-part step-footer">
+    @if (stepData()?.data?.job_size) {
+      <div>{{stepData().data.job_size | filesize: fileSizeConfigStorage}}</div>
+    }
+    @if (stepData()?.data?.last_update) {
+      <div class="d-flex-center">
+        <i class="al-icon al-ico-upload sm me-1" data-id="uploadIcon"></i>{{stepData().data.last_update * 1000 | timeAgo}}
+      </div>
+    }
+  </div>
+</div>

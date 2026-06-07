@@ -1,0 +1,26 @@
+:host {
+  min-height: 23px;
+}
+
+.tag {
+  line-height: 21px;
+  margin: 1px 1px 1px 10px;
+  min-width: 30px;
+  color: var(--color-on-surface-variant);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 4px;
+  background-color: var(--color-surface-container);
+  border: solid 1px var(--color-outline-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.tag.example {
+  background: var(--color-neon-surface);
+  color: var(--color-on-neon-surface);
+  min-width: unset;
+  border: solid 1px var(--color-outline-variant);
+}

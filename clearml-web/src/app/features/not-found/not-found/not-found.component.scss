@@ -1,0 +1,29 @@
+@import "variables";
+
+:host{
+  #not-found-container {
+    margin-top: 5%;
+    color: var(--color-on-surface);
+
+    h1 {
+      font-size: 200px;
+      font-weight: bold;
+      margin: 0;
+
+    }
+    h2 {
+      font-size: 44px;
+      font-weight: 100;
+    }
+    h3 {
+      font-size: 30px;
+      font-weight: 100;
+    }
+  }
+  .cat {
+    font-size: 140px;
+    width: 140px;
+    height: 140px;
+  }
+}
+

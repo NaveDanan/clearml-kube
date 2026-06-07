@@ -1,0 +1,77 @@
+@if (activateFromMenuButton()) {
+  <div
+    [matMenuTriggerFor]="experimentMenu"
+    class="p-0 cell menu-button al-icon sm-md  al-ico-bars-menu"
+  ></div>
+} @else {
+  <div #contextTrigger
+       style="visibility: hidden; position: fixed"
+       [style.left.px]="position.x"
+       [style.top.px]="position.y"
+       [matMenuTriggerFor]="experimentMenu">
+  </div>
+}
+<mat-menu #experimentMenu="matMenu" [hasBackdrop]="false" class="light-theme entity-context-menu">
+  @if (selectedDisableAvailable()[menuItems.queue]) {
+    @if (tableMode()) {
+      <button mat-menu-item (click)="toggleDetails()">
+        <mat-icon fontSet="al" [fontIcon]="icons.DETAILS"></mat-icon>
+        Details
+      </button>
+      <hr>
+    }
+    @if (!selectedDisableAvailable()[menuItems.run]?.disable) {
+      <button mat-menu-item (click)="runPipelineController()">
+        <mat-icon fontSet="al" [fontIcon]="icons.RUN"></mat-icon>
+        {{selectedDisableAvailable()[menuItems.run]?.available | menuItemText : 'Run' : selectedDisableAvailableIsMultiple() }}
+      </button>
+    }
+    <button mat-menu-item (click)="abortControllerPopup()"
+            [disabled]="selectedDisableAvailable()[menuItems.abort].disable">
+      <mat-icon fontSet="al" [fontIcon]="icons.STOPPED"></mat-icon>
+      {{selectedDisableAvailable()[menuItems.abort]?.available | menuItemText : 'Abort' : selectedDisableAvailableIsMultiple()}}
+    </button>
+    @if (!isArchive()) {
+      <button mat-menu-item (click)="continueController()"
+              [disabled]="selectedDisableAvailable()[menuItems.continue].disable">
+        <mat-icon fontSet="al" fontIcon="al-ico-refresh"></mat-icon>
+        {{selectedDisableAvailable()[menuItems.continue]?.available | menuItemText : 'Continue' : selectedDisableAvailableIsMultiple()}}
+      </button>
+    }
+    <button mat-menu-item
+            [matMenuTriggerFor]="tagsMenu.matMenu"
+            [disabled]="selectedDisableAvailable()[menuItems.tags]?.disable"
+            (menuOpened)="tagMenuOpened()"
+            (menuClosed)="tagMenuClosed()">
+      <mat-icon fontSet="al" [fontIcon]="icons.TAG"></mat-icon>
+      <span>{{selectedDisableAvailable()[menuItems.tags]?.available | menuItemText : 'Add Tag' : selectedDisableAvailableIsMultiple() }}</span>
+    </button>
+    <sm-tags-menu
+      #tagsMenu
+      class="light-theme"
+      [tags]="experiment()?.tags"
+      [tagsFilterByProject]="tagsFilterByProject()"
+      [projectTags]="projectTags()"
+      [companyTags]="companyTags()"
+      (tagSelected)="tagSelected.emit($event)">
+    </sm-tags-menu>
+    @if (isCompare()) {
+      <button mat-menu-item (click)="openColorPicker($event)" data-id="Palette Option">
+        <mat-icon fontSet="al" [fontIcon]="icons.PALETTE"></mat-icon>
+        <span>Edit Color</span>
+      </button>
+    }
+    <button mat-menu-item (click)="restoreArchive(entityTypeEnum.controller)"
+            [disabled]="selectedDisableAvailable()[menuItems.archive].disable">
+      <mat-icon fontSet="al" [fontIcon]="isArchive() ? icons.RESTORE : icons.ARCHIVE"></mat-icon>
+      {{selectedDisableAvailable()[menuItems.archive].available | menuItemText : isArchive() ? 'Restore from Archive' : 'Archive' : selectedDisableAvailableIsMultiple()}}
+    </button>
+    @if (isArchive()) {
+      <button mat-menu-item (click)="deleteExperimentPopup(entityTypeEnum.controller, true)"
+              [disabled]="selectedDisableAvailable()[menuItems.delete].disable">
+        <mat-icon fontSet="al" [fontIcon]="icons.REMOVE"></mat-icon>
+        {{selectedDisableAvailable()[menuItems.delete].available | menuItemText : 'Delete' : selectedDisableAvailableIsMultiple()}}
+      </button>
+    }
+  }
+</mat-menu>

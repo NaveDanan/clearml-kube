@@ -1,0 +1,39 @@
+<div class="experiment-compare-container light-theme">
+  <sm-experiment-compare-header
+    [entityType]="entityType"
+  ></sm-experiment-compare-header>
+  <div class="experiment-compare-body">
+
+    <div class="global-legend-container" [class.show]="(showGlobalLegend$ | ngrxPush)" data-id="globalLegendContainer">
+      <div class="global-legend">
+        @for (exp of globalLegendData$ | ngrxPush; track exp.id) {
+          <div data-id="experimentLegend" class="legend-experiment">
+            <span #dot class="experiment-color"
+              data-id="experimentLegendColor"
+              [style.background-color]="experimentsColor[exp.id]"
+              [colorButtonRef]="dot"
+              [smChooseColor]="experimentsColor[exp.id]"
+              [stringToColor]="exp.name + '-' + exp.id"
+            ></span>
+            <span class="experiment-name"
+              [smTooltip]="duplicateNamesObject[exp.name] ? '' : exp.name" smShowTooltipIfEllipsis>
+              <a class="ellipsis" [routerLink]="buildUrl(exp)" [queryParams]="{archive: exp.systemTags?.includes('archived') || undefined}" [matTooltipShowDelay]="400" [smTooltip]="duplicateNamesObject[exp.name] ? exp.name + ' - ' + exp.id : ''">{{exp.name}}</a>
+            </span>
+            <sm-tag-list [tags]="exp.tags"></sm-tag-list>
+            @if ((globalLegendData$ | ngrxPush)?.length > 1) {
+              <button mat-icon-button class="small-button" (click)="removeExperiment(exp)" data-id="removeExperimentButton">
+                <mat-icon fontSet="al" fontIcon="al-ico-dialog-x" class="sm"></mat-icon>
+              </button>
+            }
+          </div>
+        }
+      </div>
+      <button mat-icon-button (click)="closeLegend()" data-id="closeLegend">
+        <mat-icon class="al-ico-dialog-x"></mat-icon>
+      </button>
+    </div>
+
+    <router-outlet></router-outlet>
+  </div>
+</div>
+

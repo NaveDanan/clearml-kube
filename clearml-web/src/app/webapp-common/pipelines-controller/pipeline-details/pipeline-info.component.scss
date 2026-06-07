@@ -1,0 +1,133 @@
+@use "variables";
+
+:host {
+  width: 260px;
+  z-index: 1;
+  border: 1px solid var(--color-surface-container-high);
+  border-radius: 4px;
+  background-color: var(--color-surface-container-low);
+
+  ::ng-deep {
+    .mat-expansion-panel-body {
+      padding: 0;
+    }
+    .mat-expansion-panel-header {
+      padding: 0 16px;
+    }
+  }
+
+  .expand-header {
+    height: 32px;
+    line-height: 34px;
+    color: var(--color-inverse-surface);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .panel-body {
+    max-height: calc(70vh - 100px);
+    min-height: 350px;
+    overflow: auto;
+    padding: 0 16px;
+  }
+
+  .section {
+    margin-bottom: 24px;
+    &:first-child {
+      margin-top:12px;
+    }
+
+    .header {
+      color: var(--color-primary);
+      font-size: variables.$font-size-small;
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+      line-height: 36px;
+    }
+
+    .param {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      line-height: 32px;
+      font-size: 12px;
+      border-bottom: solid 1px var(--color-outline-variant);
+
+      .key {
+        flex: 1 1 0;
+        margin-right: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .value {
+        flex: 1 1 0;
+        color: var(--color-on-surface-variant);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  header {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 6px 0;
+    grid-template-areas:
+      "icon name"
+      "icon status";
+    width: 100%;
+    margin: 12px 0 24px;
+    padding-bottom: 12px;
+    color: var(--color-on-surface-variant);
+    .al-icon {
+      grid-area: icon;
+    }
+    .name {
+      grid-area: name;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .status {
+    grid-area: status;
+    margin-right: auto;
+    height: 16px;
+    line-height: 18px;
+    padding: 0 6px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: var(--color-on-primary-container);
+    background-color: var(--status-color, var(--color-draft-container));
+  }
+
+  .empty-msg {
+    text-align: center;
+    padding-top: 12px;
+    font-size: variables.$font-size-small;
+    color: var(--color-empty-state);
+  }
+
+  footer {
+    height: 48px;
+    line-height: 48px;
+    padding: 0 16px;
+    border-top: solid 1px var(--color-surface-container-high);
+    .arr-link {
+      i {
+        margin-left:4px;
+        transform: translateY(2px);
+        transition: margin-left 0.3s;
+      }
+      &:hover i {
+        margin-left: 8px;
+      }
+    }
+  }
+}

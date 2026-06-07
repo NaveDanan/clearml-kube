@@ -1,0 +1,19 @@
+@use "../layout/layout";
+
+:host {
+
+  .models-body {
+    width: 100%;
+    height: calc(100% - #{layout.$project-header-height});
+    transition: height 0.3s;
+  }
+
+  .model-table-container {
+    transition: all 0.3s;
+
+  }
+
+  ::ng-deep .card-view table {
+    width: unset !important;
+  }
+}

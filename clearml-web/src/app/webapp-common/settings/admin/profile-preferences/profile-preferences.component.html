@@ -1,0 +1,73 @@
+<div class="toggles">
+  <sm-usage-stats #usage [class.d-none]="!usage.shown"></sm-usage-stats>
+  @if (admin() || usage.shown) {
+    <mat-slide-toggle
+      (change)="statsChange($event)"
+      [checked]="show()"
+      color="accent"
+      ><span class="d-flex-center">Show Hidden Projects<i class="al-icon al-ico-ghost sm ms-3"></i></span>
+    </mat-slide-toggle>
+  }
+  <mat-slide-toggle
+    (change)="toggleExamples($event)"
+    [checked]="hideExamples()"
+    color="accent"
+    >Don't show ClearML examples
+  </mat-slide-toggle>
+  @if (supportReScaling) {
+    <mat-slide-toggle
+      (change)="hidpiChange($event)"
+      [checked]="disableHidpi"
+    >
+      <div class="d-flex-center">
+        Disable HiDPI browser scale override
+        <mat-icon fontSet="al" fontIcon="al-ico-info-circle" class="sm info ms-3"
+                  data-id="hidpiInfoIcon"
+                  smTooltip="ClearML dynamically sets the browser scaling factor for an optimal page layout. Disable for default desktop scale."
+        ></mat-icon>
+        <a href="#" class="reload hidden ms-3" [class.hidden]="!disableHidpiChanged" (click)="$event.preventDefault(); reload($event)">Reload to apply</a>
+      </div>
+    </mat-slide-toggle>
+  }
+  @if (tipsService.hasTips()) {
+    <mat-slide-toggle
+      (change)="setNeverShowTipsAgain($event)"
+      [checked]="neverShowTipsAgain()?.includes(popupId)"
+      color="accent"
+      >Don't show pro tips periodically
+    </mat-slide-toggle>
+  }
+  @if (!this.config.configuration().enterpriseServer) {
+    <mat-slide-toggle
+      (change)="toggleEnterpriseFeatures($event.checked)"
+      [checked]="hideEnterpriseFeatures()"
+      color="accent"
+    >Don't show Enterprise Features</mat-slide-toggle>
+  }
+  <mat-slide-toggle
+    (change)="toggleBlockUserScript($event)"
+    [checked]="blockUserScripts()"
+    [disabled]="config.configuration().blockUserScript"
+  >
+    <div class="d-flex-center">
+      Block running user's scripts in the browser
+      <mat-icon fontSet="al" fontIcon="al-ico-info-circle" class="sm info ms-3"
+                data-id="blockScriptsInfoIcon"
+                [smTooltip]="blockScriptNotice()"
+      ></mat-icon>
+    </div>
+  </mat-slide-toggle>
+    <mat-slide-toggle
+      (change)="hideSpecificContainerArguments($event)"
+      [checked]="!!hideRedactedArguments()"
+    >
+      <div class="d-flex-center">
+        Hide specific container arguments
+        <mat-icon fontSet="al" fontIcon="al-ico-info-circle" class="sm info ms-3"
+                  data-id="hideSpecificargInfoIcon"
+                  smTooltip="Redact the values for the specified container environment variables in the task execution page"
+        ></mat-icon>
+        <button class="ms-2" mat-button data-id="editButton" (click)="editHideSpecificContainerArguments()">Edit</button>
+      </div>
+    </mat-slide-toggle>
+</div>

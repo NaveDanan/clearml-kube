@@ -1,0 +1,33 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow: auto;
+  padding: 12px;
+
+  .artifact-container {
+    padding: 10px 12px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    border-radius: 4px;
+    margin-bottom: 2px;
+
+    .icon, .al-icon {
+      margin-right: 10px;
+      color: var(--color-primary);
+    }
+
+    &:hover {
+      background-color: var(--color-surface-container-low);
+    }
+
+    &.selected {
+      background-color: var(--color-surface-container-high);
+      color: var(--color-on-surface);
+
+      &:hover {
+        background-color: var(--color-surface-container-highest);
+      }
+    }
+  }
+}

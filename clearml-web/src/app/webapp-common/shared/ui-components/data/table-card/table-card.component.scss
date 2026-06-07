@@ -1,0 +1,72 @@
+.table-card {
+  &.item-color{
+    border-left: 8px solid;
+  }
+  display: grid;
+  grid-template-columns: 20px 32px 1fr;
+  align-items: center;
+  gap: 0 6px;
+  padding: 16px 16px 16px 10px;
+  grid-template-areas:
+    "cbx type-icon card-name"
+    ". tags tags"
+    ". data data";
+  &.two-columns {
+    grid-template-columns: 24px 1fr;
+    grid-template-areas:
+    "cbx card-name"
+    ". tags"
+    ". data";
+  }
+  &.no-selection {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+    "card-name"
+    "tags"
+    "data";
+  }
+
+  &.checked.selected {
+    --mat-checkbox-unselected-icon-color: var(--color-on-surface);
+
+    ::ng-deep mat-checkbox:not(.mat-mdc-checkbox-checked) {
+      .mdc-checkbox:hover .mdc-checkbox__background {
+        background-color: var(--color-surface);
+      }
+    }
+  }
+}
+
+.cbx { grid-area: cbx; margin-right: auto; }
+.type-icon { grid-area: type-icon; display: flex; justify-content: center; }
+.card-name { grid-area: card-name; display: flex; overflow: hidden; align-items: center;}
+.tags {
+  grid-area: tags;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.data {
+  grid-area: data;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 12px;
+}
+
+.no-selection .data {
+  margin-top: 0;
+}
+
+
+.name-container {
+  min-width: 0;
+  display: flex;
+  margin-right: 12px;
+}
+
+.name {
+  flex: 1;
+  font-weight: 500;
+  min-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,8 @@
+@if (modelInfo$ | ngrxPush) {
+  <sm-experiment-artifact-item-view
+    [artifact]="selectedArtifact$ | ngrxPush"
+    [editable]="false"
+    [downloading]="downloadingArtifact$ | ngrxPush"
+  ></sm-experiment-artifact-item-view>
+}
+

@@ -1,0 +1,121 @@
+:host {
+  --row-border-color: var(--color-surface-container-high);
+
+  form.editable, .table-container {
+    height: 100%;
+    padding-bottom: 6px;
+  }
+
+  form.editable {
+    padding-bottom: 6px;
+  }
+
+  .form-container {
+    height: 100%;
+    overflow: auto;
+  }
+
+  .param-row {
+    margin-bottom: 12px;
+  }
+
+  mat-form-field {
+    flex: 1;
+    padding-right: 12px;
+  }
+
+  ::ng-deep tr:hover {
+    cursor: auto !important;
+    transition: background-color 0.3s;
+  }
+
+  .separator {
+    width: 100%;
+    //border-bottom: solid 1px #dee1e9;
+  }
+
+  .remove-button {
+    margin-bottom: 22px;
+  }
+
+  .param-row {
+    font-weight: 500;
+
+    & > div {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .highlight-text {
+    background-color: var(--color-tertiary-container);
+    color: var(--color-on-tertiary-container);
+
+    &.current-match {
+      background-color: var(--color-tertiary);
+      color: var(--color-on-tertiary);
+    }
+  }
+
+  .current-match .highlight-text {
+    background-color: var(--color-tertiary);
+    color: var(--color-on-tertiary);
+  }
+
+  .name {
+    font-weight: 500;
+  }
+
+  .allow-multi-space {
+    white-space: pre;
+  }
+
+  .al-ico-description {
+    color: var(--color-primary);
+  }
+
+  ::ng-deep .table-container {
+    --p-datatable-body-cell-border-color: var(--color-surface-container-high);
+    td:first-child {
+      padding-left: 8px !important;
+    }
+    .p-datatable-table {
+      border-collapse: separate;
+    }
+  }
+
+  ::ng-deep .mat-mdc-form-field-icon-suffix {
+    padding: 0 12px !important;
+  }
+}
+
+.value-container {
+  display: flex;
+  align-items: center;
+
+  button {
+    margin-left: 12px;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  &:hover {
+   button {
+     visibility: visible;
+     opacity: 1;
+   }
+  }
+}
+
+.dots-slice {
+  transform: scale(0.5);
+  transform-origin: left;
+  margin-bottom: 12px;
+}
+
+.divider {
+  border-color: var(--color-outline-variant);
+  opacity: 0.5;
+}

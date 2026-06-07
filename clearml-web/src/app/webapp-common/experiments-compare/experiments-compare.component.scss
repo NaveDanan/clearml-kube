@@ -1,0 +1,167 @@
+$nav-height: 62px;
+$header-height: 60px;
+
+:host {
+
+
+  .experiment-compare-container {
+    height: 100%;
+    position: relative;
+    display: block;
+
+    sm-experiment-compare-header {
+      display: block;
+      height: $header-height;
+
+    }
+
+    nav {
+      height: $nav-height;
+      gap: 1px;
+    }
+
+    ::ng-deep nav {
+      border-top: 1px solid rgba(2, 2, 2, 0.07);
+    }
+
+    .experiment-compare-body {
+      padding: 0;
+      height: calc(100% - #{$nav-height});
+      display: flex;
+      flex-direction: column;
+    }
+
+  }
+
+  ::ng-deep sm-experiment-graphs, ::ng-deep sm-debug-images, ::ng-deep sm-experiment-output-log {
+    display: block;
+    height: 100%;
+  }
+
+  ::ng-deep .no-output {
+    text-align: center;
+    color: var(--color-surface-container-low);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translateY(-50%) translateX(-50%);
+    display: block;
+  }
+
+  ::ng-deep .no-output-icon {
+    height: 200px;
+    width: 200px;
+    left: 50%;
+    margin-bottom: 10px;
+  }
+
+  /* Handle */
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-surface-container-low);
+  }
+
+  ::ng-deep al-drawer sm-card2 .card-container {
+    border-radius: 6px 0 0 6px !important;
+    border-right: none !important;
+  }
+
+  ::ng-deep al-drawer button.drawer-toggle {
+    border-radius: 0 6px 6px 0;
+  }
+}
+
+.global-legend-container {
+  display: flex;
+  gap: 12px;
+  max-height: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--color-surface-container-low);
+  width: 100%;
+  padding: 0 24px;
+  transition: max-height 300ms, padding 300ms;
+
+  &.show {
+    max-height: 200px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--color-surface-container);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-primary-container);
+
+    &:hover {
+      background-color: var(--color-primary);
+    }
+  }
+}
+
+.global-legend {
+  display: flex;
+  flex-grow: 1;
+  flex-wrap: wrap;
+  gap: 12px;
+  overflow: auto;
+  height: 100%;
+  padding: 0 10px 0 0;
+  max-height: 132px;
+  background: transparent;
+}
+
+.legend-experiment {
+  display: flex;
+  align-items: center;
+  flex: 0 1 100px;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: solid 1px var(--color-surface-container);;
+  background-color: var(--color-surface-container-lowest);
+
+  .experiment-color {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    cursor: pointer;
+    &:hover {
+      box-shadow: 0 0 0 1px var(--color-surface-container-lowest), 0 0 0 2px var(--color-primary);;
+    }
+  }
+
+  .experiment-name {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 500;
+    margin-right: 6px;
+    max-width: 300px;
+    > a {
+      color: var(--color-on-surface-variant);
+      &:hover {
+        color: var(--color-on-surface);;
+        text-decoration: underline;
+        text-underline-offset: 4px;
+        text-decoration-color: var(--color-outline-variant);
+      }
+    }
+  }
+
+  sm-tag-list {
+    max-width: 300px;
+  }
+
+  &:last-child {
+    margin-right: 12px;
+  }
+}
+
+.legend-add {
+  border-radius: 4px;
+  height: 36px;
+}
+
+.small-button {
+  --mat-icon-button-icon-size: 16px;
+  --mat-icon-button-state-layer-size: 20px;
+}

@@ -1,0 +1,44 @@
+<div [hidden]="!showLoadingOverlay()" [class.d-flex]="showLoadingOverlay()" class="overlay justify-content-center align-items-center">
+  <div class="loading">
+    <mat-spinner strokeWidth="2" diameter="24" color="accent"></mat-spinner>
+    <div class="text">Loading</div>
+  </div>
+</div>
+<div [hidden]="showLoadingOverlay() || chartData()" [class.d-flex]="!(showLoadingOverlay() || chartData())"
+     class="overlay justify-content-center align-items-center">
+     <div class="loading">
+      <div class="text no-data">No data to show</div>
+    </div>
+</div>
+
+<canvas
+  baseChart
+  class="chart"
+  [data]="chartData()"
+  [options]="lineChartOptions()"
+  [type]="lineChartType"
+  [plugins]="lineChartPlugins"
+></canvas>
+
+@if (tooltipData()) {
+  <div
+    #chartjsTooltip class="tooltip" animate.leave="leaving" animate.enter="enter"
+    [style.left.px]="tooltipData()?.position.x"
+    [style.top.px]="tooltipData()?.position.y"
+  >
+  @if (!hideTooltipTitle()) {
+    <div class="tooltip__title">{{tooltipData()?.title}}</div>
+  }
+    <div class="tooltip__body" [style.--columns]="tooltipData().columns">
+      @for (item of tooltipData()?.dataPoints; track item.datasetIndex) {
+        <div class="tooltip__body__item">
+           <span
+             class="tooltip__body__item__dot" [class.striped]="item.striped"
+             [style.--dot-color]="item.color.backgroundColor"
+           ></span>
+          <span class="tooltip__body__item__key">{{item['overrideTooltipLabel'] ?? item.dataset.label}}:</span> {{item.formattedValue}}
+        </div>
+      }
+    </div>
+  </div>
+}

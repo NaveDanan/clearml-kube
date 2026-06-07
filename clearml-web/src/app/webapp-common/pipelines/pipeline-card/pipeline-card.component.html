@@ -1,0 +1,102 @@
+<sm-card class="project-card"
+  (click)="projectClicked()"
+  [isExample]="!['All Tasks'].includes(project.name) && !isRootProject && (!project.company || ! project.company.id)"
+  [showFolder]="false"
+  [oneTabMode]="true"
+  [subFolderTitle]="project?.sub_projects?.length + ' sub projects'"
+  >
+  <div secondTab class="sub-projects-list">
+    <cdk-virtual-scroll-viewport [itemSize]="30" [minBufferPx]="440" [maxBufferPx]="660" class="h-100">
+      <a
+        *cdkVirtualFor="let subProject of project?.sub_projects; trackBy: trackById"
+        class="d-flex align-items-center"
+        smClickStopPropagation
+        (click)="subProjectClicked(subProject.id)"
+        [smTooltip]="subProject?.name"
+        [innerHTML]="subProject?.name | breadcrumbsEllipsis"
+      ></a>
+    </cdk-virtual-scroll-viewport>
+  </div>
+  <div header-content [class.rename-state]="editName.active()">
+    <div class="d-flex justify-content-between align-items-center card-name">
+      <sm-inline-edit #editName
+        class="title edit-name dark"
+        [originalText]="project.name | shortProjectName"
+        [editable]="true"
+        [minLength]="1"
+        [required]="true"
+        pattern="^[^\/]+$"
+        [forbiddenString]="[]"
+        [inlineDisabled]="true"
+        (textChanged)="prepareProjectNameForChange($event)"
+        >
+        <span class="d-flex align-items-center">
+          <span class="project-name"
+            [smTooltip]="project.name | cleanProjectPath"
+            smShowTooltipIfEllipsis
+          >{{project.name | shortProjectName}} </span>@if (!hideProjectPathIcon() && (project.name | cleanProjectPath:
+          false)) {
+          <i
+            [smTooltip]="project.name | cleanProjectPath: false"
+          class="al-icon al-ico-project-path sm ms-2"></i>
+        }</span>
+      </sm-inline-edit>
+      @if (!hideMenu()) {
+        <sm-pipeline-card-menu
+          class="menu-wrapper"
+          [project]="project"
+          [allTags]="allTags()"
+          (run)="run.emit()"
+          (rename)="editName.inlineActivated()"
+          (addTag)="addTag.emit($event)"
+          (delete)="delete.emit()"
+          data-id="pipelineCardMenu"
+        ></sm-pipeline-card-menu>
+      }
+    </div>
+    @if (project.stats?.active?.last_task_run) {
+      <span
+        class="last-run"
+        [smTooltip]="project.stats?.active?.last_task_run | date: timeFormatString"
+        matTooltipPosition="after"
+      >Last run {{project.stats?.active?.last_task_run | timeAgo}}</span>
+    } @else {
+      <div class="last-run">No pipeline runs yet</div>
+    }
+  </div>
+  <div class="d-flex justify-content-around w-100">
+    <ng-template></ng-template>
+    <sm-circle-counter
+      [counter]="project.stats?.active?.status_count.in_progress"
+      label="RUNNING"
+      [type]="project.stats?.active?.status_count.in_progress? circleTypeEnum.running : circleTypeEnum.empty"
+    ></sm-circle-counter>
+    <sm-circle-counter
+      [counter]="project.stats?.active?.status_count.queued"
+      label="PENDING"
+      [type]="project.stats?.active?.status_count.queued ? circleTypeEnum.pending : circleTypeEnum.empty"
+    ></sm-circle-counter>
+    <sm-circle-counter
+      [counter]="project.stats?.active?.status_count?.completed"
+      label="COMPLETED"
+      [type]="project.stats?.active?.status_count?.completed? circleTypeEnum.completed : circleTypeEnum.empty"
+    ></sm-circle-counter>
+    <sm-circle-counter
+      [counter]="project.stats?.active?.status_count.failed"
+      label="FAILED"
+      [type]="project.stats?.active?.status_count.failed ? circleTypeEnum.failed : circleTypeEnum.empty"
+    ></sm-circle-counter>
+  </div>
+  <div footer class="footer-tags">
+    @if (!hideMenu()) {
+      <sm-tag-list
+        class="w-100"
+        [tags]="project.tags"
+        (remove)="removeTag.emit($event)"
+        smClickStopPropagation
+      ></sm-tag-list>
+    } @else {
+      <sm-tag-list [tags]="project.tags"></sm-tag-list>
+    }
+  </div>
+</sm-card>

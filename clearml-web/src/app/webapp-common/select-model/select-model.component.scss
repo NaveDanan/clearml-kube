@@ -1,0 +1,39 @@
+:host {
+  .space-line {
+    height: 14px;
+  }
+
+  sm-models-table {
+    display: block;
+    height: 100%;
+    padding: 16px 0;
+  }
+
+  .model-table-container {
+    height: calc(100% - 134px);
+    width: 100%;
+  }
+
+  .buttons {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+
+    button {
+      width: 130px;
+    }
+  }
+
+  ::ng-deep p-table table {
+    width: 100% !important;
+
+    .p-datatable-selectable-row  {
+      cursor: default !important;
+    }
+  }
+
+  ::ng-deep .generic-container {
+    max-height: unset !important;
+  }
+}
+

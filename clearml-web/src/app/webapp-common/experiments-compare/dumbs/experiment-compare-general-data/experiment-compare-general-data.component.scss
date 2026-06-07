@@ -1,0 +1,69 @@
+
+:host {
+  header {
+    .project {
+      font-size: 12px;
+      width: 330px;
+      min-height: 16px;
+      line-height: 1.5;
+      margin-bottom: 6px;
+    }
+
+    h3 {
+      font-size: 19px;
+      margin: 0;
+    }
+
+    .experiment-name {
+      font-size: 18px;
+      max-width: 80%;
+      display: inline-block;
+      white-space: nowrap;
+
+      a {
+        text-decoration: unset;
+        display: block;
+        width: 100%;
+        color: inherit;
+      }
+    }
+  }
+
+  sm-tag-list {
+    margin-top: 4px;
+    height: 18px;
+    max-width: 530px;
+  }
+
+  .general-info {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    height: 40px;
+
+    .dot {
+      background-color: var(--color-on-surface-variant);
+      opacity: 0.5;
+      width: 3px;
+      height: 3px;
+      margin: 0 10px;
+      border-radius: 50%;
+    }
+
+    .iterations {
+      flex: 1;
+    }
+  }
+
+  sm-status-icon-label {
+    height: 12px;
+  }
+  ::ng-deep sm-status-icon-label {
+    .status-icon-container {
+      display: flex !important;
+    }
+    mat-icon, .label {
+      color: var(--color-on-surface-variant)
+    }
+  }
+}

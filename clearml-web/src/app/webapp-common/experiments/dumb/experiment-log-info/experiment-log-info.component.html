@@ -1,0 +1,21 @@
+<cdk-virtual-scroll-viewport itemSize="25" minBufferPx="1000" maxBufferPx="2000"
+  class="viewport" tabindex="0">
+  <div *cdkVirtualFor="let line of lines; trackBy: trackByTimestampFn" data-id="logLine" class="log-line" [class.separator]="line.separator">
+    <div class="timestamp" data-id="timeStamp">{{line.timestamp | date:'y-MM-dd HH:mm:ss'}}</div>
+    @if (line.hasAnsi) {
+      <div data-id="resultEntry" class="entry" [innerHTML]="line.entry | purify"></div>
+    } @else {
+      <div class="entry">{{line.entry}}</div>
+    }
+  </div>
+</cdk-virtual-scroll-viewport>
+@if (fetching()) {
+  <mat-spinner [diameter]="32" [strokeWidth]="4" color="accent"></mat-spinner>
+}
+
+@if (!fetching()) {
+  <button mat-flat-button class="get-last" [class.at-end]="canRefresh" (click)="getLast()" data-id="jumpToEndButton">
+    <mat-icon fontSet="al" fontIcon="al-ico-arrow-down"></mat-icon>
+    Jump to end
+  </button>
+}

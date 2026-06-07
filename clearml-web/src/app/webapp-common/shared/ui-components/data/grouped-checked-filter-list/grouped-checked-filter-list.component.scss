@@ -1,0 +1,173 @@
+@use 'variables';
+@use "mixins/link";
+
+:host {
+  @include link.link();
+
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+
+
+  .empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-on-surface-variant);
+    font-size: 14px;
+  }
+
+  ::ng-deep .mat-expansion-panel-header {
+
+    .mat-expansion-indicator {
+      height: 25px;
+      width: 12px;
+      text-align: center;
+    }
+
+    &.mat-expanded, .mat-expanded:focus {
+      color: var(--color-on-surface);
+
+      .mat-expansion-indicator {
+        height: 22px;
+      }
+
+      .item-key {
+        color: var(--color-on-surface);
+      }
+    }
+  }
+
+  .mat-expansion-panel {
+    box-shadow: none;
+    color: var(--color-on-surface-variant);
+  }
+
+  ::ng-deep mat-checkbox {
+    width: 100%;
+    height: inherit;
+
+    .mdc-checkbox {
+      transform: scale(0.8);
+    }
+
+    .mdc-form-field {
+      width: 100%;
+      height: inherit;
+
+      label {
+        width: 100%;
+      }
+    }
+
+    .ellipsis {
+      max-width: 94%;
+    }
+  }
+}
+
+.title {
+  color: var(--color-on-surface-variant);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 30px 24px 6px 0;
+  font-size: 12px;
+  height: 36px;
+}
+
+.list {
+  flex: 1;
+  overflow: scroll;
+  padding-right: 24px;
+
+  mat-expansion-panel {
+    --mat-expansion-container-background-color: transparent;
+    box-shadow: none;
+    margin-bottom: 2px;
+
+    mat-expansion-panel-header {
+      padding: 0 12px;
+
+      .has-selected {
+        margin: 0 24px 0 auto;
+        background-color: var(--color-tertiary);
+        width: 6px;
+        height: 6px;
+        border-radius: 6px;
+        align-self: center;
+      }
+      &.mat-expanded {
+        background-color: var(--color-tint-8);
+      }
+    }
+  }
+
+  ::ng-deep .mat-expansion-panel-body {
+    padding: 0;
+  }
+
+  .item-key {
+    font-size: 14px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    display: inline-block;
+    max-width: calc(100% - 42px);
+  }
+
+  mat-expansion-panel-header {
+    color: var(--color-on-surface-variant);
+
+    &:hover .item-key {
+      color: var(--color-on-surface);
+    }
+  }
+
+  .item {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    border-radius: 4px;
+    font-family: variables.$font-family-base, sans-serif;
+    font-size: 12px;
+    color: var(--color-on-surface-variant);
+    cursor: pointer;
+
+    &.disabled {
+      opacity: 0.5;
+      cursor: default;
+      mat-checkbox {
+        pointer-events: none;
+      }
+    }
+
+    &:hover {
+      background-color: var(--color-tint-5);
+    }
+  }
+
+  label {
+    display: block;
+    font-weight: normal;
+    padding-left: 12px;
+    margin: 0 !important;
+    line-height: normal;
+    font-size: 12px;
+    cursor: inherit;
+  }
+
+}
+
+:host-context(.hyper-params-custom-col) {
+  .actions,
+  .list {
+    padding-left: 24px;
+  }
+}

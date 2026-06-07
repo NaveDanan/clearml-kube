@@ -1,0 +1,629 @@
+<ng-template #runaiLogo>
+  <svg
+    class="runai-logo"
+    width="656"
+    height="196"
+    viewBox="0 0 164 64"
+    xmlns="http://www.w3.org/2000/svg"
+    fill-rule="evenodd"
+    clip-rule="evenodd"
+    stroke-linejoin="round"
+    stroke-miterlimit="2"
+    aria-hidden="true"
+    focusable="false">
+    <path
+      fill="currentColor"
+      d="M160.352 24.069v-.449h.288c.157 0 .371.012.371.204 0 .208-.11.245-.296.245h-.363m0 .315h.192l.447.784h.49l-.494-.816c.255-.019.465-.14.465-.484 0-.427-.295-.565-.793-.565h-.721v1.865h.414v-.784m2.098-.146c0-1.095-.851-1.73-1.8-1.73-.955 0-1.805.635-1.805 1.73s.85 1.733 1.805 1.733c.948 0 1.8-.638 1.8-1.733m-.52 0c0 .798-.587 1.334-1.28 1.334v-.006c-.713.006-1.289-.53-1.289-1.328 0-.797.577-1.331 1.289-1.331.694 0 1.28.534 1.28 1.331M96.374 5.707l.002 19.66h5.552V5.707h-5.554zm-43.677-.026v19.686H58.3V10.086l4.37.014c1.437 0 2.43.345 3.123 1.084.879.936 1.237 2.444 1.237 5.205v8.978h5.427V14.49c0-7.763-4.948-8.81-9.789-8.81h-9.97l-.001.001zm52.617.027v19.659h9.006c4.798 0 6.364-.798 8.057-2.587 1.198-1.256 1.971-4.014 1.971-7.027 0-2.763-.655-5.228-1.797-6.763-2.057-2.745-5.02-3.282-9.445-3.282h-7.792zm5.508 4.28h2.387c3.463 0 5.703 1.556 5.703 5.591 0 4.037-2.24 5.592-5.703 5.592h-2.387V9.988zm-22.453-4.28l-4.634 15.58-4.44-15.579-5.993-.001 6.34 19.659h8.003l6.391-19.659h-5.667zm38.563 19.659h5.553V5.709l-5.555-.001.002 19.659zm15.564-19.652l-7.753 19.645h5.475l1.227-3.472h9.175l1.161 3.472h5.944l-7.812-19.646-7.417.001zM146.1 9.3l3.364 9.204h-6.833l3.47-9.204h-.001z"/>
+    <path
+      fill="#76b900"
+      d="M16.889 8.985V6.28c.262-.02.528-.033.798-.042 7.4-.232 12.255 6.359 12.255 6.359s-5.244 7.282-10.866 7.282a6.83 6.83 0 01-2.187-.35v-8.204c2.88.348 3.46 1.62 5.192 4.508l3.852-3.248s-2.812-3.688-7.552-3.688c-.515 0-1.008.036-1.492.088zm0-8.938V4.09c.265-.021.531-.038.798-.048 10.29-.346 16.995 8.44 16.995 8.44s-7.7 9.364-15.723 9.364c-.735 0-1.424-.068-2.07-.183v2.498c.553.07 1.126.112 1.724.112 7.465 0 12.864-3.812 18.092-8.325.867.694 4.416 2.383 5.145 3.123-4.971 4.16-16.555 7.515-23.123 7.515a18.807 18.807 0 01-1.838-.096V30h28.375V.047H16.889zm0 19.482v2.133c-6.905-1.23-8.822-8.408-8.822-8.408s3.316-3.674 8.822-4.269v2.34l-.011-.001c-2.89-.347-5.147 2.353-5.147 2.353s1.265 4.544 5.158 5.852zM4.625 12.943s4.092-6.04 12.264-6.663V4.088C7.838 4.815 0 12.48 0 12.48s4.439 12.833 16.889 14.008V24.16C7.753 23.011 4.625 12.943 4.625 12.943z"/>
+    <text
+      x="92"
+      y="50"
+      text-anchor="middle"
+      font-family="Arial, Helvetica, sans-serif"
+      font-size="24.5"
+      font-weight="700"
+      fill="currentColor">Run:ai</text>
+  </svg>
+</ng-template>
+
+<ng-template #connectionDialog>
+  <div class="connection-dialog">
+    <div class="dialog-header">
+      <div>
+        <div class="dialog-kicker">Run:AI Autoscaler</div>
+        <h2>Connection</h2>
+      </div>
+      <button mat-icon-button type="button" mat-dialog-close aria-label="Close connection dialog">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    </div>
+
+    <form [formGroup]="connectionForm" class="form-grid connection-form">
+      <mat-form-field appearance="outline">
+        <mat-label>Connect With</mat-label>
+        <mat-select formControlName="connection_method">
+          <mat-option value="openshift">OpenShift oc token</mat-option>
+          <mat-option value="runai_application">Run:ai application keys</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Run:ai CLI Version Commands</mat-label>
+        <mat-select formControlName="runai_cli_version">
+          <mat-option value="auto">Auto</mat-option>
+          <mat-option value="v2">V2</mat-option>
+          <mat-option value="v1">V1</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      @if (connectionForm.controls.connection_method.value === 'openshift') {
+        <mat-form-field appearance="outline">
+          <mat-label>OpenShift Login</mat-label>
+          <mat-select formControlName="openshift_login_mode">
+            <mat-option value="fields">URL and token</mat-option>
+            <mat-option value="command">Paste oc login</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        @if (connectionForm.controls.openshift_login_mode.value === 'fields') {
+          <mat-form-field appearance="outline">
+            <mat-label>OpenShift API URL</mat-label>
+            <input matInput formControlName="openshift_api_url" placeholder="https://api.cluster.example.com:6443">
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>OpenShift Token</mat-label>
+            <input matInput formControlName="openshift_token" type="password" placeholder="sha256~...">
+          </mat-form-field>
+        } @else {
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>oc login command</mat-label>
+            <textarea matInput formControlName="openshift_login_command" rows="3"
+                      placeholder="oc login --token=sha256~... --server=https://api.cluster.example.com:6443"></textarea>
+          </mat-form-field>
+        }
+      } @else {
+        <mat-form-field appearance="outline">
+          <mat-label>Run:ai Application Access Key</mat-label>
+          <input matInput formControlName="runai_access_key" placeholder="Application access key">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Run:ai Application Secret Key</mat-label>
+          <input matInput formControlName="runai_secret_key" type="password">
+        </mat-form-field>
+      }
+
+      <mat-form-field appearance="outline">
+        <mat-label>Project</mat-label>
+        <input matInput formControlName="runai_project" placeholder="Optional Run:ai project name">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Cluster</mat-label>
+        <input matInput formControlName="runai_cluster" placeholder="Optional cluster name">
+      </mat-form-field>
+    </form>
+
+    <div class="connection-actions dialog-actions">
+      <button mat-stroked-button type="button"
+              [disabled]="connectionForm.invalid"
+              (click)="testConnection()">
+        @if (connectionStatus() === 'testing') {
+          <mat-spinner diameter="18"></mat-spinner>
+        }
+        TEST CONNECTION
+      </button>
+      <span class="dialog-spacer"></span>
+      @if (connectionStatus() === 'success') {
+        <span class="status-badge success">
+          <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon> Connected
+        </span>
+        <span class="projects-count" title="Available projects">{{ formatNumber(connectionResult()?.projects_count) }}</span>
+      }
+      @if (connectionStatus() === 'error') {
+        <span class="status-badge error">
+          <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon> Connection failed
+        </span>
+      }
+      <button mat-stroked-button type="button"
+              [disabled]="connectionForm.pristine"
+              (click)="resetConnection()">RESET
+      </button>
+      <button mat-flat-button type="button"
+              [disabled]="connectionForm.invalid || connectionForm.pristine"
+              (click)="saveConnection()">SAVE
+      </button>
+    </div>
+  </div>
+</ng-template>
+
+<ng-template #importDialog>
+  <div class="import-dialog">
+    <div class="dialog-header">
+      <div>
+        <div class="dialog-kicker">Run:AI Autoscaler</div>
+        <h2>Import Configuration</h2>
+      </div>
+      <button mat-icon-button type="button" mat-dialog-close aria-label="Close import configuration dialog">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    </div>
+
+    <form [formGroup]="importForm" class="import-form">
+      <mat-form-field appearance="outline">
+        <mat-label>Import From</mat-label>
+        <mat-select formControlName="mode">
+          <mat-option value="command">Run:ai command</mat-option>
+          <mat-option value="json">JSON configuration file</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      @if (importForm.controls.mode.value === 'command') {
+        <mat-form-field appearance="outline">
+          <mat-label>Run:ai workload command</mat-label>
+          <textarea matInput
+                    formControlName="command"
+                    rows="10"
+                    placeholder="runai workspace submit my-shell --project ml-research --image nvcr.io/nvidia/pytorch:25.02-py3 --gpu-devices-request 1 --command -- bash -lc &quot;sleep infinity&quot;"></textarea>
+        </mat-form-field>
+      } @else {
+        <div class="upload-row">
+          <button mat-stroked-button type="button" (click)="jsonFileInput.click()">
+            <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
+            UPLOAD JSON
+          </button>
+          <input #jsonFileInput type="file" accept="application/json,.json" (change)="importJsonFile($event)" hidden>
+        </div>
+        <mat-form-field appearance="outline">
+          <mat-label>JSON configuration</mat-label>
+          <textarea matInput
+                    formControlName="json"
+                    rows="10"
+                    placeholder='{"workload_type":"workspace","workload_name":"my-shell","project":"ml-research","image":"nvcr.io/nvidia/pytorch:25.02-py3","gpu_devices_request":"1"}'></textarea>
+        </mat-form-field>
+      }
+    </form>
+
+    @if (importError()) {
+      <div class="import-error">{{ importError() }}</div>
+    }
+
+    <div class="dialog-actions import-actions">
+      <span class="dialog-spacer"></span>
+      <button mat-stroked-button type="button" mat-dialog-close>CANCEL</button>
+      <button mat-flat-button type="button"
+              [disabled]="!importReady()"
+              (click)="importConfiguration(workloadDialog)">
+        IMPORT
+      </button>
+    </div>
+  </div>
+</ng-template>
+
+<ng-template #workloadDialog>
+  <div class="workload-dialog config-section">
+    <div class="dialog-header">
+      <div>
+        <div class="dialog-kicker">Run:AI Autoscaler</div>
+        <h2>Submit Workload</h2>
+      </div>
+      <button mat-icon-button type="button" mat-dialog-close aria-label="Close submit workload dialog">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    </div>
+
+    <form [formGroup]="workloadForm" class="form-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Workload Type</mat-label>
+        <mat-select formControlName="workload_type">
+          <mat-option value="training">Training</mat-option>
+          <mat-option value="workspace">Workspace</mat-option>
+          <mat-option value="inference">Inference</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Workload Name</mat-label>
+        <input matInput formControlName="workload_name">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Container Image</mat-label>
+        <input matInput formControlName="image" placeholder="e.g. ubuntu:latest">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Template</mat-label>
+        <input matInput formControlName="template" placeholder="Optional template name">
+      </mat-form-field>
+
+      <div class="full-width">
+        <mat-checkbox formControlName="command_override">Override entrypoint</mat-checkbox>
+      </div>
+
+      @if (workloadForm.controls.command_override.value) {
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Command</mat-label>
+          <input matInput formControlName="command">
+        </mat-form-field>
+      }
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Arguments (after --)</mat-label>
+        <input matInput formControlName="args" placeholder="e.g. --epochs 10 --lr 0.001">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Environment Variables</mat-label>
+        <input matInput formControlName="environment_variables"
+               placeholder="KEY1=val1,KEY2=val2">
+      </mat-form-field>
+
+      <h3 class="section-label full-width">Resources</h3>
+
+      <mat-form-field appearance="outline">
+        <mat-label>CPU Request</mat-label>
+        <input matInput formControlName="cpu_core_request" placeholder="e.g. 0.5">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>CPU Limit</mat-label>
+        <input matInput formControlName="cpu_core_limit" placeholder="e.g. 2">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Memory Request</mat-label>
+        <input matInput formControlName="cpu_memory_request" placeholder="e.g. 1G">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Memory Limit</mat-label>
+        <input matInput formControlName="cpu_memory_limit" placeholder="e.g. 4G">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>GPU Devices</mat-label>
+        <input matInput formControlName="gpu_devices_request" placeholder="e.g. 1">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>GPU Memory</mat-label>
+        <input matInput formControlName="gpu_memory_request" placeholder="e.g. 8G">
+      </mat-form-field>
+
+      <h3 class="section-label full-width">Scheduling</h3>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Node Pools</mat-label>
+        <input matInput formControlName="node_pools" placeholder="pool-a,pool-b">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Priority</mat-label>
+        <mat-select formControlName="priority">
+          <mat-option value="">Default</mat-option>
+          <mat-option value="very-low">Very Low</mat-option>
+          <mat-option value="low">Low</mat-option>
+          <mat-option value="medium-low">Medium Low</mat-option>
+          <mat-option value="medium">Medium</mat-option>
+          <mat-option value="medium-high">Medium High</mat-option>
+          <mat-option value="high">High</mat-option>
+          <mat-option value="very-high">Very High</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Working Directory</mat-label>
+        <input matInput formControlName="working_dir">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Existing PVC</mat-label>
+        <input matInput formControlName="existing_pvc"
+               placeholder="claimname=NAME,path=/mnt">
+      </mat-form-field>
+
+      @if (workloadForm.controls.workload_type.value === 'training') {
+        <h3 class="section-label full-width">Training Options</h3>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Parallelism</mat-label>
+          <input matInput formControlName="parallelism" type="number">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Runs</mat-label>
+          <input matInput formControlName="runs" type="number">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Restart Policy</mat-label>
+          <mat-select formControlName="restart_policy">
+            <mat-option value="">Default</mat-option>
+            <mat-option value="Always">Always</mat-option>
+            <mat-option value="OnFailure">OnFailure</mat-option>
+            <mat-option value="Never">Never</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Backoff Limit</mat-label>
+          <input matInput formControlName="backoff_limit" type="number">
+        </mat-form-field>
+      }
+
+      @if (workloadForm.controls.workload_type.value === 'workspace') {
+        <h3 class="section-label full-width">Workspace Options</h3>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>External URL</mat-label>
+          <input matInput formControlName="external_url"
+                 placeholder="container=8888">
+        </mat-form-field>
+      }
+
+      @if (workloadForm.controls.workload_type.value === 'inference') {
+        <h3 class="section-label full-width">Inference & Autoscaling</h3>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Serving Port</mat-label>
+          <input matInput formControlName="serving_port" placeholder="8080">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Min Replicas</mat-label>
+          <input matInput formControlName="min_replicas" type="number">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Max Replicas</mat-label>
+          <input matInput formControlName="max_replicas" type="number">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Initial Replicas</mat-label>
+          <input matInput formControlName="initial_replicas" type="number">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Autoscaling Metric</mat-label>
+          <mat-select formControlName="metric">
+            <mat-option value="">None</mat-option>
+            <mat-option value="throughput">Throughput</mat-option>
+            <mat-option value="concurrency">Concurrency</mat-option>
+            <mat-option value="latency">Latency</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Metric Threshold</mat-label>
+          <input matInput formControlName="metric_threshold" type="number">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Scale-to-Zero Retention (s)</mat-label>
+          <input matInput formControlName="scale_to_zero_retention" type="number">
+        </mat-form-field>
+      }
+    </form>
+
+    <div class="submit-actions dialog-actions">
+      <button mat-stroked-button type="button" (click)="resetWorkload()">RESET</button>
+      <button mat-flat-button type="button"
+              [disabled]="connectionForm.invalid || workloadForm.invalid"
+              (click)="submitWorkload()">SUBMIT WORKLOAD
+      </button>
+    </div>
+
+    @if (lastExecution()) {
+      <div class="execution-status">
+        <h3>Last Execution</h3>
+        <div class="status-line">
+          <span class="label">Status:</span>
+          <span [class]="'value ' + lastExecution().status">{{ lastExecution().status }}</span>
+        </div>
+        @if (lastExecution().stdout) {
+          <div class="output-block">
+            <span class="label">Output:</span>
+            <pre>{{ lastExecution().stdout }}</pre>
+          </div>
+        }
+        @if (lastExecution().stderr) {
+          <div class="output-block error">
+            <span class="label">Errors:</span>
+            <pre>{{ lastExecution().stderr }}</pre>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</ng-template>
+
+@if (selectedProvider()) {
+  <header class="sm-entity-page-header">
+    <button mat-icon-button (click)="back()" aria-label="Back to autoscaler providers">
+      <mat-icon fontSet="al" fontIcon="al-ico-arrow-left" data-id="backAutoscaler"></mat-icon>
+    </button>
+    <span>Run:AI Autoscaler</span>
+  </header>
+
+  <div class="provider-dashboard">
+    <aside class="provider-sidebar">
+      <div class="provider-heading">
+        <div class="provider-logo large">
+          <ng-container [ngTemplateOutlet]="runaiLogo"></ng-container>
+        </div>
+        <h1>Run:AI Autoscaler</h1>
+      </div>
+      <div class="byline">By Nave Danan</div>
+      <p>
+        The Autoscaler submits workloads to a configured Run:ai cluster and lets the external orchestrator manage GPU
+        capacity for training, workspace, and inference jobs.
+      </p>
+      <div class="version">v1.16.0-1905</div>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-block">
+        <div class="instances-toolbar">
+          <div class="instances-title">APP INSTANCES</div>
+          <button class="filter-button" type="button">
+            All
+            <mat-icon fontSet="al" fontIcon="al-ico-dropdown-arrow"></mat-icon>
+          </button>
+          <span class="toolbar-spacer"></span>
+          <button mat-icon-button type="button" aria-label="Search app instances">
+            <mat-icon fontSet="al" fontIcon="al-ico-search"></mat-icon>
+          </button>
+          <button mat-icon-button type="button"
+                  [matMenuTriggerFor]="instancesMenu"
+                  aria-label="App instances menu">
+            <mat-icon fontSet="al" fontIcon="al-ico-dots-v-menu"></mat-icon>
+          </button>
+          <mat-menu #instancesMenu="matMenu">
+            <button mat-menu-item type="button" (click)="openConnectionDialog(connectionDialog)">
+              <mat-icon fontSet="al" fontIcon="al-ico-settings"></mat-icon>
+              <span>Connection</span>
+            </button>
+            <button mat-menu-item type="button" (click)="openImportDialog(importDialog)">
+              <mat-icon fontSet="al" fontIcon="al-ico-import"></mat-icon>
+              <span>Import Configuration</span>
+            </button>
+            <button mat-menu-item type="button" [disabled]="!hasCompletedWorkloads()">
+              <mat-icon fontSet="al" fontIcon="al-ico-trash-all"></mat-icon>
+              <span>Clear Completed</span>
+            </button>
+          </mat-menu>
+          <button mat-icon-button type="button"
+                  aria-label="Launch new app instance"
+                  (click)="openWorkloadDialog(workloadDialog)">
+            <mat-icon fontSet="al" fontIcon="al-ico-add"></mat-icon>
+          </button>
+        </div>
+        <div class="sidebar-state">
+          @if (appInstances().length) {
+            <div class="app-instance-list">
+              @for (instance of appInstances(); track instance.key) {
+                <div class="app-instance-row"
+                     role="button"
+                     tabindex="0"
+                     [class.selected]="selectedInstance()?.key === instance.key"
+                     (click)="selectInstance(instance)"
+                     (keydown.enter)="selectInstance(instance)"
+                     (keydown.space)="selectInstance(instance)">
+                  <span class="instance-main">
+                    <span class="instance-name">{{ instance.name }}</span>
+                    <span class="instance-meta">{{ instance.status || 'unknown' }} · {{ instance.type || 'workload' }}</span>
+                  </span>
+                  <button mat-icon-button type="button"
+                          aria-label="Instance details"
+                          (click)="openInstanceDetails($event, instance, workloadDialog)">
+                    <mat-icon fontSet="al" fontIcon="al-ico-info-circle"></mat-icon>
+                  </button>
+                  <button mat-icon-button type="button"
+                          aria-label="Delete app instance"
+                          (click)="deleteInstance($event, instance)">
+                    <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+                  </button>
+                </div>
+              }
+            </div>
+          } @else {
+            <span>{{ dashboard()?.total_instances ? dashboard()?.total_instances + ' app instances' : 'No instances launched yet' }}</span>
+          }
+          <button mat-button type="button" (click)="openWorkloadDialog(workloadDialog)">
+            Launch new
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="provider-content">
+      <div class="stats-grid">
+        <section class="dashboard-card idle-card">
+          <h2>
+            {{ selectedInstance()?.name || 'App Instance' }}
+            @if (dashboardLoading()) {
+              <mat-spinner diameter="16"></mat-spinner>
+            }
+          </h2>
+          <div class="selected-state">{{ selectedInstance()?.status || 'No instance selected' }}</div>
+          <div class="card-meta">
+            <span>{{ selectedInstance()?.project || 'No project' }}</span>
+            <span>{{ selectedInstance()?.type || 'workload' }}</span>
+            <span>Updated {{ lastRefreshLabel() }}</span>
+          </div>
+        </section>
+
+        <section class="dashboard-card resources-card">
+          <h2>Resources and queues</h2>
+          <div class="bar-chart" aria-label="Run:ai GPU allocation chart">
+            @for (bar of resourceBars(); track bar.label) {
+              <span [style.height.px]="bar.height" [attr.title]="bar.label + ': ' + bar.value + ' GPUs'"></span>
+            }
+          </div>
+          <div class="resource-summary">
+            <span>Instance GPU {{ formatNumber(selectedInstance()?.gpus) }}</span>
+            <span>Cluster GPU {{ formatNumber(dashboard()?.resources?.gpu_allocated) }} / {{ formatNumber(dashboard()?.resources?.gpu_total) }}</span>
+            <span>Requested {{ formatNumber(dashboard()?.resources?.gpu_requested) }}</span>
+          </div>
+        </section>
+      </div>
+
+      <section class="dashboard-card gauge-card">
+        <h2>Instances</h2>
+        <div class="gauge" aria-hidden="true">
+          <span class="gauge-fill" [style.clip-path]="'polygon(0 0, ' + instanceGaugePercent() + '% 0, ' + instanceGaugePercent() + '% 100%, 0 100%)'"></span>
+          <span class="gauge-needle"></span>
+        </div>
+        <div class="instance-summary">
+          <span>{{ formatNumber(dashboard()?.running_instances) }} running</span>
+          <span>{{ formatNumber(dashboard()?.pending_instances) }} pending</span>
+          <span>{{ formatNumber(dashboard()?.failed_instances) }} failed</span>
+          <span>{{ formatNumber(dashboard()?.total_instances) }} total</span>
+        </div>
+      </section>
+
+      <section class="dashboard-card console-card">
+        <h2>Console Log</h2>
+        <div class="console-log">
+          @if (dashboardError()) {
+            <div class="console-line error">{{ dashboardError() }}</div>
+          }
+          @for (line of selectedConsoleLines(); track line) {
+            <div class="console-line">{{ line }}</div>
+          }
+        </div>
+      </section>
+    </main>
+  </div>
+} @else {
+  <div class="provider-landing">
+    <div class="provider-options">
+      <button type="button" class="provider-card runai" (click)="selectProvider('runai')">
+        <div class="card-copy">
+          <div class="card-title">Run:AI Autoscaler</div>
+          <div class="card-divider"></div>
+          <div class="card-byline">By ClearML</div>
+          <p>
+            The Autoscaler submits workloads to Run:ai and lets the orchestrator manage compute capacity for training,
+            workspace, and inference workloads.
+          </p>
+        </div>
+
+        <div class="provider-logo">
+          <ng-container [ngTemplateOutlet]="runaiLogo"></ng-container>
+        </div>
+
+        @if (isConfigured()) {
+          <span class="active-badge">
+            <mat-icon fontSet="al" fontIcon="al-ico-success" class="sm-md me-2"></mat-icon>Configured
+          </span>
+        }
+      </button>
+    </div>
+  </div>
+}

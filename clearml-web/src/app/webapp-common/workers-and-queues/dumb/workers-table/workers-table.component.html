@@ -1,0 +1,47 @@
+<div #tableContainer class="worker-container">
+  <sm-table #table
+    [tableData]="workers()"
+    [selection]="selectedWorker()"
+    [reorderableColumns]="false"
+    [resizableColumns]="false"
+    [scrollable]="true"
+    [columns]="cols"
+    [rowsNumber]="100"
+    [rowHeight]="40"
+    (rowSelectionChanged)="onRowClicked($event)"
+    >
+    <ng-template let-col let-worker="rowData" pTemplate="body">
+      @switch (col.id) {
+        @case (WORKERS_TABLE_COL_FIELDS.TASK_RUNNING_TIME) {
+          <span class="ellipsis">{{worker?.task?.running_time | durationFormater:'ms':'ddhhmmss'}}</span>
+          @if (!worker?.task?.running_time) {
+            <span>&mdash;</span>
+          }
+        }
+        @case (WORKERS_TABLE_COL_FIELDS.ID) {
+          <span class="first-content ellipsis" [smTooltip]="worker.name" smShowTooltipIfEllipsis>
+            {{worker.name}}
+          </span>
+        }
+        @default {
+          <span  class="ellipsis" [smTooltip]="getBodyData(worker, col)" smShowTooltipIfEllipsis>{{getBodyData(worker, col)}}</span>
+          @if ((getBodyData(worker, col)!==0) && !getBodyData(worker, col)) {
+            <span>&mdash;</span>
+          }
+        }
+      }
+    </ng-template>
+
+    <ng-template let-col pTemplate="sort-filter">
+      <sm-table-filter-sort
+        [class.first]="col.id === WORKERS_TABLE_COL_FIELDS.ID"
+        [column]="col"
+        [sortOrder]="tableSortFieldsObject()[col.id]"
+        (sortOrderChanged)="onSortChanged($event, col.id)">
+      </sm-table-filter-sort>
+    </ng-template>
+  </sm-table>
+</div>
+
+
+

@@ -1,0 +1,32 @@
+@for (iteration of iterations; track iteration.iter) {
+  <mat-expansion-panel
+    class="images-section"
+    togglePosition="before"
+    [expanded]="$first"
+    [class.short-list]="iteration.events.length <= ref.nativeElement.clientWidth / 200"
+  >
+    @if (!isDatasetVersionPreview) {
+      <mat-expansion-panel-header class="debug-header" [collapsedHeight]="null" data-id="debugHeader">
+        <mat-panel-title> {{iteration.iter}}</mat-panel-title>
+      </mat-expansion-panel-header>
+    }
+    <ng-template matExpansionPanelContent>
+      <sm-virtual-grid
+        [items]="iteration.events"
+        [cardTemplate]="snippetTemplate"
+        [cardHeight]="180"
+        [cardWidth]="180"
+        [padding]="0"
+        [trackFn]="trackFrame"
+      ></sm-virtual-grid>
+      <ng-template #snippetTemplate let-frame>
+        <sm-debug-image-snippet
+          [frame]="frame"
+          (imageError)="imageUrlError({frame, experimentId})"
+          (imageClicked)="imageClicked.emit({frame})"
+          (createEmbedCode)="createEmbedCode.emit({metrics: [frame.metric], variants: [frame.variant], domRect:$event});">
+        </sm-debug-image-snippet>
+      </ng-template>
+    </ng-template>
+  </mat-expansion-panel>
+}

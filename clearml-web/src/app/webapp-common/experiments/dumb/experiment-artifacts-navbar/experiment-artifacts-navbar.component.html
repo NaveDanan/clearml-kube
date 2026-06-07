@@ -1,0 +1,86 @@
+@if (inputModels()?.length || editable()) {
+  <mat-expansion-panel [expanded]="true" class="secondary-panel grouped-selection">
+    <mat-expansion-panel-header collapsedHeight="40px" expandedHeight="40px" class="active">
+      INPUT MODELS
+    </mat-expansion-panel-header>
+    @if (noItemsMode()) {
+      <div
+        queryParamsHandling="preserve"
+        class="artifact-container pointer"
+        [routerLink]="'input-model/input-model'"
+        [class.selected]="activeSection() === ACTIVE_SECTIONS['input-model']"
+        >
+        <i class="icon sm al-ico-import"></i> Input Model
+      </div>
+    } @else {
+      @for (model of inputModels(); track model.id + model.taskName) {
+        <div
+          queryParamsHandling="merge"
+          class="artifact-container pointer"
+          [routerLink]="'input-model/' + (model.id | safeUrlParameter)"
+          [queryParams]="{taskName: model.taskName}"
+          [class.selected]="route.snapshot.queryParams.taskName === model.taskName && model.id === selectedArtifactKey() && activeSection() === ACTIVE_SECTIONS['input-model']"
+          >
+          <i class="icon sm al-ico-import"></i>
+          <span class="ellipsis">{{model.taskName}}</span>
+        </div>
+      }
+    }
+  </mat-expansion-panel>
+}
+
+@if (outputModels()?.length) {
+  <mat-expansion-panel [expanded]="true" class="secondary-panel grouped-selection">
+    <mat-expansion-panel-header collapsedHeight="40px" expandedHeight="40px" class="active">
+      OUTPUT MODELS
+    </mat-expansion-panel-header>
+    @for (model of outputModels(); track model.id + model.taskName) {
+      <div
+        queryParamsHandling="preserve"
+        class="artifact-container pointer"
+        [routerLink]="'output-model/' + (model.id | safeUrlParameter)"
+        [class.selected]="model.id === selectedArtifactKey() && activeSection() === ACTIVE_SECTIONS['output-model']"
+        >
+        <i class="icon sm al-ico-export"></i>
+        <span class="ellipsis">{{model.taskName}}</span>
+      </div>
+    }
+  </mat-expansion-panel>
+}
+
+@if (dataAuditArtifacts()?.length > 0) {
+  <mat-expansion-panel [expanded]="true" class="secondary-panel grouped-selection">
+    <mat-expansion-panel-header collapsedHeight="40px" expandedHeight="40px" class="active">
+      DATA AUDIT
+    </mat-expansion-panel-header>
+    @for (artifact of dataAuditArtifacts(); track artifact.key + artifact.mode) {
+      <div
+        class="artifact-container pointer"
+        queryParamsHandling="preserve"
+        [routerLink]="'artifact/' + (artifact.key | safeUrlParameter) + '/' + (artifact.mode | safeUrlParameter)"
+        [class.selected]="selectedArtifactKey() === artifact.key && activeSection() === ACTIVE_SECTIONS['artifact']"
+        >
+        <mat-icon fontSet="al" fontIcon="al-ico-data-audit" class="sm" [class.selected]="selectedArtifactKey() === artifact.key"></mat-icon>
+        {{artifact.key}}
+      </div>
+    }
+  </mat-expansion-panel>
+}
+@if (otherArtifacts()?.length > 0) {
+  <mat-expansion-panel [expanded]="true" class="secondary-panel grouped-selection">
+    <mat-expansion-panel-header collapsedHeight="40px" expandedHeight="40px" class="active">
+      OTHER
+    </mat-expansion-panel-header>
+    @for (artifact of otherArtifacts(); track artifact.key + artifact.mode) {
+      <div
+        class="artifact-container pointer"
+        queryParamsHandling="preserve"
+        [routerLink]="'other/' + (artifact.key | safeUrlParameter) + '/' + (artifact.mode | safeUrlParameter)"
+        [class.selected]="selectedArtifactKey() === artifact.key && activeSection() === ACTIVE_SECTIONS['other']"
+        >
+        <mat-icon fontSet="al" fontIcon="al-ico-data-audit" class="sm" [class.selected]="selectedArtifactKey() === artifact.key"></mat-icon>
+        <span class="ellipsis">{{artifact.key}}</span>
+      </div>
+    }
+  </mat-expansion-panel>
+}

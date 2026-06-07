@@ -1,0 +1,39 @@
+@import "mixins/common";
+@import "variables";
+
+:host {
+  .dashboard-body {
+    height: 100%;
+    overflow: auto;
+  }
+
+  .recent {
+    height: 100%;
+    max-width: 2400px;
+    margin: 0 auto;
+  }
+
+  .clear-search {
+    font-size: 14px;
+    text-align: center;
+    color: #a7b2d8;
+  }
+
+  .view-all {
+    font-size: 12px;
+    font-weight: bold;
+  }
+
+  sm-dashboard-experiments {
+    display: block;
+    padding-top: 24px;
+    margin: 0 auto;
+    height: calc(100% - 620px);
+  }
+
+  .dashboard-search {
+    display: block;
+    overflow: auto;
+    height: 100%;
+  }
+}

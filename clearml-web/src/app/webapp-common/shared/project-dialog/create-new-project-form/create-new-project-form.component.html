@@ -1,0 +1,84 @@
+<form [formGroup]="projectForm" class="d-flex flex-column">
+  <mat-form-field appearance="outline">
+    <mat-label>Project name</mat-label>
+    <input
+      formControlName="name"
+      matInput
+      autocomplete="off"
+      pattern="^[^\/]*$"
+    >
+    @if (projectForm.controls.name.invalid && projectForm.controls.name.errors; as errors) {
+      <mat-error>
+        @if (errors?.required) {
+          Please add name.
+        }
+        @else if (errors?.uniqueProject) {
+          Project name in this path already exists.
+        }
+        @else if (errors?.pattern) {
+          Project name can't contain slash (/)
+        }
+        @else if (errors?.minlength) {
+          Name can't contain only spaces.
+        }
+      </mat-error>
+    }
+  </mat-form-field>
+
+  <div class="position-relative">
+    <sm-paginated-entity-selector
+      formControlName="parent"
+      [data]="allProjects()"
+      label="Create in"
+      placeHolder="Search for project path"
+      [isRequired]="true"
+      [emptyNameValidator]="true"
+      [createNewSuffix]="projects() !== null && projectForm.controls.parent.value && !(projectForm.controls.parent.value | stringIncludedInArray: projectsNames())"
+      (getEntities)="loadMore($event, false)"
+      (loadMore)="loadMore($event, true)"
+    ></sm-paginated-entity-selector>
+    @if (!projectForm.controls.parent.untouched && projectForm.controls.parent.errors; as errors) {
+      <div class="extra-errors">
+        @if (errors?.required) {
+          <mat-error>Please add name.</mat-error>
+        } @else if (errors?.emptyName) {
+          <mat-error>Project name can't contain only spaces.</mat-error>
+        }
+      </div>
+    }
+  </div>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Description</mat-label>
+    <textarea class="project-description"
+              name="description"
+              matInput
+              formControlName="description"
+    ></textarea>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline">
+    <mat-label>Default output destination</mat-label>
+    <input class="project-output-dest"
+           matInput
+           name="default_output_destination"
+           formControlName="default_output_destination"
+           placeholder="e.g. s3://bucket. gs://bucket"
+    >
+    @if (projectForm.controls.default_output_destination.invalid && projectForm.controls.default_output_destination.errors; as errors) {
+      <mat-error>
+        @if (errors?.required) {
+          Please add default destination.
+        }
+        @if (errors?.pattern) {
+          Illegal output destination (e.g. s3://bucket. gs://bucket)
+        }
+      </mat-error>
+    }
+  </mat-form-field>
+
+  <div class="w-100 create-project-button">
+    <button mat-flat-button data-id="Create Project" [disabled]="projectForm.controls.default_output_destination.invalid || projectForm.invalid" (click)="send()">CREATE PROJECT
+    </button>
+  </div>
+</form>

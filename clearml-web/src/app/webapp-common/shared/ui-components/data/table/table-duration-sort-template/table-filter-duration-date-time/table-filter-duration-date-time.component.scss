@@ -1,0 +1,12 @@
+:host {
+  .mat-datepicker-container {
+    width: 130px;
+    input {
+      width: 80px;
+    }
+  }
+
+  .mat-mdc-form-field {
+    width: 130px;
+  }
+}

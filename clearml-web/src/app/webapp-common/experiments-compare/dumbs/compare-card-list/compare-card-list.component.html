@@ -1,0 +1,62 @@
+<div
+  #detailsContainer
+  id="experiment-details-container"
+  cdkDropList
+  cdkDropListOrientation="horizontal"
+  (cdkDropListDropped)="drop($event)"
+  >
+  @for (experiment of (experiments); track experiment.id; let i = $index) {
+    <al-drawer
+      class="light-theme"
+      cdkDrag
+      cdkDragLockAxis="x"
+      cdkDragPreviewContainer="parent"
+      [displayOnHover]="i > 0"
+      [label]="experiments[i].name"
+      (toggled)="toggled.emit($event)"
+      (mouseenter)="changeHovered(i, true)"
+      (mouseleave)="changeHovered(i, false)">
+      <sm-card2
+        [showBorder]="baseExperiment.id === experiment.id || hovered[i]"
+        >
+        <!--[cdkAutoScroller]="detailsContainer"-->
+        <div extra-header style="width: 100%">
+          <ng-container *ngTemplateOutlet="extraHeaderTemplate; context: {$implicit: experiment, index: i}">
+          </ng-container>
+        </div>
+        <div headerButtons class="actions-container">
+          <div class="actions" [class]="{'invisible': ! hovered[i]}">
+            <button mat-icon-button cdkDragHandle smTooltip="Click and drag to reposition the task"
+                    data-id="dragAndDropButton" class="drag" [class]="{'invisible': experiments.length === 1}"
+            >
+              <mat-icon fontSet="al" fontIcon="al-ico-drag"></mat-icon>
+            </button>
+            @if (baseExperiment.id !== experiment.id) {
+              <button class="sm" mat-icon-button (click)="setAsBase(experiment)" smTooltip="Set as baseline" data-id="setBaselineButton">
+                <mat-icon fontSet="al" fontIcon="al-ico-arrow-from-right"></mat-icon>
+              </button>
+            }
+            @if (experiments.length > 1) {
+              <button class="sm" mat-icon-button (click)="experimentRemoved(experiment)" smTooltip="Remove from comparison" data-id="removeComparision">
+                <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+              </button>
+            }
+          </div>
+        </div>
+        <div header-content>
+          <ng-container *ngTemplateOutlet="headerTemplate; context: {$implicit: experiment, index: i}">
+          </ng-container>
+        </div>
+        <ng-container *ngTemplateOutlet="bodyTemplate; context: {$implicit: experiment, index: i}">
+        </ng-container>
+      </sm-card2>
+    </al-drawer>
+  }
+  @if (tasksLimitExceeded) {
+    <div class="limit-message-container">
+      <div class="limit-message" data-id="limitMessageText">
+        <i class="al-icon al-ico-info-circle mb-2"></i>Only the first 10 tasks are available for this view...
+      </div>
+    </div>
+  }
+</div>

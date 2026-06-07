@@ -1,0 +1,153 @@
+@use "variables";
+
+:host {
+  --mat-expansion-container-shape: 0;
+  --mat-expansion-header-text-weight: normal;
+
+  ::ng-deep .generic-container {
+    padding: 32px 24px 0 !important;
+    --mat-stepper-container-color: transparent;
+
+    .ace_scroller {
+      bottom: 2px !important;
+    }
+  }
+}
+
+.mat-expansion-panel {
+  .mat-expansion-panel-header {
+    border-radius: unset;
+    border-bottom: 1px solid var(--color-outline-variant);
+    padding: 16px 24px 0 0;
+  }
+
+  &.mat-expanded {
+    --mat-expansion-container-background-color: transparent;
+
+    .mat-expansion-panel-header {
+      padding: 16px 24px 0 0;
+      border-bottom: initial;
+    }
+
+    ::ng-deep .mat-expansion-panel-body {
+      padding-left: 0;
+    }
+  }
+}
+
+
+form, .edit-section {
+  height: calc(94vh - 345px);
+  max-height: 520px;
+  overflow: auto;
+  padding: 0 24px;
+}
+
+h5 {
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--color-on-surface-variant);
+  margin: 24px 0 6px;
+}
+
+h6 {
+  font-size: 12px;
+  margin: 24px 0 8px;
+
+  &.disabled {
+    opacity: 0.5;
+  }
+}
+
+section {
+  border-top: 1px solid var(--color-outline-variant);
+  padding-bottom: 24px;
+}
+
+code {
+  font-family: variables.$font-family-monospace;
+  border-radius: 4px;
+  margin: 0 4px;
+  padding: 2px 4px;
+}
+
+mat-form-field {
+  width: 100%;
+}
+
+.mat-mdc-form-field, sm-paginated-entity-selector {
+  display: block;
+  padding-top: 16px;
+}
+
+.mat-mdc-radio-button ~ .mat-mdc-radio-button {
+  margin-left: 16px;
+}
+
+.git > .mat-mdc-form-field:first-child {
+  width: 180px;
+}
+
+.checkbox {
+  margin: 12px 0 12px -6px;
+}
+
+.poetry {
+  margin-bottom: 12px;
+}
+
+.venv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 48px;
+  align-items: end;
+  gap: 24px;
+
+  mat-button-toggle-group {
+    height: 40px;
+  }
+}
+
+.terminal {
+  resize:  none;
+  font-family: variables.$font-family-monospace;
+  font-size: 13px !important;
+  line-height: 1.6;
+  padding: 6px;
+}
+
+.text {
+  background-color: var(--color-surface-container-low);
+}
+
+.args-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 40px;
+  align-items: end;
+  gap: 12px;
+}
+
+.buttons {
+  margin: 24px 0 12px;
+  display: flex;
+  gap: 12px;
+}
+
+sm-code-editor {
+  display: block;
+  height: calc(100% - 90px);
+}
+
+.mat-mdc-form-field {
+  button {
+    height: 26px;
+    padding: 0 12px;
+  }
+}
+.mat-expansion-panel .mat-expansion-panel-header:not([aria-disabled="true"]).cdk-keyboard-focused, .mat-expansion-panel .mat-expansion-panel-header:not([aria-disabled="true"]).cdk-program-focused {
+  background: inherit;
+}
+
+textarea {
+  resize: none;
+}

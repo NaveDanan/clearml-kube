@@ -1,0 +1,24 @@
+:host {
+  display: block;
+  position: relative;
+  height: 100%;
+
+  .form-section {
+    margin-top: 18px;
+  }
+
+  sm-section-header {
+
+    height: 35px;
+  }
+
+  sm-experiment-execution-parameters {
+    display: block;
+    height: calc(100% - 60px);
+  }
+
+  sm-search.table-search {
+    padding-right: 2px;
+    border-radius: 4px;
+  }
+}

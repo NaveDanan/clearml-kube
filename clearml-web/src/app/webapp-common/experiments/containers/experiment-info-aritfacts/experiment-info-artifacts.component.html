@@ -1,0 +1,43 @@
+<ng-template
+  let-modelInfo="modelInfo"
+  let-editable="editable"
+  [ngTemplateOutletContext]="{
+    modelInfo: modelInfo$ | ngrxPush,
+    editable: editable$ | ngrxPush
+  }" [ngTemplateOutlet]="selfie" #selfie>
+  <sm-overlay [backdropActive]="backdropActive$ | ngrxPush"></sm-overlay>
+  @if ((modelInfo?.output?.length) || (modelInfo?.input?.length) || (modelInfo?.artifacts?.length) || editable) {
+    <as-split
+      class="light-theme"
+      [unit]="'pixel'"
+      [gutterSize]=1
+      >
+      <as-split-area [size]="minimized ? 250 : 360" [minSize]="150">
+        <sm-experiment-artifacts-navbar
+          [class.minimized]="minimized"
+          [artifacts]="modelInfo?.artifacts"
+          [outputModels]="modelInfo?.output"
+          [inputModels]="modelInfo?.input"
+          [editable]="editable"
+          [activeSection]="activeSection"
+          [routerConfig]="routerConfig$ | ngrxPush"
+          [selectedArtifactKey]="selectedId$ | ngrxPush"
+        ></sm-experiment-artifacts-navbar>
+      </as-split-area>
+      <as-split-area>
+        @if (modelInfo) {
+          <router-outlet></router-outlet>
+        }
+      </as-split-area>
+    </as-split>
+  } @else {
+    @if (modelInfo) {
+      <div class="d-flex h-100">
+        <div class="no-data">
+          <mat-icon fontSet="al" fontIcon="al-ico-artifacts" class="xxl"></mat-icon>
+          <h4>NO ARTIFACTS RECORDED</h4>
+        </div>
+      </div>
+    }
+  }
+</ng-template>

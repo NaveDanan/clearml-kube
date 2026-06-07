@@ -1,0 +1,65 @@
+.editable-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  height: 100%;
+  padding: 24px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+
+  &.dark-theme {
+    background-color: transparent;
+  }
+
+  &.edit-mode {
+    z-index: 101;
+    border: 1px dashed var(--color-outline);
+    box-shadow: 0 0 10px rgba(0, 0, 0, .15);
+    border-radius: 4px;
+    background-color: var(--color-surface-container-lowest);
+  }
+
+  .edit-wrapper {
+    position: sticky;
+    z-index: 99;
+    text-align: right;
+    height: 0;
+    opacity: 0;
+    gap: 12px;
+  }
+
+  .edit-pen {
+    z-index: 1;
+    transition: opacity 0.5s, background-color ease-in-out 0.3s;
+  }
+
+  .cancel-save {
+    position: relative;
+    text-align: right;
+    opacity: 0;
+    z-index: -1;
+    width: 180px;
+    margin-left: auto;
+
+    &.edit-mode {
+      opacity: 1;
+      z-index: 99;
+      display: flex;
+      justify-content: flex-end;
+    }
+  }
+
+  &:hover, &.force {
+    .edit-wrapper {
+      opacity: 1;
+    }
+  }
+}
+
+:host-context(.generic-container) {
+  .editable-container {
+    border: 1px solid var(--color-outline-variant);
+    margin-top: 24px;
+    padding: 12px 24px 24px 24px;
+  }
+}

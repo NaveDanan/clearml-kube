@@ -1,0 +1,49 @@
+:host {
+  ::ng-deep .mdc-text-field--filled .mdc-line-ripple::before {
+    border-bottom: 0;
+  }
+
+  mat-chip-grid .mat-mdc-form-field-input-control {
+    height: 26px;
+  }
+
+mat-form-field {
+    display: block;
+  }
+
+  input[disabled] {
+    width: 0;
+    max-width: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  ::ng-deep .mat-mdc-chip-grid {
+    width: 100%;
+
+    &.single {
+      width: calc(100% - 12px);
+
+      .mdc-evolution-chip-set__chips {
+        flex-wrap: nowrap;
+        overflow: hidden;
+      }
+    }
+
+    .mdc-evolution-chip-set__chips {
+      align-items: center;
+      gap: 6px 4px;
+    }
+  }
+  // allow changing chip color when edit is disabled
+  ::ng-deep .mdc-text-field--disabled {
+    pointer-events: auto;
+  }
+}
+
+:host-context(.single-selection) {
+  .chips-input {
+    width: 100px;
+    flex: 1 1 100px;
+  }
+}

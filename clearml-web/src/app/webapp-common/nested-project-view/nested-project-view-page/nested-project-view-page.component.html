@@ -1,0 +1,56 @@
+<div class="sm-card-list-layout projects"
+  [class.in-empty-state]="!(projectsList()?.length !== 0 || searching())">
+  <sm-projects-header
+    (orderByChanged)="orderByChanged.emit($event)"
+    [sortByField]="projectsOrderBy()"
+    [sortOrder]="projectsSortOrder()"
+    [enableTagsFilter]="true"
+    [tags]="projectsTags()"
+    >
+    <sm-button-toggle
+      left-items
+      [options]="[
+             {value: false, icon: 'al-ico-flat-view',  label: 'List view'},
+             {value: true, icon:'al-ico-project-path', label: 'Project view'}
+            ]"
+      [ngModel]="true"
+      (ngModelChange)="toggleNestedView.emit($any($event))"
+    ></sm-button-toggle>
+    <div class="d-flex">
+      <ng-content select="[create-button]"></ng-content>
+      <ng-content select="[extendedButtons]"></ng-content>
+    </div>
+  </sm-projects-header>
+  @if (projectsList()?.length !== 0 || searching()) {
+    @for (project of projectsList(); track project.id + $index + projectsList().length) {
+      @if ($index + totalVirtualCards() < projectsList().length || noMoreProjects() || searching()) {
+        <sm-nested-card
+          [hideMenu]="['All Tasks'].includes(project.name) || project['isRoot'] || isExample(project)"
+          [entityType]="entityType()"
+          [project]="project"
+          (projectCardClicked)="cardClicked.emit($event)"
+          (projectNameChanged)="projectNameChanged.emit({id: project.id, name: $event})"
+          >
+          <ng-container *ngTemplateOutlet="cardContentTemplateRef(); context: {$implicit: project}"></ng-container>
+          @if (cardContentFooterTemplateRef()) {
+            <div card-footer class="footer-tags">
+              <ng-container *ngTemplateOutlet="cardContentFooterTemplateRef(); context: {$implicit: project}"></ng-container>
+            </div>
+          }
+        </sm-nested-card>
+      }
+    }
+  } @else {
+    <ng-content select="[empty-state]"></ng-content>
+  }
+
+  @if (noMoreProjects() === false && projectsList()?.length > 0) {
+    <div class="load-more">
+      <sm-dots-load-more
+        [loading]="projectsState().loading()"
+        (loadMore)="loadMoreAction()"
+        class="mx-auto my-2"
+      ></sm-dots-load-more>
+    </div>
+  }
+</div>

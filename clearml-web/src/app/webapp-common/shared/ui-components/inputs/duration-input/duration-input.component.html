@@ -1,0 +1,67 @@
+<form [formGroup]="form" [class.in-edit-mode]="inEdit()">
+  <div class="inputs-container">
+    <input #hoursInput
+           matInput
+           formControlName="hours"
+           (keydown)="checkChars($event)"
+           (keyup)=" ($any($event.target).selectionStart === 2) && !$event.key.startsWith('Arrow') && mins.focus()"
+           (keyup.enter)="onChangePartial()"
+           (keyup.arrowRight)="($any($event.target).selectionStart===2 || $any($event.target).value.length <= 1) && mins.focus()"
+           (keyup.arrowUp)="increase(form.controls.hours)"
+           (keyup.arrowDown)="decrease(form.controls.hours)"
+           (blur)="focusOutInput()"
+           smKeyDownStopPropagation
+           (focus)="$any($event.target).select()"
+           smTooltip="Hours"><span class="separator">:</span>
+    <input #mins
+           matInput
+           formControlName="minutes"
+           (keydown)="checkChars($event)"
+           (keyup)="($any($event.target).selectionStart===2 ) && !$event.key.startsWith('Arrow') && secs.focus()"
+           (keyup.enter)="onChangePartial()"
+           (keyup.arrowRight)="($any($event.target).selectionStart===2 || $any($event.target).value.length <= 1)  && secs.focus()"
+           (keyup.arrowLeft)="$any($event.target).selectionEnd===0 && hoursInput.focus()"
+           (keyup.arrowUp)="increase(form.controls.minutes)"
+           (keyup.arrowDown)="decrease(form.controls.minutes)"
+           (blur)="focusOutInput()"
+           smKeyDownStopPropagation
+           (focus)="$any($event.target).select()"
+           smTooltip="Minutes"
+    >
+    <span class="separator">:</span>
+    <input #secs
+           matInput
+           formControlName="seconds"
+           (keydown)="checkChars($event)"
+           (keyup)="(($any($event.target).selectionStart === 2 ) && !$event.key.startsWith('Arrow') && mill.focus())"
+           (keyup.enter)="onChangePartial()"
+           (keyup.arrowRight)="($any($event.target).selectionStart === 2 || $any($event.target).value.length <= 1) && mill.focus()"
+           (keyup.arrowLeft)="$any($event.target).selectionEnd === 0 && mins.focus()"
+           (keyup.arrowUp)="increase(form.controls.seconds)"
+           (keyup.arrowDown)="decrease(form.controls.seconds)"
+           (blur)="focusOutInput()"
+           smKeyDownStopPropagation
+           (focus)="$any($event.target).select()"
+           smTooltip="Seconds"
+    >
+    <span class="separator">.</span>
+    <input #mill
+           matInput
+           formControlName="ms"
+           (keydown)="checkChars($event)"
+           (keyup.enter)="onChangePartial()"
+           (keyup.arrowLeft)="$any($event.target).selectionEnd === 0 && secs.focus()"
+           (keyup.arrowUp)="increase(form.controls.ms, 999)"
+           (keyup.arrowDown)="decrease(form.controls.ms)"
+           (blur)="focusOutInput()"
+           smKeyDownStopPropagation
+           (focus)="$any($event.target).select()"
+           smTooltip="Milliseconds"
+    >
+  </div>
+  <div class="submit" [class.in-edit-mode]="inEdit()">
+       <button mat-icon-button class="sm" (click)="onChangePartial()">
+              <mat-icon fontSet="al" fontIcon="al-ico-complete"></mat-icon>
+       </button>
+  </div>
+</form>

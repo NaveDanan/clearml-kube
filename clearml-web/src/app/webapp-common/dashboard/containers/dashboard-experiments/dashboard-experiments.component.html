@@ -1,0 +1,12 @@
+<div class="recent-header">
+  <div class="recent-title">RECENT TASKS</div>
+  <ng-content select="[header-buttons]"></ng-content>
+</div>
+<div class="table-container">
+  @if (recentTasks()) {
+    <sm-recent-tasks-table
+      [tasks]="recentTasks()"
+      (taskSelected)="taskSelected($event)"
+    ></sm-recent-tasks-table>
+  }
+</div>

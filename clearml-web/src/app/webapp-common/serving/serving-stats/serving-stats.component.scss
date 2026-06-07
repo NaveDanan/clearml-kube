@@ -1,0 +1,40 @@
+@use "../../layout/layout";
+
+:host {
+  display: block;
+  height: layout.$graph-height;
+  min-height: layout.$graph-height;
+  padding: 20px 20px 0;
+  border-bottom: 1px solid var(--color-surface-container-high);
+
+  .header {
+    padding: 0 4px;
+    margin-bottom: 12px;
+
+    .title {
+      color: var(--color-primary);
+    }
+
+    .time-selector {
+      width: 180px;
+      position: relative;
+    }
+
+    .param-selector {
+      width: 210px;
+      position: relative;
+    }
+
+    .warning {
+      margin-left: 10px;
+      line-height: 20px;
+      color: var(--color-warning);
+    }
+  }
+
+  .line-chart-container {
+    height: calc(100% - 48px);
+    position: relative;
+    z-index: 500;
+  }
+}

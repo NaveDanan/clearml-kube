@@ -1,0 +1,78 @@
+@use "mixins/link";
+
+@include link.link();
+::ng-deep body sm-s3-access .editable {
+  padding: 0;
+  background-color: var(--color-on-surface);
+}
+
+.form-container {
+  display: grid;
+  grid-template-rows: 32px auto 36px;
+  gap: 8px;
+  padding-right: 24px;
+}
+
+.credentials-container {
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  &:empty {
+    display: none;
+  }
+}
+
+.s3-row {
+  display: grid;
+  grid-gap: 6px;
+  grid-template-columns: minmax(60px, 20%) minmax(40px, 15%) minmax(60px, 20%) minmax(40px, 10%) minmax(75px, 10%) minmax(70px, 20%) minmax(60px, 5%);
+  padding: 6px 0;
+
+  &:last-child {
+    padding-bottom: 8px;
+  }
+
+  .value {
+    line-height: 30px;
+    padding: 0 10px;
+    border: 1px solid;
+    border-radius: 4px;
+  }
+}
+
+.header {
+  border-bottom: solid 1px var(--color-outline-variant);
+  padding-bottom: 6px;
+  text-transform: uppercase;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.delete-button {
+  display: flex;
+  align-items: center;
+}
+
+.alert-icon {
+  display: flex;
+  align-items: center;
+
+  .al-icon {
+    color: var(--color-error);
+
+    &:hover {
+      color: var(--color-failed);
+    }
+  }
+}
+
+.add-button {
+  display: inline-block;
+  margin: 12px 0 24px;
+
+
+  .al-icon {
+    vertical-align: middle;
+  }
+}
+

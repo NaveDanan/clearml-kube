@@ -1,0 +1,27 @@
+@use "mixins/link";
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  .editable-design {
+    flex: 1;
+    min-height: 300px;
+  }
+
+  .uri {
+    word-break: break-all;
+  }
+
+  .al-ico-download {
+    vertical-align: middle;
+  }
+
+  @include link.link();
+
+  .mat-mdc-progress-spinner {
+    display: inline-block;
+    margin-bottom: -3px;
+  }
+}

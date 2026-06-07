@@ -1,0 +1,330 @@
+
+////// Default prime theme ///////
+$primaryColor: var(--color-surface-container-lowest);
+
+$emphasis-high: var(--color-on-surface-variant) !default;
+$emphasis-medium: var(--color-outline) !default;
+
+//global
+$fontWeight: normal !default;
+$textColor: $emphasis-high !default;
+$textSecondaryColor: $emphasis-medium !default;
+$listItemTransition: none !default;
+$inlineSpacing: .5rem !default;
+$loadingIconFontSize: 2rem !default;
+
+//selected state
+$highlightBg: rgba($primaryColor, .12) !default;
+$highlightTextColor: $primaryColor !default;
+
+//focus
+$focusOutlineColor: transparent !default;
+$focusOutline: 0 none !default;
+
+//table
+$tableHeaderBorder: 1px solid var(--color-surface-container-low) !default;
+$tableHeaderBorderWidth: 0 0 1px 0 !default;
+$tableHeaderBg: var(--color-surface-container-lowest) !default;
+$tableHeaderTextColor: $textColor !default;
+$tableHeaderFontWeight: 500 !default;
+$tableHeaderPadding: 5px 16px !default;
+
+$tableHeaderCellPadding: 5px 16px !default;
+$tableHeaderCellBg: var(--color-surface-container-low) !default;
+$tableHeaderCellTextColor: $textColor !default;
+$tableHeaderCellFontWeight: 500 !default;
+$tableHeaderCellBorder: 1px solid var(--color-surface-container-low) !default;
+$tableHeaderCellBorderWidth: 0 1px 1px 0 !default;
+
+$tableBodyRowBg: var(--color-surface-container-lowest) !default;
+$tableBodyRowTextColor: $textColor !default;
+$tableBodyRowHoverBg: var(--color-surface-container-low) !default;
+$tableBodyCellBorder: 1px solid var(--color-surface-container-high) !default;
+$tableBodyCellPadding: 14px 1rem !default;
+
+$tableResizerHelperBg: $primaryColor !default;
+
+$tableCellContentAlignment: left !default;
+$tableTopPaginatorBorderWidth: 0 0 1px 0 !default;
+$tableBottomPaginatorBorderWidth: 0 0 1px 0 !default;
+
+:host {
+  display: block;
+  height: 50%;
+  flex-grow: 1;
+  --cell-width: 220px;
+
+  .experiment-header {
+    width: var(--cell-width);
+    min-width: var(--cell-width);
+    max-width: var(--cell-width);
+    white-space: nowrap;
+
+    .experiment-color {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 6px;
+      cursor: pointer;
+    }
+
+    .experiment-name {
+      display: inline-block;
+      width: calc(100% - 20px);
+    }
+  }
+
+  .value-cell {
+    max-width: var(--cell-width);
+  }
+}
+
+.mat-drawer {
+  width: 434px;
+  background-color: var(--color-surface-container-lowest);
+}
+
+.filter-header-cell {
+  border-right: $tableBodyCellBorder !important;
+  overflow: unset;
+}
+
+.filter-header {
+  display: flex;
+  width: 401px;
+  align-items: center;
+  gap: 24px;
+
+  .is-filtered {
+    border-color: var(--color-surface-container-high);
+    background-color: var(--color-surface-container-lowest);
+  }
+
+  mat-form-field {
+    flex-grow: 1;
+  }
+}
+
+.freeze-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -10px;
+  height: 100%;
+  width: 1px;
+  box-shadow: -6px 0 4px rgba(0, 0, 0, 0.4);
+}
+
+.metrics-column {
+  width: 200px;
+  max-width: 200px;
+  overflow: hidden;
+  border-right: $tableBodyCellBorder;
+  border-left-width: 0;
+  border-bottom-width: 0;
+  color: var(--color-primary);
+  font-weight: 500;
+  padding-left: 24px !important;
+  left: 0 !important;
+}
+
+.variants-column {
+  width: 200px;
+  max-width: 200px;
+  border-right: 1px solid var(--color-surface-container-high) !important;
+  border-left-width: 0;
+  font-weight: 500;
+  left: 217px !important;
+}
+
+.variant-cell {
+  display: flex;
+  align-items: center;
+}
+
+.variant-name {
+  flex: 1;
+}
+
+.row-info-icon {
+  color: var(--color-primary);
+}
+
+.value-text {
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.value {
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+  border-radius: 2px;
+  margin-left: 6px;
+  padding: 2px 4px;
+
+  &.tag-max {
+    color: var(--color-surface-container-lowest);
+    background-color: var(--color-outline);
+  }
+
+  &.tag-min {
+    color: var(--color-outline);
+    border: 1px solid var(--color-outline);
+    background-color: var(--color-surface-container-lowest);;
+  }
+}
+
+.head {
+  padding: 12px 24px 0;
+  height: 24px;
+  display: flex;
+  justify-content: end;
+}
+
+.close {
+  z-index: 1;
+}
+
+:host ::ng-deep p-table {
+
+  &.no-rows {
+    table {
+      table-layout: fixed !important;
+    }
+  }
+  &.p-datatable {
+    .p-paginator-bottom {
+      border-width: $tableBottomPaginatorBorderWidth;
+      border-radius: 0;
+    }
+
+    .p-datatable-header {
+      background: $tableHeaderBg;
+      color: $tableHeaderTextColor;
+      border: $tableHeaderBorder;
+      border-width: $tableHeaderBorderWidth;
+      padding: $tableHeaderPadding;
+      font-weight: $tableHeaderFontWeight;
+    }
+
+
+    .p-datatable-thead > tr > th {
+      text-align: $tableCellContentAlignment;
+      padding: $tableHeaderCellPadding;
+      border: $tableHeaderCellBorder;
+      border-width: $tableHeaderCellBorderWidth;
+      font-weight: $tableHeaderCellFontWeight;
+      color: $tableHeaderCellTextColor;
+      background: $tableHeaderCellBg;
+      transition: $listItemTransition;
+    }
+
+    .p-datatable-tbody {
+      > tr {
+        color: $tableBodyRowTextColor;
+        transition: $listItemTransition;
+
+        > td {
+          background: $tableBodyRowBg;
+          text-align: $tableCellContentAlignment;
+          padding: $tableBodyCellPadding;
+          border-color: var(--color-surface-container-high);
+
+          .p-row-editor-save {
+            margin-right: $inlineSpacing;
+          }
+        }
+
+        &.last-row {
+          td {
+            border-bottom: 1px solid var(--color-outline-variant);
+          }
+        }
+
+        &:hover {
+          > td:not(.metrics-column) {
+            background: $tableBodyRowHoverBg;
+          }
+        }
+
+        &:focus {
+          outline: 0.15rem solid $focusOutlineColor;
+          outline-offset: 0.15rem;
+        }
+
+        &:last-child td {
+          border-bottom: 1px solid var(--color-outline-variant);
+        }
+      }
+    }
+
+    .p-datatable-column-resizer-helper {
+      background: $tableResizerHelperBg;
+    }
+
+    .p-datatable-scrollable-header,
+    .p-datatable-scrollable-footer {
+      background: var(--color-surface-container-lowest);
+    }
+
+    &.p-datatable-scrollable > .p-datatable-table-container > .p-datatable-table,
+    &.p-datatable-scrollable > .p-datatable-table-container > .p-scroller-viewport > .p-scroller > .p-datatable-table {
+      > .p-datatable-thead,
+      > .p-datatable-tfoot {
+        background-color: $tableHeaderCellBg;
+      }
+    }
+
+    .p-datatable-loading-icon {
+      font-size: $loadingIconFontSize;
+    }
+
+
+    .p-scroller {
+      height: 100% !important;
+    }
+  }
+
+  th {
+    overflow: hidden;
+  }
+
+  tr th:first-child {
+    width: 500px;
+    max-width: 500px;
+  }
+
+  tr td:last-child,
+  tr th:last-child {
+    width: auto !important;
+    max-width: none !important;
+  }
+}
+
+.no-output {
+  color: var(--color-empty-state);
+  z-index: 1;
+
+  h4 {
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  &.all-filtered-message {
+    color: var(--color-outline);
+    .link {
+      color: var(--color-primary);
+    }
+  }
+}

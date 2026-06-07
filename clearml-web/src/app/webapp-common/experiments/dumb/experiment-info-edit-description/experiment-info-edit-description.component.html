@@ -1,0 +1,8 @@
+<div class="description-tooltip"  [class.add-description]="!selectedExperiment()?.comment">
+  @if (selectedExperiment()?.comment) {
+    <p>{{selectedExperiment()?.comment}}</p>
+    <a href="" (click)="$event.preventDefault(); editDescription.emit()" data-id="editDescriptionButton">Edit description</a>
+  } @else {
+    <a  href="" (click)="$event.preventDefault(); editDescription.emit()">Add description</a>
+  }
+</div>

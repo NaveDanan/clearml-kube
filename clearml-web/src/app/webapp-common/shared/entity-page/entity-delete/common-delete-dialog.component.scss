@@ -1,0 +1,122 @@
+:host {
+  display: block;
+  max-width: 640px;
+
+  .files-list-container {
+    position: relative;
+    margin-top: 24px;
+    visibility: hidden;
+  }
+
+  .progress-bar {
+    margin-top: 4px;
+  }
+
+  .progress-message {
+    text-align: center;
+    margin-top: 12px;
+
+    &.success {
+      color: var(--color-published);
+    }
+  }
+
+  .buttons {
+    margin-top: 32px;
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: center;
+
+    button {
+      width: 130px;
+    }
+
+    .yes-button {
+      margin-left: 16px;
+    }
+  }
+
+  .text-danger {
+    display: block;
+    position: absolute;
+  }
+
+  .more-info {
+    max-height: 0;
+    padding: 0 12px;
+    border: none;
+    overflow: hidden;
+    transition: max-height 0.3s, padding 0.3s;
+    margin-left: 20px;
+    font-size: 12px;
+    line-height: 1.4;
+    white-space: nowrap;
+
+    .copy {
+      position: absolute;
+      right: 6px;
+      top: 26px;
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+
+    &.mono {
+      font-family: monospace;
+    }
+
+    &.info-open {
+      max-height: 180px;
+      padding: 12px;
+      border: 1px solid var(--color-outline-variant);
+      border-radius: 4px;
+      overflow: auto;
+      transition: max-height 0.3s, padding 0.3s;
+
+      &:hover .copy{
+        visibility: visible;
+        opacity: 1;
+      }
+    }
+
+    .entities {
+      padding-left: 20px;
+    }
+  }
+
+  .more-info-icon {
+    width: 20px;
+    text-align: center;
+    vertical-align: middle;
+    transform: rotate(0);
+    transition: transform 0.3s ease-in-out;
+
+    &.info-open {
+      transform: rotate(90deg);
+    }
+  }
+
+  .list-container {
+    padding-left: 12px;
+    font-size: 14px;
+  }
+
+  li {
+    margin-bottom: 6px;
+  }
+
+  .error-reason {
+    font-size: 12px;
+  }
+
+  .delete-artifacts-checkbox {
+    display: flex;
+    justify-content: center;
+  }
+
+  .entity-name {
+    max-width: 200px;
+    font-weight: bold;
+  }
+}

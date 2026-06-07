@@ -1,0 +1,153 @@
+@use "variables";
+@use "src/app/webapp-common/assets/fonts/variables" as font;
+
+$type-colors: (
+  string: #FF6B6B,
+  link: #FF6B6B,
+  number: #009688,
+  boolean: #b938a4,
+  date: #05668D,
+
+  array: #999,
+  object: #999,
+  function: #999,
+
+  'null': #fff,
+  undefined: #fff
+);
+
+.ngx-json-viewer {
+  height: 100%;
+  overflow: auto;
+  position: relative;
+  --mat-tree-node-min-height: 24px;
+
+  .segment {
+    padding: 2px;
+    margin-left: 14px;
+
+    .segment-main {
+      word-wrap: break-word;
+
+      .toggler {
+        position: absolute;
+        margin-left: -24px;
+        line-height: 16px;
+        &:hover {
+          color: var(--color-on-surface-variant);
+        }
+        &::after {
+          display: inline-block;
+          font-family: font.$icomoon-font-family;
+          content: font.$al-ico-ico-chevron-down;
+          font-size: 18px;
+          transform: rotate(-90deg);
+          transition: transform 0.1s ease-in, color 0.1s ease-in;
+        }
+      }
+
+      &.expanded > .toggler::after {
+        transform: none;
+      }
+
+      &.expandable,
+      &.expandable > .toggler {
+        cursor: pointer;
+      }
+
+      .segment-key {
+        color: #a06bc7;
+      }
+
+      .segment-separator {
+        color: var(--color-on-surface-variant);
+      }
+
+      .segment-value {
+        color: var(--color-on-surface);
+      }
+    }
+
+    .children {
+      margin-top: 2px;
+    }
+  }
+
+  .found {
+    &::selection {
+      color: var(--color-tertiary-container);
+      background-color: var(--color-on-tertiary-container);
+    }
+    background-color: var(--color-tertiary-container);
+    border-radius: 4px;
+    padding: 0 2px;
+  }
+
+  .current .found {
+    background-color: var(--color-warning);
+    color: var(--color-on-primary);
+
+    &::selection {
+      background-color: var(--color-surface-container-lowest);
+      color: var(--color-warning);
+    }
+  }
+
+  @each $type, $color in $type-colors {
+    .segment-type-#{$type} > .segment-main > .segment-value {
+      color: $color;
+    }
+  }
+
+  // special cases need highlightted
+  .segment-type-null > .segment-main > .segment-value {
+    background-color: red;
+  }
+  .segment-type-undefined > .segment-main {
+    & > .segment-key {
+      color: var(--color-on-surface-variant);
+    }
+    & > .segment-value {
+      background-color: var(--color-on-surface-variant);
+    }
+  }
+  .segment-type-object > .segment-main,
+  .segment-type-array > .segment-main {
+    white-space: nowrap;
+  }
+
+
+  .braces.last {
+    position: relative;
+    left: -12px;
+  }
+
+  mat-tree-node {
+    --mat-tree-node-text-size: 12px;
+    --mat-tree-node-text-font: #{variables.$font-family-monospace};
+    line-height: normal;
+  }
+}
+
+:host-context(.dark-theme) {
+  .ngx-json-viewer {
+
+    .segment .segment-main {
+
+
+      .segment-key {
+        color: #A4ADCD !important;
+      }
+    }
+  }
+
+  @each $type, $color in $type-colors {
+    .segment-type-#{$type} > .segment-main > .segment-value {
+      color: $color !important;
+    }
+  }
+
+  .segment-type-link > .segment-main > .segment-value > a {
+    color: #ff8400 !important;
+  }
+}

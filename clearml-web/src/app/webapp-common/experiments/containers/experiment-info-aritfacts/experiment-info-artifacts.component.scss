@@ -1,0 +1,35 @@
+:host {
+  display: block;
+  position: relative;
+  height: 100%;
+
+  .no-data {
+    text-align: center;
+    color: var(--color-empty-state);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translateY(-50%) translateX(-50%);
+    display: block;
+    h4 {
+      font-weight: 500;
+      font-size: 16px;
+    }
+  }
+
+  ::ng-deep sm-labeled-row {
+    border-bottom: none !important;
+  }
+
+  ::ng-deep hr {
+    margin: 0 26px;
+  }
+
+  sm-experiment-artifacts-navbar {
+    //border-right: 1px solid #dee1e9;
+    flex: 0 0 300px;
+    &.minimized {
+      flex: 0 0 250px;
+    }
+  }
+}

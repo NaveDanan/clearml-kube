@@ -1,0 +1,37 @@
+<cdk-virtual-scroll-viewport
+  class="card-container" [itemSize]="cardHeight() + gridGap()"
+  [minBufferPx]="cardHeight() * 5" [maxBufferPx]="cardHeight() * 10"
+>
+  <div
+    class="card-row"
+    [class.snippets-mode]="snippetsMode()"
+    [style.--cardWidth]="cardWidth() + 'px'"
+    [style.--gridGap]="gridGap() + 'px'"
+    [style.--padding]="snippetsMode() ? padding() + 'px' : null"
+    [style.height.px]="cardHeight() + gridGap()"
+    *cdkVirtualFor="let row of itemRows$ | ngrxPush; trackBy: trackRow; let rowIndex = index"
+  >
+    @for (item of row; track trackFn()(item) + cardHeight()) {
+      <ng-container *ngTemplateOutlet="cardTemplate(); context: {$implicit: item, index: $index + rowIndex * cardsInRow()}"></ng-container>
+    }
+    @for (blankItem of [].constructor(cardsInRow() - row.length); track trackByIndex($index)) {
+      <div></div>
+    }
+  </div>
+  @if (showLoadMoreButton() && (itemRows$ | ngrxPush)?.length) {
+    @if (autoLoadMore()) {
+      <sm-dots-load-more class="my-2" (loadMore)="loadMoreClicked.emit()" [loading]="itemsState().loading()"></sm-dots-load-more>
+    } @else {
+      <div class="load-more" [style.height.px]="cardHeight()">
+        <button mat-flat-button (click)="loadMoreClicked.emit()">
+          <div class="d-flex-center gap-2">
+            @if (itemsState().loading()) {
+              <mat-spinner [diameter]="16" [strokeWidth]="2" mode="indeterminate"></mat-spinner>
+            }
+            <span>LOAD MORE</span>
+          </div>
+        </button>
+      </div>
+    }
+    }
+  </cdk-virtual-scroll-viewport>

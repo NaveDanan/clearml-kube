@@ -1,0 +1,11 @@
+<ul>
+  @for (notification of notifications; track identifyNotification($index, notification)) {
+    <li class="notifier__container-list">
+      <notifier-notification
+        [notification]="notification"
+        (ready)="onNotificationReady( $event )"
+        (dismiss)="onNotificationDismiss( $event )">
+      </notifier-notification>
+    </li>
+  }
+</ul>

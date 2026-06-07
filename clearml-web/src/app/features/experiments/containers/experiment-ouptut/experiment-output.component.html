@@ -1,0 +1,75 @@
+<sm-overlay [backdropActive]="backdropActive$ | ngrxPush"></sm-overlay>
+<sm-info-header-status-icon-label
+  [status]=" (selectedExperiment())?.status || selectedExperiment()?.status"
+></sm-info-header-status-icon-label>
+<div class="experiment-output-container light-theme" [class.minimized]="minimized">
+  <sm-experiment-info-header
+    [experiment]="selectedExperiment()"
+    [infoData]="infoData$ | ngrxPush"
+    [editable]="!isExample"
+    [showMenu]="true"
+    [minimized]="minimized"
+    [isSharedAndNotOwner]="isSharedAndNotOwner$ | ngrxPush"
+    (experimentNameChanged)="updateExperimentName($event)"
+    (closeInfoClicked)="closePanel()"
+    (minimizeClicked)="minimizeView()"
+    (maximizedClicked)="maximize()"
+  ></sm-experiment-info-header>
+  <sm-experiment-info-navbar [minimized]="minimized" [splitSize]="selectSplitSize$ | ngrxPush">
+    @if ((routerConfig.includes('scalars') && minimized) || !minimized) {
+      <div class="scalar-buttons" leftButtons></div>
+    }
+    @if ((routerConfig.includes('scalars') && minimized) || !minimized) {
+      <span class="close-button" refresh>
+      <div class="scalar-buttons">
+        @if (routerConfig.includes('scalars')) {
+          <div class="table-graph-toggle" [class.maximized]="!minimized">
+            <button mat-icon-button [smTooltip]="(metricValuesView$ | ngrxPush) === false ? 'Metric values': 'Graphs'" (click)="toggleTableView()">
+              <mat-icon fontSet="al" [fontIcon]="(metricValuesView$ | ngrxPush) === false ? 'al-ico-table-view': 'al-ico-charts-view'"></mat-icon></button>
+          </div>
+        }
+        @if ((metricValuesView$ | ngrxPush) === false && routerConfig.includes('scalars') && minimized) {
+          <button mat-icon-button data-id="scalar settings" [matMenuTriggerFor]="graphSettingsMenu" smTooltip="Settings" #trigger="matMenuTrigger" [class.menu-opened]="trigger.menuOpen">
+            <mat-icon fontSet="al" fontIcon="al-ico-tune"></mat-icon>
+          </button>
+          <mat-menu #graphSettingsMenu="matMenu">
+            <sm-graph-settings-bar
+              class="graph-settings-menu"
+              (click)="$event.stopPropagation()"
+              [verticalLayout]="true"
+              [smoothWeight]="smoothWeight()"
+              [smoothSigma]="smoothSigma()"
+              [smoothType]="smoothType()"
+              [xAxisType]="xAxisType()"
+              [groupBy]="groupBy()"
+              [groupByOptions]="groupByOptions"
+              [showOrigin]="showOriginals()"
+              [clearable]="!isProjectLevel()"
+              (changeWeight)="changeSmoothness($event)"
+              (changeSigma)="changeSigma($event)"
+              (changeXAxisType)="changeXAxisType($event)"
+              (changeGroupBy)="changeGroupBy($event)"
+              (changeShowOrigin)="changeShowOriginals($event)"
+              (changeSmoothType)="changeSmoothType($event)"
+              (setToProject)="setToProject()"
+            ></sm-graph-settings-bar>
+          </mat-menu>
+        }
+      </div>
+        @if (!minimized){
+          <sm-refresh-button
+            class="light-theme"
+            (setAutoRefresh)="setAutoRefresh($event)"
+          ></sm-refresh-button>
+        }
+    </span>
+    }
+    @if ((routerConfig.includes('plots') && minimized) || !minimized) {
+      <span class="close-button-fake" refresh></span>
+    }
+
+  </sm-experiment-info-navbar>
+  <div class="output-body" [class.minimized]="minimized" #scrollContainer>
+    <router-outlet class="output-outlet" (activate)="onActivate($event, scrollContainer)"></router-outlet>
+  </div>
+</div>

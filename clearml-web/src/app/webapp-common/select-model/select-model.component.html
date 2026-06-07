@@ -1,0 +1,58 @@
+<sm-dialog-template [header]="data?.header">
+  <div class="model-table-container">
+    <div class="w-100 model-header">
+      <sm-select-model-header
+        [searchActive]="true"
+        [searchValue]="searchValue$ | ngrxPush"
+        [viewMode]="viewMode$ | ngrxPush"
+        [isShowArchived]="showArchive$ | ngrxPush"
+        [hideArchiveToggle]="data.hideShowArchived"
+        [hideCreateNewButton]="true"
+        [tableFilters]="tableFilters$ | ngrxPush"
+        (searchValueChanged)="onSearchValueChanged($event)"
+        (clearFilters)="clearFilters()"
+        (isArchivedChanged)="showArchives($event)"
+      ></sm-select-model-header>
+    </div>
+    <sm-models-table
+      class="model-info-container align-self-stretch"
+      [selectionMode]="data.selectionMode ?? 'single'"
+      [enableMultiSelect]="data.selectionMode === 'multiple'"
+      [minimizedView]="false"
+      [hideSelectAll]="true"
+      [reorderableColumns]="false"
+      [models]="models$ | ngrxPush"
+      [tableCols]="tableCols$ | ngrxPush"
+      [noMoreModels]="noMoreModels$ | ngrxPush"
+      [users]="users$ |ngrxPush"
+      [currentUserId]="currentUser()?.id"
+      [frameworks]="frameworks$ |ngrxPush"
+      [tags]="tags$ | ngrxPush"
+      [projects]="(projectsOptions$ | ngrxPush)"
+      [systemTags]="systemTags$ | ngrxPush"
+      [tableSortFields]="(tableSortFields$ | ngrxPush)"
+      [tableSortOrder]="(tableSortOrder$ | ngrxPush)"
+      [tableFilters]="(tableFilters$ | ngrxPush)"
+      [checkedModels]="selectedModels$ | ngrxPush"
+      [onlyPublished]="data.selectionMode === 'single'"
+      [columnResizeMode]="'fit'"
+      (modelsSelectionChanged)="modelsSelectionChanged($event)"
+      (modelSelectionChanged)="modelSelectionChanged($event)"
+      (sortedChanged)="sortedChanged($event)"
+      (filterChanged)="filterChanged($event)"
+      (filterSearchChanged)="filterSearchChanged($event)"
+      (loadMoreModels)="getNextModels()"
+    >
+    </sm-models-table>
+    <div class="buttons">
+      <button mat-stroked-button (click)="closeDialog(null)" data-id ="CancelButton">
+        CANCEL
+      </button>
+      @if (data.selectionMode === 'multiple') {
+        <button mat-flat-button type="submit" (click)="closeDialogMultiple()" data-id="ApplyButton">
+          APPLY
+        </button>
+      }
+    </div>
+  </div>
+</sm-dialog-template>

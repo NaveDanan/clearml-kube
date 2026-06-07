@@ -1,0 +1,43 @@
+@use "mixins/common";
+
+.top-labels {
+  @include common.counter-label();
+  text-align: left;
+  padding-top: 8px;
+}
+
+.sub-title {
+  @include common.counter-label();
+  padding-right: 10px;
+}
+
+.model-footer {
+  font-size: 10px;
+  padding: 5px 10px;
+}
+
+::ng-deep .model-card {
+  cursor: pointer;
+
+  height: 228px;
+  overflow: hidden;
+  .chips{
+    margin-top: 4px;
+    margin-bottom: 20px;
+    padding-top: 8px;
+  }
+}
+
+.brio-footer {
+  height: 60px;
+  overflow: hidden
+}
+
+:host{
+  .content-subtitle{
+    font-size: 10px;
+  }
+  .model-name{
+    width: 280px;
+  }
+}

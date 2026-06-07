@@ -1,0 +1,110 @@
+
+:host {
+  position: relative;
+
+  ::ng-deep #searchDiff {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    transition: transform 0.5s;
+
+    button {
+      font-size: 12px;
+
+      &.prev {
+        border-right-color: transparent !important;
+      }
+
+      &.next {
+        border-left-color: transparent !important;
+      }
+    }
+  }
+
+  @media(max-width: 1620px) {
+    #searchDiff {
+      position: static;
+      transform: unset;
+    }
+  }
+
+
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 100%;
+  padding: 0 24px;
+  border-top: 1px solid var(--color-surface);
+  border-bottom: 1px solid var(--color-surface);
+
+  .actions-container {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+
+    > * {
+      margin-right: 12px;
+    }
+  }
+
+  .view-mode-select {
+    width: 220px;
+  }
+
+  .settings {
+    display: flex;
+    align-items: center;
+
+    .export-button {
+      line-height: 11px;
+      padding: 0;
+      color: var(--color-on-surface-variant);
+    }
+  }
+
+  .add-experiment {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 16px;
+    border-right: 1px solid var(--color-primary-fixed-dim);
+    border-radius: var(--mat-button-filled-container-shape) 0 0 var(--mat-button-filled-container-shape);
+    &.plus {
+      border-radius: 0 var(--mat-button-filled-container-shape) var(--mat-button-filled-container-shape) 0;
+      padding: 0 12px;
+      min-width: 36px;
+      border-left: var(--color-outline) 1px solid;
+      .mat-icon {
+        margin: unset;
+      }
+    }
+    &:focus {
+      position: relative;
+      z-index: 1;
+    }
+  }
+
+
+}
+
+
+::ng-deep .light-theme .mat-mdc-select-value-text {
+  i {vertical-align: middle;}
+}
+::ng-deep .light-theme .mat-mdc-option .mdc-list-item__primary-text {
+  white-space: nowrap;
+  i {vertical-align: middle;}
+}
+
+::ng-deep .mat-mdc-menu-content {
+  height: 100%;
+}
+
+.next-diff {
+  display: flex;
+  gap: 12px;
+}

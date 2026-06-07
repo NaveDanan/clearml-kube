@@ -1,0 +1,118 @@
+<form [formGroup]="filterForm" class="form-container">
+  @if (showUserFilter()) {
+    <section>
+      <div class="filter-head">
+        <h4>Users</h4>
+        <button mat-icon-button class="sm" [matMenuTriggerFor]="usersSubMenu?.smMenu()?.menu()" (menuOpened)="usersMenuChangedState(true)">
+          <mat-icon fontSet="al" fontIcon="al-ico-add"></mat-icon>
+        </button>
+      </div>
+      <sm-table-filter-sort #usersSubMenu
+                            (filterChanged)="usersFilterChanged($event)"
+                            (searchValueChanged)="usersSearchValueChanged($event)"
+                            (menuClosed)="usersMenuChangedState(false)"
+                            [column]="usersColumn"
+                            [options]="usersOptionsLabels() | filter: usersSearchTerm():'label'"
+                            [value]="userFilter.value ?? []"
+                            class="d-none"
+      ></sm-table-filter-sort>
+      <mat-chip-listbox aria-labelledby="status-chip-list-label">
+        @for (user of selectedUsers(); track user.id) {
+          <mat-chip-row (removed)="removeSelectedUser(user.id)">
+                          <span class="name ellipsis">{{ user.name }}</span>
+              <button class="remove-button" matChipRemove>
+                          <mat-icon fontSet="al" fontIcon="al-ico-dialog-x" class="xs pointer"></mat-icon>
+        </button>
+
+
+          </mat-chip-row>
+        }
+      </mat-chip-listbox>
+      <!-- empty state  -->
+      @if (userFilter.value?.length === 0) {
+        <div class="empty-state">No users selected</div>
+      }
+    </section>
+  }
+
+
+  @if (statusOptions()?.length > 0) {
+    <section class="status-filter-container">
+      <div class="filter-head">
+        <h4>Status</h4>
+      </div>
+      <mat-chip-listbox
+        formControlName="statusFilter"
+        aria-labelledby="status-chip-list-label"
+        [multiple]="true"
+      >
+        @for (status of statusOptions(); track status) {
+          <mat-chip-option [value]="status">
+            <span class="d-flex gap-2 ps-2">
+              <sm-status-icon-label [externalStatusLabels]="statusOptionsLabels()" [status]="status"></sm-status-icon-label>
+            </span>
+          </mat-chip-option>
+        }
+      </mat-chip-listbox>
+    </section>
+  }
+
+  @if (typeOptions()?.length > 0) {
+    <section class="status-filter-container">
+      <div class="filter-head">
+        <h4>Type</h4>
+      </div>
+      <mat-chip-listbox
+        formControlName="typeFilter"
+        aria-labelledby="type-chip-list-label"
+        [multiple]="true"
+      >
+        @for (type of typeOptions(); track type) {
+          <mat-chip-option [value]="type">
+            <span class="d-flex gap-2 ps-2">
+              <mat-icon fontSet="al" [fontIcon]="'al-ico-type-' + (type?.replace('_', '-') ?? 'training')" class="sm"></mat-icon>
+              {{ type | replaceViaMapPipe: EXPERIMENTS_STATUS_LABELS }}
+            </span>
+          </mat-chip-option>
+        }
+      </mat-chip-listbox>
+    </section>
+  }
+  <section>
+    <div class="filter-head mb-1">
+      <h4>Tags</h4>
+      <button mat-icon-button class="sm" (click)="openTagMenu()">
+        <mat-icon fontSet="al" fontIcon="al-ico-add"></mat-icon>
+      </button>
+    </div>
+    <sm-tag-list
+      [class.menu-open]="tagsMenuTrigger?.menuOpen"
+      [tags]="tagsFilter.value"
+      [showAddTagOnlyOnHover]="true"
+      [showAddTag]="false"
+      (add)="openTagMenu()"
+      (remove)="removeTag($event)"></sm-tag-list>
+    <span
+      #tagsMenuTrigger="matMenuTrigger"
+      [matMenuTriggerFor]="tagsMenu.matMenu"
+      (menuClosed)="tagsMenuClosed()"
+    ></span>
+    <sm-tags-menu
+      #tagsMenu
+      [tags]="tagsFilter.value"
+      [companyTags]="tags()"
+      [disableFilterByProject]="true"
+      [disableCreateNew]="true"
+      [disableColorManagement]="true"
+      (tagSelected)="addTag($event)"
+    ></sm-tags-menu>
+    @if (tagsFilter.value?.length === 0) {
+      <div class="empty-state">No tags selected</div>
+    }
+  </section>
+
+  <div class="clear-all">
+    <a href="#" (click)="$event.preventDefault(); clearAllFilters()" [class.disabled]="!isFiltered()">Clear all filters</a>
+  </div>
+</form>
+

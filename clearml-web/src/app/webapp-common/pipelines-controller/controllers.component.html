@@ -1,0 +1,151 @@
+<sm-overlay [backdropActive]="backdropActive$ | ngrxPush"></sm-overlay>
+<sm-experiment-header
+  [tableCols]="tableMode() === 'compare' ? (tableCompareView() === 'plots' ? (compareSelectedMetricsPlots$ | ngrxPush) : (compareSelectedMetricsScalars$ | ngrxPush)) : (filteredTableCols$| ngrxPush)"
+  [isArchived]="inArchivedMode()"
+  [metricVariants]="metricsVariants$()"
+  [hyperParams]="hyperParams$ | ngrxPush"
+  [minimizedView]="minimizedView()"
+  [isMetricsLoading]="metricLoading$ | ngrxPush"
+  [tableFilters]="tableFilters$ | ngrxPush"
+  [tableMode]="firstExperiment ? getTableModeFromURL() : 'table'"
+  [showCompareScalarSettings]="showCompareScalarSettings$ | ngrxPush"
+  [compareView]="tableCompareView()"
+  [rippleEffect]="tableModeAwareness$ | ngrxPush"
+  [addButtonTemplate]="addButton"
+  [noData]="!((experiments$ | ngrxPush)?.length > 0)"
+  [entityType]="entityType"
+  (isArchivedChanged)="archivedChanged($event)"
+  (selectedTableColsChanged)="getTableModeFromURL() === 'compare' ?  toggleSelectedMetricHidden($event) : selectedTableColsChanged($event)"
+  (getMetricsToDisplay)="getMetricsToDisplay()"
+  (selectedMetricToShow)="getTableModeFromURL() === 'compare' ? compareSelectedMetricToShow($event) : selectedMetricToShow($event)"
+  (selectedHyperParamToShow)="selectedHyperParamToShow($event)"
+  (removeColFromList)="getTableModeFromURL() === 'compare' ?  compareRemoveColFromList($event): removeColFromList($event)"
+  (setAutoRefresh)="setAutoRefresh($event)"
+  (clearSelection)="clearSelection()"
+  (clearTableFilters)="clearTableFiltersHandler($event)"
+  (tableModeChanged)="modeChanged($event); tableModeUserAware()"
+  (downloadTableAsCSV)="downloadTableAsCSV()"
+  (downloadFullTableAsCSV)="downloadFullTableAsCSV()"
+  (toggleShowCompareSettings)="showCompareSettingsChanged()"
+  (compareViewChanged)="compareViewChanged($event)"
+>
+</sm-experiment-header>
+<ng-template #addButton let-isSmallScreen="smallScreen">
+  <button
+    mat-flat-button
+    class="tertiary-button me-3"
+    [disabled]="inArchivedMode() || exampleProject()"
+    (click)="newRun()"
+  >
+    <mat-icon fontSet="al" fontIcon="al-ico-add" data-id="newRunButton"></mat-icon>
+     NEW RUN
+  </button>
+</ng-template>
+<div class="experiment-body">
+  <as-split
+    [gutterSize]=1
+    [useTransition]="true"
+    [gutterDblClickDuration]="400"
+    (gutterClick)="clickOnSplit()"
+    (gutterDblClick)="closePanel()"
+    (dragEnd)="splitSizeChange($event)"
+    (dragStart)="disableInfoPanel()"
+    (transitionEnd)="experimentsTable.table()?.resize(); experimentsTable.afterTableInit()"
+    [class.opened]="minimizedView() && splitSize() <= 1"
+    [class.closed]="minimizedView() && splitSize() >= 99"
+  >
+    <as-split-area
+      [size]="100 - splitSize()"
+      [minSize]="1"
+      [maxSize]="99"
+    >
+      <sm-experiments-table
+        #experimentsTable
+        class="align-self-stretch"
+        selectionMode="single"
+        [initialColumns]="tableCols"
+        [colsOrder]="(tableColsOrder$ | ngrxPush)"
+        [tableCols]="tableCols$| ngrxPush"
+        [experiments]="experiments$ | ngrxPush"
+        [currentUserId]="currentUser()?.id"
+        [users]="users()"
+        [hyperParamsOptions]="hyperParamsOptions$ | ngrxPush"
+        [activeParentsFilter]="activeParentsFilter$ | ngrxPush"
+        [parents]="parents$ | ngrxPush"
+        [experimentTypes]="types$ | ngrxPush"
+        [tags]="tags$ | ngrxPush"
+        [systemTags]="systemTags$ | ngrxPush"
+        [tableSortFields]="(tableSortFields$ | ngrxPush)"
+        [tableSortOrder]="(tableSortOrder$ | ngrxPush)"
+        [tableFilters]="(tableFilters$ | ngrxPush)"
+        [checkedExperiments]="checkedExperiments$ | ngrxPush"
+        [selectedExperimentsDisableAvailable]="selectedExperimentsDisableAvailable$ | ngrxPush"
+        [selectedExperiment]="highlited()"
+        [minimizedView]="minimizedView()"
+        [noMoreExperiments]="noMoreExperiments$ | ngrxPush"
+        [contextMenuTemplate]="contextMenuExtendedTemplate"
+        [contextMenuActive]="contextMenuActive"
+        [entityType]="entityType"
+        [hasExperimentUpdate]="selectedExperimentsHasUpdate$ | ngrxPush"
+        [cardsCollapsed]="cardsCollapsed()"
+        [cardHeight]="112"
+        [showColors]="showColorsInCards()"
+        (experimentSelectionChanged)="getTableModeFromURL() !== 'compare' && experimentSelectionChanged($event)"
+        (experimentsSelectionChanged)="experimentsSelectionChanged($event)"
+        (sortedChanged)="sortedChanged($event)"
+        (filterChanged)="filterChanged($event)"
+        (tagsMenuOpened)="refreshTagsList()"
+        (typesMenuOpened)="refreshTypesList()"
+        (loadMoreExperiments)="getNextExperiments()"
+        (columnsReordered)="columnsReordered($event)"
+        (columnResized)="columnResized($event)"
+        (contextMenu)="onContextMenuOpen($event)"
+        (removeTag)="removeTag($event)"
+        (clearAllFilters)="clearTableFiltersHandler($event)"
+        (cardsCollapsedChanged)="cardsCollapsedToggle()"
+        (closePanel)="closePanel()"
+      >
+      </sm-experiments-table>
+    </as-split-area>
+    <as-split-area
+      style="display: flex; flex-direction: column; overflow: hidden;"
+      [class.light-theme]="getTableModeFromURL() === 'compare'"
+      [size]="splitSize()"
+      [visible]="minimizedView()"
+    >
+      <router-outlet></router-outlet>
+    </as-split-area>
+  </as-split>
+</div>
+
+<sm-entity-footer
+  [class.footer-visible]="(experiments$ | ngrxPush) && ((checkedExperiments$ | ngrxPush) && (checkedExperiments$ | ngrxPush)?.length > 1) || (showAllSelectedIsActive$ |ngrxPush)"
+  [footerState]="footerState$ | ngrxPush"
+  [footerItems]="footerItems"
+  (footerItemClick)="onFooterHandler($event)"
+  (tagSelected)="tagSelected($event, 'experiments')"
+></sm-entity-footer>
+
+<ng-template #contextMenuExtendedTemplate let-contextExperiment>
+  <sm-controller-menu
+    #contextMenu
+    [experiment]="contextExperiment"
+    [selectedExperiment]="selectedExperiment$ | ngrxPush"
+    [selectedExperiments]="singleRowContext ? [contextExperiment] : checkedExperiments"
+    [selectedDisableAvailableIsMultiple]="!singleRowContext"
+    [selectedDisableAvailable]="singleRowContext ? getSingleSelectedDisableAvailable(contextExperiment) : (selectedExperimentsDisableAvailable$ | ngrxPush)"
+    [numSelected]="singleRowContext ? 1 : checkedExperiments.length"
+    [tagsFilterByProject]="tagsFilterByProject$ | ngrxPush"
+    [projectTags]="tags$ | ngrxPush"
+    [companyTags]="companyTags$ | ngrxPush"
+    [activateFromMenuButton]="false"
+    [useCurrentEntity]="singleRowContext"
+    [minimizedView]="true"
+    [tableMode]="!minimizedView()"
+    [isCompare]="getTableModeFromURL() === 'compare'"
+    [backdrop]="menuBackdrop"
+    (tagSelected)="onAddTag($event, contextExperiment)"
+    (menuOpened)="setContextMenuStatus(true)"
+    (menuClosed)="setContextMenuStatus(false)"
+  ></sm-controller-menu>
+</ng-template>

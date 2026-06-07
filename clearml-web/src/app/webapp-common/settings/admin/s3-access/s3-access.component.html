@@ -1,0 +1,62 @@
+@if (S3Form) {
+  <form [formGroup]="S3Form" class="form-container">
+      @if (bucketCredentials.controls.length > 0 || externalCredentials()?.length) {
+        <div class="s3-row header">
+          <div>Bucket</div>
+          <div>Key</div>
+          <div>Secret / SAS</div>
+          <div>Token</div>
+          <div>AWS Region</div>
+          <div>Host (Endpoint)</div>
+        </div>
+      }
+    <div class="credentials-container">
+      @for (bucket of externalCredentials(); track $index) {
+        <div class="s3-row">
+          <div class="value ellipsis">{{ bucket.Bucket }}</div>
+          <div class="value ellipsis">{{ bucket.Key }}</div>
+          <div class="value ellipsis">{{ bucket.Secret }}</div>
+          <div class="value ellipsis">{{ bucket.Token }}</div>
+          <div class="value ellipsis">{{ bucket.Region }}</div>
+          <div class="value ellipsis">{{ bucket.Endpoint }}</div>
+        </div>
+      }
+      @for (bucket of bucketCredentials.controls; track bucket?.value?.Bucket ? bucket.value.Bucket + bucket.value.Endpoint : $index) {
+        <div class="s3-row" formArrayName="bucketCredentials">
+          <ng-container [formGroupName]="$index">
+
+            <mat-form-field appearance="outline" class="no-bottom">
+              <input matInput class="form-control" formControlName="Bucket"></mat-form-field>
+            <mat-form-field appearance="outline" class="no-bottom">
+              <input matInput class="form-control" formControlName="Key"></mat-form-field>
+            <mat-form-field appearance="outline" class="no-bottom">
+              <input matInput class="form-control" formControlName="Secret"></mat-form-field>
+            <mat-form-field appearance="outline" class="no-bottom">
+              <input matInput class="form-control" formControlName="Token"></mat-form-field>
+            <mat-form-field appearance="outline" class="no-bottom">
+              <input matInput class="form-control" formControlName="Region" placeholder="us-east-2"></mat-form-field>
+            <mat-form-field appearance="outline" class="no-bottom">
+              <input #endpoint matInput class="form-control" formControlName="Endpoint" placeholder="Leave empty for AWS S3">
+            </mat-form-field>
+            <div class="d-flex justify-content-end">
+              @if (endpoint.value.startsWith('http://') && secured) {
+                <span class="alert-icon me-2" smTooltip="Embedding images through a non-secure transport (HTTP) in a secure web application might require special configuration of your browser">
+                <i class="al-icon sm-md al-ico-alert"></i>
+              </span>
+              }
+              <button mat-icon-button smTooltip="Remove" matTooltipShowDelay="500" (click)="removeBucket($index)">
+                <mat-icon fontSet="al" [fontIcon]="ICONS.REMOVE"></mat-icon>
+              </button>
+            </div>
+          </ng-container>
+        </div>
+      }
+    </div>
+    <div>
+      <button mat-button (click)="addBucket({})">
+        <mat-icon fontSet="al" fontIcon="al-ico-add"></mat-icon>
+        Add Access Keys
+      </button>
+    </div>
+  </form>
+}

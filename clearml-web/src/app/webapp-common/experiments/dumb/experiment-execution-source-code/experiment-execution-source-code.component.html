@@ -1,0 +1,125 @@
+<form [formGroup]="sourceCodeForm">
+  <div [class.source-code-container]="editable()">
+    <sm-labeled-row label="REPOSITORY">
+      @if (!editable()) {
+        @if (repoData().targetUrl) {
+          <a [href]="repoData().targetUrl" target="_blank" class="d-inline-flex ">
+            @if (repoData().type) {
+              <mat-icon class="repo-icon" [class]="'i-' + repoData().type"></mat-icon>
+            }{{sourceCodeForm.controls.repository.value}}
+          </a>
+        } @else {
+          {{sourceCodeForm.controls.repository.value}}
+        }
+      } @else {
+        <mat-form-field appearance="outline" class="w-100 no-bottom">
+          <input matInput formControlName="repository">
+        </mat-form-field>
+      }
+    </sm-labeled-row>
+    <sm-labeled-row [label]="editable() ? 'COMMIT' : (sourceCodeForm.controls.scriptType.value | replaceViaMapPipe: flagNameMap)">
+      @if (!editable()) {
+        <div>
+          <div>
+            @switch (sourceCodeForm.controls.scriptType.value) {
+              @case (sourceTypesEnum.VersionNum) {
+                {{sourceCodeForm.controls.version_num.value}}
+                @if (sourceCodeForm.controls.branch.value) {
+                  (in branch {{sourceCodeForm.controls.branch.value}})
+                }
+              }
+              @case (sourceTypesEnum.Branch) {
+                @if (sourceCodeForm.controls.branch.value) {
+                  Latest in branch {{sourceCodeForm.controls.branch.value}}
+                }
+              }
+              @case (sourceTypesEnum.Tag) {
+                @if (sourceCodeForm.controls.version_num.value) {
+                  {{sourceCodeForm.controls.tag.value}} (commit id {{sourceCodeForm.controls.version_num.value}})
+                } @else {
+                  {{sourceCodeForm.controls.tag.value}}
+                }
+              }
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="d-flex w-100" style="gap: 12px">
+          <mat-form-field appearance="outline" class="flex-grow-1">
+            <mat-label>Type</mat-label>
+            <mat-select panelClass="light-theme" formControlName="scriptType">
+              @for (type of scriptTypeOptions; track type) {
+                <mat-option [value]="type.value">{{type.label}}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          @switch (sourceCodeForm.controls.scriptType.value) {
+            @case (sourceTypesEnum.VersionNum) {
+              <mat-form-field appearance="outline" class="flex-grow-1">
+                <mat-error>Required</mat-error>
+                <mat-label>Commit ID</mat-label>
+                <input matInput type="text" formControlName="version_num"
+                       (blur)="resetOtherScriptParameters(sourceTypesEnum.VersionNum)"
+                       [placeholder]="scriptPlaceHolders[sourceTypesEnum.VersionNum]">
+              </mat-form-field>
+            }
+            @case (sourceTypesEnum.Branch) {
+              <mat-form-field appearance="outline" class="flex-grow-1">
+                <mat-label>Branch</mat-label>
+                <mat-error>Required</mat-error>
+                <input matInput type="text" formControlName="branch"
+                       (blur)="resetOtherScriptParameters(sourceTypesEnum.Branch)"
+                       [placeholder]="scriptPlaceHolders[sourceTypesEnum.Branch]">
+              </mat-form-field>
+            }
+            @case (sourceTypesEnum.Tag) {
+              <mat-form-field appearance="outline" class="flex-grow-1">
+                <mat-error>Required</mat-error>
+                <mat-label>Tag</mat-label>
+                <input matInput type="text" formControlName="tag"
+                       (blur)="resetOtherScriptParameters(sourceTypesEnum.Tag)"
+                       [placeholder]="scriptPlaceHolders[sourceTypesEnum.Tag]">
+              </mat-form-field>
+            }
+          }
+        </div>
+      }
+    </sm-labeled-row>
+    <sm-labeled-row label="SCRIPT PATH">
+      @if (!editable()) {
+        <div>{{sourceCodeForm.controls.entry_point.value}}</div>
+      } @else {
+        <mat-form-field appearance="outline" class="w-100 no-bottom">
+          <input matInput type="text" formControlName="entry_point">
+        </mat-form-field>
+      }
+    </sm-labeled-row>
+    <sm-labeled-row label="WORKING DIRECTORY">
+      @if (!editable()) {
+        <div>{{sourceCodeForm.controls.working_dir.value}}</div>
+      }
+      @if (editable()) {
+        <mat-form-field appearance="outline" class="w-100 no-bottom">
+          <input matInput type="text" formControlName="working_dir">
+        </mat-form-field>
+      }
+    </sm-labeled-row>
+    <sm-labeled-row label="BINARY">
+      @if (!editable()) {
+        <div class="d-flex align-items-center">
+          {{sourceCodeForm.controls.binary.value}}
+          @if (sourceCodeForm.controls.binary.value && !(sourceCodeForm.controls.binary.value.substring(sourceCodeForm.controls.binary.value.lastIndexOf('/')+1)).match(binaryValidationRegexp)) {
+            <i
+              class="al-icon al-ico-alert-outline sm ms-2"
+              smTooltip="This binary is not supported by ClearML agent - System python will be used for execution"
+            ></i>
+          }
+        </div>
+      } @else {
+        <mat-form-field appearance="outline" class="col-24 no-bottom">
+          <input matInput type="text" formControlName="binary">
+        </mat-form-field>
+      }
+    </sm-labeled-row>
+  </div>
+</form>

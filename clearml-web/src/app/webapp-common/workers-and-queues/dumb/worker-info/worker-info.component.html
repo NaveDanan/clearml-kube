@@ -1,0 +1,61 @@
+<button mat-icon-button class="close sm" (click)="this.deselectWorker.emit()">
+  <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+</button>
+
+<mat-tab-group [mat-stretch-tabs]="false" mat-align-tabs="center" [dynamicHeight]="true">
+  <mat-tab label="INFO" class="tab-link" bodyClass="h-100">
+    <div class="worker-info-container">
+      <div class="info-column">
+        <sm-vertical-labeled-row label="Worker Name" [tooltip]="selectedWorker()?.name">{{selectedWorker()?.name ?? '—' }}</sm-vertical-labeled-row>
+        <sm-vertical-labeled-row label="Update Time">{{selectedWorker()?.last_report_time | timeAgo}}</sm-vertical-labeled-row>
+        <sm-vertical-labeled-row label="Current Task" [tooltip]="selectedWorker()?.task?.name">
+          @if (selectedWorker()?.task?.name ) {
+            <a [href]="'/projects/'+ ($any(selectedWorker()?.task)?.project?.id ?? '*') + '/tasks/' + selectedWorker()?.task?.id"
+               target="_blank">{{selectedWorker()?.task?.name}}</a>
+          } @else {
+            —
+          }
+        </sm-vertical-labeled-row>
+      </div>
+      <div class="info-column">
+        <sm-vertical-labeled-row label="Tasks Run Time">{{selectedWorker()?.task?.running_time ? (selectedWorker()?.task?.running_time  | durationFormater:'ms':'ddhhmmss') : '—'}}</sm-vertical-labeled-row>
+        <sm-vertical-labeled-row label="Tasks Iteration">{{selectedWorker()?.task?.last_iteration ? selectedWorker()?.task?.last_iteration : '—'}}</sm-vertical-labeled-row>
+      </div>
+    </div>
+  </mat-tab>
+  <mat-tab label="QUEUES" class="tab-link">
+    @if (selectedWorker()?.queues.length === 0) {
+      <div class="empty-state">No queues currently assigned to this worker</div>
+    } @else {
+      <div class="queues-table-container">
+        <sm-simple-table-2 [cols]="cols" [rowsData]="selectedWorker()?.queues">
+          <ng-template let-col let-i="rowIndex" let-row="row">
+            <div class="body">
+              <!--QUEUE-->
+              <div class="id-cell d-flex">
+                <a class="value link ellipsis"
+                   [routerLink]="['../queues']"
+                   [queryParams]="{id: row.id}"
+                   [smTooltip]="row?.display_name || row.name"
+                   [matTooltipShowDelay]="500"
+                   smShowTooltipIfEllipsis>{{row?.display_name || row.name}}</a>
+                <sm-copy-clipboard
+                  class="copy-btn"
+                  [label]="''"
+                  [tooltipText]="'Copy Queue ID'"
+                  [clipboardText]="row?.id"
+                ></sm-copy-clipboard>
+              </div>
+
+              <!--NEXT EXPERIMENT-->
+              <div class="ellipsis" [smTooltip]="row?.next_task?.name" [matTooltipShowDelay]="500" smShowTooltipIfEllipsis>{{row?.next_task?.name}}</div>
+
+              <!--IN QUEUE-->
+              <div>{{row?.num_tasks}}</div>
+            </div>
+          </ng-template>
+        </sm-simple-table-2>
+      </div>
+    }
+  </mat-tab>
+</mat-tab-group>

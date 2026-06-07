@@ -1,0 +1,63 @@
+$list-width: 359px;
+
+:host {
+  display: flex;
+  height: 100%;
+
+  .toggle-all {
+    font-size: 10px;
+    padding-right: 2px;
+    cursor: pointer;
+  }
+
+  .list-container {
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    height: 100%;
+    width: $list-width;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .graphs-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    padding: 0 !important;
+  }
+
+  .drawer-settings-bar {
+    height: unset;
+    padding: 24px;
+    border-bottom: 1px solid var(--color-surface-container-high);
+  }
+
+
+  .ribbon-setting-bar {
+    display: flex;
+    overflow: hidden;
+    height: auto;
+    max-height: 0;
+    padding: 0 25px 0 22px;
+    background-color: var(--color-surface);
+    transition: max-height 0.3s;
+
+    &.with-settings {
+      min-height: 64px;
+      max-height: 128px;
+    }
+  }
+
+  sm-experiment-graphs {
+    &.with-settings {
+      height: calc(100% - 64px);
+    }
+  }
+
+
+
+  ::ng-deep sm-experiment-output-scalars .cursor-crosshair {
+    cursor: default !important;
+  }
+}

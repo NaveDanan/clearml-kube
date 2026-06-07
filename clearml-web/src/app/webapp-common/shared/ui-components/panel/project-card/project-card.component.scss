@@ -1,0 +1,76 @@
+@use "mixins/common";
+
+hr {
+  margin: 0 !important;
+}
+
+.card-name {
+  height: 32px;
+  margin-bottom: 8px;
+}
+
+.project-tag {
+  @include common.card-header-tag();
+  color: var(--color-tertiary);
+}
+
+.tag {
+  width: 24px;
+  margin: 0 16px;
+  line-height: 12px;
+}
+
+.footer-title {
+  flex: 1;
+  @include common.counter-label();
+  text-align: center;
+  font-size: 10px;
+  padding: 12px
+}
+
+.sub-projects-list {
+  height: 100%;
+  padding: 6px 0;
+
+  a {
+    color: var(--color-on-surface);
+    display: flex;
+    align-items: center;
+    margin: 0 12px;
+    padding: 0 12px;
+    border-radius: 3px;
+    line-height: 30px;
+    text-decoration: none;
+
+    ::ng-deep .sub-path {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 120px;
+      &.double-width{
+        max-width:260px;
+      }
+    }
+
+    &:hover {
+      background-color: var(--color-primary-container);
+    }
+  }
+}
+
+::ng-deep .project-card {
+  cursor: pointer;
+  height: 228px;
+  overflow: hidden;
+}
+
+.project-name {
+  max-width: 280px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.info-icon {
+  vertical-align: middle;
+}

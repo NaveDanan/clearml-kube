@@ -1,0 +1,84 @@
+
+:host {
+  height: 100%;
+
+  .dialog-template-container {
+    height: 100%;
+    min-height: 150px;
+    overflow-y: auto;
+    background-color: transparent;
+  }
+
+  .create-title {
+    margin: 10px 10px 18px;
+    font-size: 24px;
+    font-weight: 400;
+    width: 100%;
+    height: 35px;
+    text-align: center;
+    color: var(--color-primary);
+    text-transform: uppercase;
+
+    &.no-uppercase {
+      text-transform: unset;
+    }
+  }
+
+  .sub-header {
+    font-size: 14px;
+    line-height: 20px;
+    text-align: center;
+    color: var(--color-on-surface-variant);
+  }
+
+  .icon {
+    margin: 10px;
+  }
+
+  .icon-image {
+    margin: 10px auto;
+    color: var(--dialog-icon-color, var(--color-primary));
+  }
+
+  .app-icon-image {
+    width: 64px;
+    height: 64px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+
+  .generic-container {
+    padding: 32px 64px;
+    overflow-x: hidden;
+    height: 100%;
+    max-height: calc(94vh - 100px);
+  }
+
+  .include-banner {
+    height: calc(100vh - 220px);
+    .generic-container {
+      border-radius: 4px 4px 0 0;
+    }
+  }
+  ::ng-deep .background-transparent {
+    .mat-mdc-dialog-container {
+      max-height: none !important;
+      height: 97vh !important;
+      background-color: transparent;
+      box-shadow: none !important;
+      overflow: hidden;
+    }
+  }
+
+  .rotate-right {
+    transform: rotate(135deg);
+  }
+
+  &.neat {
+    .generic-container {
+        padding: 32px 32px 0 32px;
+    }
+  }
+}

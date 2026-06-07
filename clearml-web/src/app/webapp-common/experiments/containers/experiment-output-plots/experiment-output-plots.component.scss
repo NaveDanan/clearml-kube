@@ -1,0 +1,29 @@
+:host {
+  display: flex;
+  height: 100%;
+  &.dataset-version-preview{
+    height: auto;
+    display: block;
+  }
+
+  mat-drawer-container {
+    --mat-sidenav-container-background-color: var(--color-surface-container-lowest);
+    --mat-sidenav-container-divider-color: var(--color-surface-container-high);
+  }
+
+  .list-container {
+    display: block;
+    height: 100%;
+    width: 359px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: 20px;
+  }
+
+
+  .graphs-container {
+    flex: 1;
+    height: 100%;
+    padding: 0 !important;
+  }
+}

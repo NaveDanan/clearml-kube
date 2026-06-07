@@ -1,0 +1,10 @@
+<span
+  class="metric-cell ellipsis"
+  [smTooltip]="roundedMetricValue?.[experiment.id] && !roundedMetricValue?.noRound ? (col | getVariantWithoutRound:experiment?.last_metrics) : ''"
+>{{col | getParamMetricValue:experiment:roundedMetricValue}}</span>
+@if (roundedMetricValue && roundedMetricValue[experiment.id]) {
+  <i
+    class="al-icon sm ms-2 al-ico-line-expand"
+    [class.rotate-180]="roundedMetricValue.noRound"
+  (click)="expandColToggle($event, col)"></i>
+}

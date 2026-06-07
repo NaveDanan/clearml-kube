@@ -1,0 +1,51 @@
+<mat-drawer-container autosize [class]="dark ? 'dark-theme' : 'light-theme'" [hasBackdrop]="false">
+  <mat-drawer #drawer [opened]="!minimized && !isDatasetVersionPreview"  [mode]="minimized ? 'over' : 'side'" [disableClose]="!minimized && !isDatasetVersionPreview">
+
+    <div class="list-container">
+      @if (plotsList !== undefined) {
+        <sm-selectable-grouped-filter-list
+          placeHolder="Find plots"
+          [list]="plotsList"
+          [checkedList]="selectedMetrics"
+          [searchTerm]="searchTerm$ | ngrxPush"
+          (itemSelect)="metricSelected($event)"
+          (selectedChanged)="hiddenListChanged($event)"
+          (searchTermChanged)="searchTermChanged($event)"
+        ></sm-selectable-grouped-filter-list>
+      }
+    </div>
+    @if (minimized) {
+      <button mat-icon-button class="close sm" (click)="drawer.close()" data-id="closeToggleGraph">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    }
+  </mat-drawer>
+  <mat-drawer-content class="overflow-hidden">
+    <div class="graphs-container">
+      @if (minimized) {
+        <div class="hover-button">
+          <button mat-flat-button class="icon-only" (click)="drawer.open()" smTooltip="Toggle Graphs" data-id="eyeIcon">
+            <mat-icon fontSet="al" fontIcon="al-ico-eye-outline"></mat-icon>
+          </button>
+        </div>
+      }
+      <sm-experiment-graphs
+        [class.dark-theme]="dark"
+        [disableResize]="isDatasetVersionPreview"
+        [isGroupGraphs]="true"
+        [hiddenList]="selectedMetrics"
+        [metrics]="graphs"
+        [list]="plotsList"
+        [legendStringLength]="minimized ? 14 : 19"
+        [minimized]="minimized"
+        [splitSize]="splitSize$ | ngrxPush"
+        [isDarkTheme]="dark"
+        (resetGraphs)="resetMetrics()"
+        (createEmbedCode)="createEmbedCode($event)"
+        [defaultHoverMode]="'x unified'"
+        (chartSettingsChanged)="changeChartSettings($event)"
+        >
+      </sm-experiment-graphs>
+    </div>
+  </mat-drawer-content>
+</mat-drawer-container>

@@ -1,0 +1,20 @@
+:host {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  h4 {
+    margin: 0;
+    display: block;
+    position: relative;
+    color: var(--color-primary);
+    font-weight: 500;
+    span.error {
+      border: solid 4px var(--color-error);
+      background-color: var(--color-error);;
+      border-radius: 6px;
+      position: absolute;
+      right: -14px;
+      top: 1px;
+    }
+  }
+}

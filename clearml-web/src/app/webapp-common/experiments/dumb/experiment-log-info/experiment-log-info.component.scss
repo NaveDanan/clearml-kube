@@ -1,0 +1,57 @@
+:host {
+  display: block;
+  position: relative;
+  overflow: hidden;
+
+  .viewport {
+    height: 100%;
+    width: 100%;
+    background-color: var(--color-surface-container-low);
+    overflow-x: scroll;
+  }
+
+  .log-line {
+    font: 12px monospace;
+
+    .timestamp {
+      background-color: color-mix(in srgb, var(--color-surface-container-high), transparent 40%);
+      width: 170px;
+      float: left;
+      height: 25px;
+      padding: 5px 0 0 20px;
+    }
+
+    .entry {
+      background-color: var(--color-surface-container-low);
+      height: 25px;
+      padding: 5px 0 0 190px;
+      white-space: pre;
+      border-bottom: 1px solid transparent;
+    }
+
+    &.separator {
+      .timestamp, .entry {
+        border-bottom: 1px solid var(--color-outline-variant);
+      }
+    }
+  }
+
+  .get-last {
+    position: absolute;
+    right: -140px;
+    bottom: 30px;
+    transition: right 0.5s;
+  }
+
+  &:hover {
+    .get-last:not(.at-end) {
+      right: 25px;
+    }
+  }
+
+  mat-spinner {
+    position: absolute;
+    left: 45%;
+    top: 45%;
+  }
+}

@@ -1,0 +1,73 @@
+@use "mixins/common";
+
+$reqWidth: 56px;
+
+.completed {
+  background-color: var(--color-completed);
+}
+
+.pending {
+  background-color: var(--color-pending-container);
+}
+
+.empty {
+  background-color: var(--color-outline-variant);
+}
+
+.running {
+  background-color: var(--color-running-container);
+}
+
+.counter-container {
+  text-align: center;
+  padding: 8px;
+  .circle {
+    display: inline-block;
+    margin: auto;
+    width: $reqWidth;
+    height: $reqWidth;
+    border-radius: 50%;
+    margin-bottom: 8px;
+    background-color: var(--color-surface-container-highest);
+
+    &.published {
+      background-color: var(--color-published-container);
+    }
+    &.in_progress {
+      background-color: var(--color-running-container);
+    }
+    &.queued {
+      background-color: var(--color-running-container);
+    }
+    &.created {
+      background-color: var(--color-draft-container);
+    }
+    &.failed {
+      background-color: var(--color-failed-container);
+    }
+    &.stopped {
+      background-color: var(--color-completed);
+    }
+    &.completed {
+      background-color: var(--color-completed);
+    }
+    &.in_progress {
+      background-color: var(--color-running-container);
+    }
+    &.closed {
+      background-color: var(--color-outline-variant);
+    }
+
+    &.Caffe, &.PyTorch, &.Keras, &.Tensor.Flow, &.Custom, &.model {
+      background-color: var(--color-outline);
+    }
+  }
+  .counter-label {
+    @include common.counter-label();
+    text-transform: uppercase;
+  }
+}
+
+.leave-space {
+  min-height: 17px;
+}

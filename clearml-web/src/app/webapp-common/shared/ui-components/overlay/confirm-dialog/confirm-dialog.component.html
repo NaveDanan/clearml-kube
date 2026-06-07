@@ -1,0 +1,49 @@
+<sm-dialog-template [displayX]="displayX() && !dialogRef.disableClose" [header]="title"
+  (xClicked)="closeDialog(undefined)" [closeOnX]="false"
+  [iconClass]="iconClass" [iconData]="iconData"
+  [style.--dialog-icon-color]="data.iconColor"
+  [containerClass]="containerClass"
+  [headerClass]="headerClass"
+  >
+  @if (reference) {
+    <div class="reference">{{reference}}</div>
+  }
+  @if (body) {
+    <div class="body" [class.text-center]="centerText" [innerHTML]="body | purify"></div>
+  } @else {
+    <ng-container *ngTemplateOutlet="template; context: templateContext"></ng-container>
+  }
+  <ng-content></ng-content>
+
+
+  @if (showNeverShowAgain) {
+    <div class="body mt-4" >
+      <mat-checkbox [(ngModel)]="neverShowAgain">
+        <span class="chkbx-label">Don't show this message again</span>
+      </mat-checkbox>
+    </div>
+  }
+
+  @if (no || yes) {
+    <div class="buttons" [ngClass]="buttonsClass">
+      @if (no) {
+        <button
+          mat-stroked-button
+          class="yes-button"
+          (click)="closeDialog(false)"
+          [id]="no"
+        >{{no}}</button>
+      }
+      @if (yes) {
+        <button
+          mat-flat-button
+          [id]="yes"
+          [class.delete-button]="['DELETE', 'DEACTIVATE'].includes(yes)"
+          (click)="closeDialog(true)">
+          {{yes}}
+        </button>
+      }
+    </div>
+  }
+
+</sm-dialog-template>

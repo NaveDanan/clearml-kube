@@ -1,0 +1,37 @@
+@if (hasLog() && showHeader()) {
+  <div class="header">
+    <div class="ellipsis" [smTooltip]="creator()" matTooltipShowDelay="300" smShowTooltipIfEllipsis>
+      <b class="me-2">Hostname:</b>{{creator()}}
+    </div>
+    <button mat-stroked-button (click)="downloadLog()">
+      <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
+      Download full log
+    </button>
+    <mat-form-field appearance="fill" class="no-bottom">
+      <input
+        matInput
+        placeholder="Filter By Regex"
+        [value]="filter$ | ngrxPush"
+        (keyup)="filterLog($event)"
+      />
+    </mat-form-field>
+  </div>
+}
+@if (hasLog() === false) {
+  <div class="no-output">
+    <mat-icon fontSet="al" fontIcon="al-ico-log" class="xxl"></mat-icon>
+    <h4>NO LOG DATA</h4>
+  </div>
+}
+
+@if (hasLog()) {
+  <sm-experiment-log-info
+    [class.no-header]="!showHeader()"
+    [logs]="log()"
+    [beginningOfLog]="logBeginning$ | ngrxPush"
+    [filterString]="filter$ | ngrxPush"
+    [fetching]="fetching$ | ngrxPush"
+    (fetchMore)="getLogs($event)"
+    (scrolledToBottom)="this.scrolledToBottom.emit();"
+  ></sm-experiment-log-info>
+}

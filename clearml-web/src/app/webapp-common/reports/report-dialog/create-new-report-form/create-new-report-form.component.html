@@ -1,0 +1,64 @@
+<form [formGroup]="reportForm" (submit)="reportForm.invalid && send()" class="d-flex flex-column">
+  <mat-form-field appearance="outline" class="mat-light">
+    <mat-label>Report name</mat-label>
+    @if (reportForm.controls.name.touched && reportForm.controls.name.errors; as errors) {
+      <mat-error>
+        @if (errors?.required) {
+          Please add name.
+        }
+        @else if (errors?.uniqueName) {
+          Report name already exists.
+        }
+        @else if (errors?.minlength) {
+          Report name should contain more than 3 characters.
+        }
+      </mat-error>
+    }
+    <input name="reportName"
+      formControlName="name"
+      matInput
+      autocomplete="off"
+      >
+  </mat-form-field>
+  <sm-paginated-entity-selector
+    formControlName="project"
+    [data]="projectsOptions()"
+    label="Project"
+    placeHolder="Search for project path"
+    [isRequired]="true"
+    [createNewSuffix]="!projectsState().loading() && projects() !== null && reportForm.controls.project.value && !(reportForm.controls.project.value | stringIncludedInArray: projectsNames())"
+    (getEntities)="loadMore($event, false)"
+    (loadMore)="loadMore($event, true)"
+    (createNewSelected)="createNewSelected($event)"
+  ></sm-paginated-entity-selector>
+  @if (!reportForm.controls.project.untouched && reportForm.controls.project.errors; as errors) {
+    <div class="extra-errors">
+      @if (errors?.required) {
+        <mat-error>Please select project.</mat-error>
+      }
+      @else if (errors?.minlength < 0) {
+        <mat-error>Project name can't contain only spaces</mat-error>
+      }
+    </div>
+  }
+
+  <mat-form-field appearance="outline" class="mt-4">
+    @if (reportForm.controls.description?.invalid) {
+      <mat-error>Please add description.
+      </mat-error>
+    }
+    <mat-label>Description</mat-label>
+    <textarea class="report-description"
+      formControlName="description"
+      matInput
+    ></textarea>
+  </mat-form-field>
+  <mat-dialog-actions>
+    <button mat-flat-button
+            data-id="Create Report"
+            [mat-dialog-close]="true"
+            [disabled]="reportForm.invalid"
+            (click)="send()">CREATE REPORT
+    </button>
+  </mat-dialog-actions>
+</form>

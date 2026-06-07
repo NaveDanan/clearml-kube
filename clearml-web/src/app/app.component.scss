@@ -1,0 +1,57 @@
+@import "variables";
+@import "webapp-common/layout/layout.scss";
+
+$notifier-height: 30px;
+
+notification-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.root-container {
+  display: flex;
+  height: 100%;
+  width: 100%;
+
+  .app-container {
+    flex: 1;
+    height: 100%;
+    width: calc(100% - #{$side-bar-close-width});
+    background-color: var(--color-surface);
+
+    &.notifier-open {
+      height: calc(100% - #{$notifier-height});
+
+      .main-router + * {
+        height: calc(100% - #{$top-bar-height});
+      }
+    }
+
+    .main-router + * {
+      display: block;
+      height: calc(100% - #{$top-bar-height});
+    }
+
+    &.login-page {
+      .main-router + * {
+        height: 100%;
+      }
+    }
+  }
+}
+
+#color-picker-outlet {
+  position: absolute;
+  visibility: hidden;
+}
+
+iframe.iframe-maximized {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  z-index: 999;
+  background-color: var(--color-surface);
+}

@@ -1,0 +1,137 @@
+:host {
+    ::ng-deep .mat-mdc-tab-nav-bar, .mat-mdc-tab-group {
+      --mat-tab-divider-height: 1px;
+    }
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 32px;
+  min-height: 160px;
+  --mat-tab-divider-color: var(--color-surface-container-high);
+
+  .label-row {
+    padding-bottom: 24px;
+  }
+
+  .cred-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    border-bottom: 1px solid var(--color-outline-variant);
+
+    .label {
+      display: inline-block;
+      width: 155px;
+      flex: 0 0 155px;
+      padding: 6px 0;
+      color: var(--color-outline);
+    }
+
+    .value {
+      padding: 6px 0;
+      color: var(--color-on-surface-variant);
+      word-break: break-all;
+    }
+  }
+
+  .credentials {
+    margin-bottom: 24px;
+  }
+
+  .credentials-and-code {
+    overflow: hidden;
+    transition: max-height 1s ease;
+    .code-container{
+      transition: height 1s ease;
+      margin-bottom: 16px;
+    }
+
+    &.small-popup {
+      max-height: 0;
+    }
+    .config-nav {
+      height: 36px;
+      margin-top: 24px;
+      display: flex;
+      border-bottom: 1px solid var(--color-outline-variant);
+      justify-content: center;
+    }
+  }
+
+  .instructions {
+    padding: 16px 0 12px;
+    color:var(--color-on-surface-variant);
+  }
+
+  .code {
+    position: relative;
+    line-height: 1.5;
+    padding: 16px 16px;
+    margin-bottom: 24px;
+    background-color: var(--color-surface-container-low);
+    border-radius: 4px;
+    border: 1px solid var(--color-outline-variant);
+
+    &:hover {
+      sm-copy-clipboard {
+        visibility: visible;
+      }
+    }
+
+    .content {
+      width: 100%;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .operation {
+      color: var(--color-warning);
+    }
+
+    .string {
+      color: var(--color-primary);
+    }
+
+    .variable {
+      color: var(--color-tertiary);
+    }
+
+    .comment {
+      color: var(--color-on-surface-variant);
+    }
+
+    sm-copy-clipboard {
+      visibility: hidden;
+      position: absolute;
+      right: 10px;
+      top: 10px;
+    }
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 32px;
+    margin-top: auto;
+
+    button[disabled] {
+      pointer-events: none;
+    }
+  }
+}
+
+form {
+  display: flex;
+}
+
+.label-input {
+  display: inline-block;
+  width: 452px;
+  margin-right: 12px;
+}
+
+.label-button {
+  height: 36px;
+  flex: 1 0 152px;
+}
+

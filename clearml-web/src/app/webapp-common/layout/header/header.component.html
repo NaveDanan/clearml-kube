@@ -1,0 +1,112 @@
+<div class="header-container" [class.login]="isLogin()" [class.wider-tabs]="widerTabs()">
+  <div class="d-flex overflow-hidden">
+    <sm-breadcrumbs
+      class="spacer"
+      [class.flex-grow-1]="!userFocus()"
+      [class.user-focus]="userFocus()"
+      [class.share-view]="isShareMode()"
+      [activeWorkspace]="activeWorkspace()">
+    </sm-breadcrumbs>
+    @if (userFocus()) {
+      <sm-show-only-user-work class="ms-3"></sm-show-only-user-work>
+    }
+  </div>
+
+  @if (hideSideNav()) {
+    <div class="logo-full middle">
+      <div class="logo-full">
+        <img alt="logo" [priority]="true"
+             [ngSrc]="darkTheme() ? environment().branding.logo : environment().branding.logo.replace('-white', '')"
+             width="124" height="42">
+      </div>
+    </div>
+  }
+  @if (!isLogin() && !hideSideNav()) {
+    <sm-header-navbar-tabs></sm-header-navbar-tabs>
+  }
+
+  @if (isLogin()) {
+    <div class="spacer"></div>
+  }
+
+  @if (!hideMenus()) {
+    <div class="right-buttons" data-id="rightSideHeaderpanel">
+      @if (!isShareMode()) {
+                <button class="me-2" mat-icon-button (click)="openGlobalSearch()" smTooltip="Search all [ctrl + k]">
+                    <mat-icon fontSet="al" fontIcon="al-ico-search" data-id="search Icon" ></mat-icon>
+                  </button>
+      }
+      @if (showAutoRefresh()) {
+        <sm-refresh-button (setAutoRefresh)="toggleAutoRefresh($event)" class="refresh-button"></sm-refresh-button>
+      }
+      <button mat-icon-button #trigger="matMenuTrigger" class="resources-trigger" [class.menu-opened]="trigger.menuOpen" [matMenuTriggerFor]="resourcesMenu">
+        <mat-icon fontSet="al" fontIcon="al-ico-help-outlined" data-id="help Icon"></mat-icon>
+      </button>
+      <span class="pointer menu-trigger position-relative" data-id="Avatar" [matMenuTriggerFor]="profileMenu">
+        @if (user().avatar; as avatar) {
+          <img alt="avatar" class="avatar" [src]="avatar">
+        } @else {
+          <div class="user-icon">
+            <i class="al-icon al-ico-account sm-md"></i>
+          </div>
+        }
+        @if (userNotificationPath() || invitesPending()?.length) {
+          <div class="user-notification"></div>
+        }
+      </span>
+      <mat-menu #profileMenu="matMenu" class="user-menu">
+        <button mat-menu-item [routerLink]="'settings/' + userNotificationPath()" data-id="Settings Button">
+          <mat-icon fontSet="al" [fontIcon]="userNotificationPath() ? 'al-ico-settings-alert' : 'al-ico-settings'">
+            <span class="path1"></span><span class="path2"></span>
+          </mat-icon>
+          <span>Settings</span>
+        </button>
+        @if (!forcedTheme()) {
+          <button mat-menu-item (click)="openAppearance($event)" data-id="Theme Options">
+            <mat-icon fontSet="al" fontIcon="al-ico-palette"></mat-icon>
+            <span>Appearance</span>
+          </button>
+        }
+        <sm-header-user-menu-actions></sm-header-user-menu-actions>
+        <hr/>
+        <button mat-menu-item (click)="logout()" data-id="Logout">
+          <mat-icon fontSet="al" fontIcon="al-ico-logout"></mat-icon>
+          Logout
+        </button>
+      </mat-menu>
+      <mat-menu #resourcesMenu="matMenu" class="user-menu">
+        <button mat-menu-item (click)="openWelcome($event)" data-id="Python Package setup Option">
+          <mat-icon fontSet="al" fontIcon="al-ico-code-file">Code</mat-icon>
+          <span>ClearML Python Package setup</span>
+        </button>
+        @if (environment().platformYoutubeChannel) {
+          <a mat-menu-item [href]="environment().platformYoutubeChannel" target="_blank" data-id="Youtube Option">
+            <mat-icon fontSet="al" fontIcon="al-ico-youtube">Youtube</mat-icon>
+            <span>ClearML on Youtube</span>
+          </a>
+        }
+        <a mat-menu-item [href]="environment().docsLink" target="_blank" data-id="Online Documentation Option">
+          <mat-icon fontSet="al" fontIcon="al-ico-documentation">Docs</mat-icon>
+          <span>Online Documentation</span>
+        </a>
+        @if (tipsService.hasTips()) {
+          <button mat-menu-item (click)="tipsService.showTipsModal(null, true)" data-id="Pro Tips Option">
+            <mat-icon fontSet="al" fontIcon="al-ico-tips">Tips</mat-icon>
+            <span>Pro Tips</span>
+          </button>
+        }
+        @if (isAdmin() && !environment().communityServer && changesService.hasChanges()) {
+          <button mat-menu-item (click)="changesService.showChangesModal()" data-id="Pro Tips Option">
+            <mat-icon fontSet="al" fontIcon="al-ico-bullhorn">Notifications</mat-icon>
+            <span>Version Notifications</span>
+          </button>
+        }
+        <a mat-menu-item [href]="'mailto:' + environment().supportEmail" data-id="Contact Us">
+          <mat-icon fontSet="al" fontIcon="al-ico-email"></mat-icon>
+          <span>Contact Us</span>
+        </a>
+      </mat-menu>
+    </div>
+  }
+</div>
+<ng-content></ng-content>

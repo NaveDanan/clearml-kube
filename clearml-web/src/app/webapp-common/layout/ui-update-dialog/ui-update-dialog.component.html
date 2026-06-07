@@ -1,0 +1,9 @@
+<sm-dialog-template
+  subHeader="Click the reload button below to reload the web page"
+  [closeOnX]="true"
+  header="New version available"
+></sm-dialog-template>
+<div mat-dialog-actions>
+  <button mat-stroked-button mat-dialog-close >CANCEL</button>
+  <button mat-flat-button (click)="reload()">RELOAD</button>
+</div>

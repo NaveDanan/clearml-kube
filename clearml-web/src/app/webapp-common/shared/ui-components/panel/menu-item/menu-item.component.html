@@ -1,0 +1,24 @@
+<div mat-menu-item [disabled]="disabled()" (click)="buttonClickedEvent($event)">
+  <div class="item-container"  >
+    @if (selectable()) {
+      <mat-checkbox smClickStopPropagation
+                    [checked]="checked()"
+                    (change)="itemClickedEvent()">
+      </mat-checkbox>
+    }
+    @if (enableIcon() && iconClass()) {
+      <mat-icon fontSet="al" [fontIcon]="iconClass()"></mat-icon>
+    }
+    <div class="item-label" [class.placeForIcon]="enableIcon()">
+      <div class="ellipsis" smShowTooltipIfEllipsis [smTooltip]="enableTooltip()? (itemTooltip() || itemLabel()): ''" data-id="sortByOption">{{ itemLabel() }}</div>
+      @if (sortOrder()) {
+        <i class="ms-2 al-icon sm-md" [class]="sortOrder() === TABLE_SORT_ORDER.ASC ? 'al-ico-sort-asc' : 'al-ico-sort-desc' " data-id="orderTypeIcon"></i>
+      }
+    </div>
+    @if (removable()) {
+      <button mat-icon-button (click)="removeItem($event)" class="remove-button sm ms-auto">
+        <mat-icon data-id="Delete Icon" fontSet="al" class="al-ico-trash"></mat-icon>
+      </button>
+    }
+  </div>
+</div>

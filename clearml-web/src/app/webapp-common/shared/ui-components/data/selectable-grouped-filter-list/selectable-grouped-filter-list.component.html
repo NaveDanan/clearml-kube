@@ -1,0 +1,29 @@
+<div class="d-flex justify-content-between mb-2">
+  <span class="font-weight-bold">{{ titleLabel() }}</span>
+</div>
+<sm-search
+  [value]="searchTerm()"
+  [minimumChars]="0"
+  [debounceTime]="0"
+  class="underline-search"
+  [placeholder]="placeHolder()"
+  (valueChanged)="onSearchTermChanged($event)"
+></sm-search>
+<div class="toggle-all-text">
+  @if (searchTerm()) {
+    <span (click)="toggleHideMatching()">{{ allFilteredSelected() ? 'Hide matching' : 'Show matching' }}</span>
+  } @else {
+  <span (click)="toggleHideAll()">{{ allSelected() ? 'Hide all' : 'Show all' }}</span>
+  }
+</div>
+<div class="toggle-all-text">
+</div>
+<sm-grouped-selectable-list
+  [filteredList]="filteredList()"
+  [fullList]="listNested()"
+  [searchTerm]="searchTerm()"
+  [checkedList]="checkedList()"
+  (itemSelect)="itemSelect.emit($event)"
+  (itemCheck)="toggleHide($event)"
+  (groupChecked)="toggleHideGroup($event)"
+></sm-grouped-selectable-list>

@@ -1,0 +1,55 @@
+<div class="logo">
+  <img
+    [ngSrc]="darkTheme() ? environment().branding.logoSmall : environment().branding.logoSmall.replace('-white', '')"
+    [priority]="true" alt="clearML" class="logo-a" width="64" height="64">
+</div>
+
+@if (currentUser()) {
+  <div #container class="items-container" [class.on-scrolling]="scrolling()">
+    <a class="item al-ico-queues"
+       routerLink="/workers-and-queues"
+       routerLinkActive="active"
+       smTooltip="ORCHESTRATION"
+    ></a>
+    <a class="item al-ico-model-endpoints"
+       [routerLink]="'/endpoints/active'"
+       [class.active]="baseRouteConfig() ==='endpoints'"
+       smTooltip="MODEL ENDPOINTS"
+       data-id="modelEndpointsIcon"
+    ></a>
+    <a class="item al-ico-datasets"
+       [routerLink]="defaultNestedModeForFeature()?.['datasets']? '/datasets/simple/*/projects' : '/datasets'"
+       [class.active]="baseRouteConfig() ==='datasets'"
+       smTooltip="DATASETS"
+    ></a>
+    <a class="item al-ico-projects"
+       smTooltip="PROJECTS"
+       routerLink="/dashboard"
+       [class.active]="['dashboard','reports', 'projects'].includes(baseRouteConfig())"
+    ></a>
+    <a class="item al-ico-pipelines"
+       [routerLink]="defaultNestedModeForFeature()?.['pipelines']? '/pipelines/*/projects' : '/pipelines'"
+       [class.active]="baseRouteConfig() ==='pipelines'"
+       smTooltip="PIPELINES"
+    ></a>
+    @if (!hideEnterpriseFeatures()) {
+      <a class="item al-ico-enterprise-rocket lm"
+         routerLink="enterprise"
+         routerLinkActive="active"
+         smTooltip="EXPLORE CLEARML ENTERPRISE"
+      ></a>
+    }
+  </div>
+}
+@if (currentUser()) {
+  <div class="account">
+    @if (environment().slackLink) {
+      <a class="item" [href]="environment().slackLink"
+         target="_blank"
+         smTooltip="Community support on Slack"
+      >
+        <i class="i-slack-mark-color"></i>
+      </a>
+    }
+  </div>
+}

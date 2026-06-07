@@ -1,0 +1,21 @@
+@use "variables";
+
+$top-bar-height: variables.$nav-bar-height;
+
+
+// Projects
+$projects-header-padding: 24px;
+$projects-header-height: 2 * $projects-header-padding + 32px;
+
+//Project
+$project-header-height: 56px;
+$project-footer-height: 100px; // main footer container
+
+$project-info-progress-height: 46px;
+
+//Experiment Info
+$experiment-info-header-height: 40px;
+$experiment-info-tabs-height: 65px;
+
+// Workers & Queues
+$graph-height: 364px;

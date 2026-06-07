@@ -1,0 +1,19 @@
+
+sm-editable-section.in-edit{
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+
+.mat-mdc-form-field{ margin-right: 12px}
+.outside-error {
+  position: absolute;
+  top: 46px;
+  left: -10px;
+  font-size: 11px;
+  color: var(--color-error);
+}
+
+.remove-row {
+  margin-bottom: 22px;
+}

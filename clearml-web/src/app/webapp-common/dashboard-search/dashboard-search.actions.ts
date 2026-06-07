@@ -1,0 +1,182 @@
+import {createAction, props} from '@ngrx/store';
+import {SEARCH_PREFIX} from './dashboard-search.consts';
+import {Project} from '~/business-logic/model/projects/project';
+import {Task} from '~/business-logic/model/tasks/task';
+import {Model} from '~/business-logic/model/models/model';
+import {ActiveSearchLink} from '~/features/dashboard-search/dashboard-search.consts';
+import {DASHBOARD_PREFIX} from '@common/dashboard/common-dashboard.const';
+import {IReport} from '@common/reports/reports.consts';
+import {TableFilter} from '@common/shared/utils/tableParamEncode';
+import {EndpointStats} from '~/business-logic/model/serving/endpointStats';
+import {ContainerInfo} from '~/business-logic/model/serving/containerInfo';
+
+
+export const searchSetTerm = createAction(
+  SEARCH_PREFIX + 'SET_TERM',
+  props<{ query: string; regExp?: boolean; force?: boolean; advanced?: boolean }>()
+);
+
+export const searchStart = createAction(
+  SEARCH_PREFIX + 'SEARCH_START',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const searchTableFilterChanged = createAction(
+  SEARCH_PREFIX + '[table filters changed]',
+  props<{ filter: TableFilter }>()
+);
+export const searchSetTableFilters = createAction(
+  SEARCH_PREFIX + ' [set table filters]',
+  props<{ filters: TableFilter[], activeLink: string }>()
+);
+
+export const searchClear = createAction(SEARCH_PREFIX + 'SEARCH_CLEAR');
+export const searchActivated = createAction(SEARCH_PREFIX + 'ACTIVATE');
+export const searchDeactivate = createAction(SEARCH_PREFIX + 'DEACTIVATE');
+export const searchLoadMoreDeactivate = createAction(SEARCH_PREFIX + 'LOAD_MORE_DEACTIVATE');
+
+export const searchProjects = createAction(
+  SEARCH_PREFIX + 'SEARCH_PROJECTS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const searchPipelines = createAction(
+  SEARCH_PREFIX + 'SEARCH_PIPELINES',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const searchReports = createAction(
+  SEARCH_PREFIX + 'SEARCH_REPORTS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const searchEndpoints = createAction(
+  SEARCH_PREFIX + 'SEARCH_ENDPOINTS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const getEndpoints = createAction(
+  SEARCH_PREFIX + 'GET_ENDPOINTS'
+);
+
+
+export const setReportsResults = createAction(
+  `${SEARCH_PREFIX}Set Reports Results`,
+  props<{ reports: IReport[]; page: number }>()
+);
+
+export const setEndpointsResults = createAction(
+  `${SEARCH_PREFIX}Set Endpoints Results`,
+  props<{ endpoints: EndpointStats[] }>()
+);
+
+export const setLoadingEndpointsResults = createAction(
+  `${SEARCH_PREFIX}Set Loading Endpoints Results`,
+  props<{ instances: ContainerInfo[] }>()
+);
+
+export const searchOpenDatasets = createAction(
+  SEARCH_PREFIX + 'SEARCH_OPEN_DATASETS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const loadMoreOpenDatasets = createAction(
+  SEARCH_PREFIX + 'LOAD_MORE_OPEN_DATASETS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const loadMoreOpenDatasetsVersions = createAction(
+  SEARCH_PREFIX + 'LOAD_MORE_OPEN_DATASETS_VERSIONS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const loadMoreModels = createAction(
+  SEARCH_PREFIX + 'LOAD_MORE_OPEN_DATASETS_MODELS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const loadMoreProjects = createAction(
+  SEARCH_PREFIX + 'LOAD_MORE_PROJECTS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const loadMoreExperiments = createAction(
+  SEARCH_PREFIX + 'LOAD_MORE_EXPERIMENTS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const loadMorePipelines = createAction(
+  SEARCH_PREFIX + 'LOAD_MORE_PIPELINES',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const loadMorePipelineRuns = createAction(
+  SEARCH_PREFIX + 'LOAD_MORE_PIPELINES_RUNS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const loadMoreReports = createAction(
+  SEARCH_PREFIX + 'LOAD_MORE_REPORTS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+
+export const setPipelinesResults = createAction(
+  `${SEARCH_PREFIX}Set Pipelines Results`,
+  props<{ pipelines: Project[], page: number }>()
+);
+
+export const setOpenDatasetsResults = createAction(
+  `${SEARCH_PREFIX}Set open datasets Results`,
+  props<{ datasets: Project[]; page: number }>()
+);
+
+export const setProjectsResults = createAction(SEARCH_PREFIX + 'SET_PROJECTS',
+  props<{ projects: Project[]; page: number }>()
+);
+
+export const searchExperiments = createAction(
+  SEARCH_PREFIX + 'SEARCH_EXPERIMENTS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const setExperimentsResults = createAction(
+  SEARCH_PREFIX + 'SET_EXPERIMENTS',
+  props<{ tasks: Task[]; page: number }>()
+);
+
+export const searchModels = createAction(
+  SEARCH_PREFIX + 'SEARCH_MODELS',
+  props<{ query: string; regExp?: boolean }>()
+);
+
+export const setModelsResults = createAction(
+  SEARCH_PREFIX + 'SET_MODELS',
+  props<{ models: Model[]; page: number }>()
+);
+
+export const setResultsCount = createAction(
+  SEARCH_PREFIX + 'SET_COUNTS',
+  props<{ counts: Record<ActiveSearchLink, number>, errors: Record<ActiveSearchLink, string> }>()
+);
+export const getCurrentPageResults = createAction(
+  DASHBOARD_PREFIX + '[get current page results]',
+  props<{ activeLink: ActiveSearchLink }>()
+);
+
+export const currentPageLoadMoreResults = createAction(
+  DASHBOARD_PREFIX + '[current page load more results]',
+  props<{ activeLink: ActiveSearchLink }>()
+);
+export const getResultsCount = createAction(
+  DASHBOARD_PREFIX + '[get results count]',
+  props<{ query: string; regExp?: boolean; force?: boolean }>());
+
+export const clearSearchResults = createAction(DASHBOARD_PREFIX + '[clear search results]');
+
+export const clearSearchFilters = createAction(DASHBOARD_PREFIX + '[clear search filters]');
+export const getTagsOptionsForSearch = createAction(DASHBOARD_PREFIX + '[get tags options for search]');
+export const getProjectsTagsOptionsForSearch = createAction(DASHBOARD_PREFIX + '[get projects tags options for search]');
+export const setSearchProjectsTags = createAction(
+  DASHBOARD_PREFIX + '[set tags options for search]',
+  props<{ tags: string[] }>());

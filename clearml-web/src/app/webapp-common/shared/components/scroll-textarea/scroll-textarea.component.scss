@@ -1,0 +1,67 @@
+@use "variables";
+
+:host {
+  .diff-container {
+    position: relative;
+    background-color: var(--color-surface-container-low);
+    padding: 16px 0 0 16px;
+    border-radius: 4px;
+
+  .floating-buttons {
+    flex-direction: row-reverse;
+    position: absolute;
+    z-index: 100;
+    top: 0;
+    right: 10px;
+    display: none;
+    gap: 12px;
+    padding: 12px;
+    background-color: var(--color-surface-container-low);
+    border-radius: 4px;
+
+  }
+
+    &:hover {
+      .floating-buttons {
+        display: flex;
+      }
+    }
+
+    .viewport {
+      height: 100%;
+      min-height: 250px;
+      color: var(--color-on-surface);
+      &.disabled {
+        color: var(--color-on-surface-variant);
+      }
+      overflow-x: scroll;
+      font-family: variables.$font-family-monospace;
+
+      .line {
+        height: 20px;
+        font-size: 12px;
+        white-space: pre;
+        ::selection {
+          background-color: var(--color-tertiary-container);
+          color: var(--color-on-tertiary-container);
+        }
+        .found {
+          &::selection {
+            color: var(--color-tertiary-container);
+            background-color: var(--color-on-tertiary-container);
+          }
+          background-color: var(--color-tertiary-container);
+          border-radius: 4px;
+          padding: 0 2px;
+          &.current {
+            background-color: var(--color-warning);
+            &::selection {
+              background-color: var(--color-surface-container-lowest);
+              color: var(--color-warning)
+            }
+          }
+        }
+      }
+    }
+  }
+}

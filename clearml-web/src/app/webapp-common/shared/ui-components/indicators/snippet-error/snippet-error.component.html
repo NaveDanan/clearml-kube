@@ -1,0 +1,36 @@
+<div class="frame text-center">
+  <div class="labeled-icon" (ngxResize)="onResize($event)">
+    <i
+      class="error-icon al-icon al-color sm"
+      [style.font-size.px]="size()"
+      [style.width.px]="size()"
+      [style.height.px]="size()"
+      [class.al-ico-no-source]="missingSource()"
+      [class.al-ico-alert-outline]="!missingSource()"
+    ></i>
+    @if (heightAboveLimit()) {
+      <div
+        class="label"
+        [class.mt-2]="missingSource()">
+        {{missingSource() ? 'Source not available' : 'Unable to load image'}}
+      </div>
+    }
+    <div class="file-path w-100" [smTooltip]="baseFile()" smShowTooltipIfEllipsis>{{baseFile()}}</div>
+  </div>
+  <div class="d-flex justify-content-between buttons-footer align-items-center">
+    <div class="clickable-icon d-flex align-items-center justify-content-center pointer"
+      [class.disabled]="missingSource()"
+      ngxClipboard
+      smTooltip="Copy Image URL"
+      [cbContent]="copyContent()"
+      (cbOnSuccess)="copyToClipboardSuccess(true)">
+      <i class="al-icon sm-md al-ico-copy-to-clipboard" data-id="copyToClipBoardButton"></i>
+    </div>
+    <div class="clickable-icon d-flex align-items-center justify-content-center pointer"
+      smTooltip="Open Image"
+      (click)="openImageClicked.emit()"
+      >
+      <i class="al-icon sm-md al-ico-export"></i>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,206 @@
+@use '@angular/material' as mat;
+
+
+:root {
+  .mat-mdc-button-base {
+    @include mat.button-overrides((
+      filled-container-height: 36px,
+      outlined-container-height: 36px,
+      text-container-height: 36px,
+    ));
+
+    @include mat.icon-button-overrides((
+      state-layer-size: 36px
+    ));
+    --mat-list-active-indicator-shape: none;
+
+    &.active {
+      .mat-mdc-button-persistent-ripple::before {
+        opacity: 0.2;
+      }
+    }
+    &.sm {
+      @include mat.button-overrides((
+        filled-container-height: 24px,
+        filled-horizontal-padding: 8px,
+        outlined-container-height: 24px,
+        outlined-horizontal-padding: 8px,
+        text-container-height: 24px,
+      ));
+    }
+    &.xs {
+      @include mat.button-overrides((
+        filled-container-height: 20px,
+        filled-horizontal-padding: 4px,
+        outlined-container-height: 20px,
+        outlined-horizontal-padding: 4px,
+        text-container-height: 20px,
+      ));
+    }
+  }
+
+  .mat-mdc-unelevated-button {
+
+    .mat-mdc-button-touch-target {
+      height: var(--mat-button-filled-container-height);
+    }
+
+    .mat-icon.al-icon {
+      height: 16px;
+      width: 16px;
+      font-size: 16px;
+      &:before {
+        line-height: 16px;
+      }
+    }
+
+    &.icon-only {
+      --mat-button-filled-horizontal-padding: 0;
+      min-width: 36px;
+
+      & > .mat-icon {
+        --mat-button-filled-icon-offset: 0;
+        --mat-button-filled-icon-spacing: 0;
+      }
+    }
+  }
+
+  .mat-mdc-outlined-button {
+    --mat-button-outlined-label-text-size: 12px;
+    .mat-icon.al-icon {
+      height: 16px;
+      width: 16px;
+      font-size: 16px;
+      &:before {
+        line-height: 16px;
+      }
+    }
+
+    &.icon-only {
+      --mat-button-outlined-horizontal-padding: 0;
+      min-width: 36px;
+
+      & > .mat-icon {
+        --mat-button-outlined-icon-offset: 0;
+        --mat-button-outlined-icon-spacing: 0;
+      }
+    }
+    &.sm {
+      --mat-button-outlined-icon-offset: 0;
+    }
+  }
+
+  .mat-button-toggle-button {
+    .mat-icon.al-icon {
+      color: var(--color-primary);
+      height: 20px;
+      width: 20px;
+      &:before {
+        line-height: 20px;
+      }
+    }
+  }
+
+  .mat-button-toggle-appearance-standard {
+    --mat-button-toggle-label-text-size: 12px;
+  }
+
+  // icon + text
+  .mat-mdc-button {
+    .mat-icon.al-icon {
+      height: 16px;
+      width: 16px;
+      font-size: 16px;
+      line-height: 16px;
+      &:before {
+        line-height: inherit;
+      }
+    }
+    // icon
+    &.icon-only {
+      --mat-button-text-with-icon-horizontal-padding: 0;
+      min-width: 36px;
+
+      & > .mat-icon {
+        --mat-button-text-icon-offset: 0;
+        --mat-button-text-icon-spacing: 0;
+        height: 20px;
+        width: 20px;
+        line-height: 20px;
+        font-size: 20px;
+      }
+      &.sm {
+        --mat-button-text-container-height: 24px;
+        min-width: 24px;
+        & > .mat-icon {
+          height: 16px;
+          width: 16px;
+          line-height: 16px;
+          font-size: 16px;
+        }
+      }
+    }
+  }
+
+  .mdc-icon-button {
+    --mat-icon-button-icon-size: 20px;
+    .mat-mdc-button-touch-target {
+      height: var(--mat-icon-button-state-layer-size);
+      width: var(--mat-icon-button-state-layer-size);
+    }
+    // add class for small buttons size
+    &.sm {
+      --mat-icon-button-icon-size: 16px;
+      --mat-icon-button-state-layer-size: 24px;
+      .mat-icon {
+        height: 16px;
+        width: 16px;
+        line-height: 16px;
+        font-size: 16px;
+        &:before {
+          line-height: inherit;
+        }
+      }
+    }
+    &.xs {
+      --mat-icon-button-icon-size: 14px;
+      --mat-icon-button-state-layer-size: 16px;
+      .mat-icon {
+        height: 14px;
+        width: 14px;
+        line-height: 14px;
+        font-size: 14px;
+        &:before {
+          line-height: inherit;
+        }
+      }
+    }
+
+    .outline {
+      min-width: 36px;
+      height: 36px;
+      border: 1px solid var(--color-outline);
+      border-radius: 18px;
+      --mat-icon-button-state-layer-size: 34px;
+    }
+  }
+}
+
+
+@mixin buttons($theme) {
+  .mat-mdc-button-base {
+    --mat-icon-button-icon-color: #{mat.get-theme-color($theme, primary)};
+  }
+
+  .secondary-button {
+    @include mat.button-color($theme, $color-variant: secondary);
+  }
+
+  .tertiary-button {
+    @include mat.button-color($theme, $color-variant: tertiary);
+  }
+
+  .delete-button {
+    @include mat.button-color($theme, $color-variant: error);
+  }
+}

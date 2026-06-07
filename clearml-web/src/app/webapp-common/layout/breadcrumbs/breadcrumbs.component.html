@@ -1,0 +1,122 @@
+<div class="overflow-container" #container>
+  @if (isCommunity() && activeWorkspace && !workspaceNeutral()) {
+    <span class="workspace">{{activeWorkspace.name}}</span>
+    <i class="al-icon al-ico-slash"></i>
+  }
+
+  @for (breadcrumbGroup of breadcrumbs() ; track $index; let lastGroup = $last; let firstGroup = $first) {
+    @if (!(shouldCollapse && breadcrumbGroup?.length > 0 && breadcrumbGroup?.[0]?.collapsable)) {
+      @for (breadcrumb of breadcrumbGroup; track (breadcrumb.name + breadcrumb.url); let lastCrumb = $last; let firstCrumb = $first) {
+        <span class="sub-projects-breadcrumbs" [class.last]="lastCrumb && lastGroup">
+          @if (breadcrumb.hidden) {
+            <i class="al-icon al-ico-ghost sm me-1 align-ghost"></i>
+          }
+          @if (breadcrumb.url && !(lastCrumb && lastGroup)) {
+            <a class="crumb url"
+               [class.first]="firstCrumb && firstGroup"
+               [routerLink]="breadcrumb.url"
+               [queryParams]="breadcrumb.urlParams"
+               [queryParamsHandling]="breadcrumb.queryParamsHandling"
+            >
+            {{breadcrumb.name}}</a>
+            @if (breadcrumb.badge) {
+              <span class="badge" [smTooltip]="breadcrumb.badgeTooltip" customClass="break-line" [matTooltipShowDelay]="300">{{breadcrumb.badge}}</span>
+            }
+          } @else {
+            <div #crumb class="crumb" [class.last]="lastGroup && lastCrumb" [class.first]="firstGroup && firstCrumb">
+              @if (lastGroup && lastCrumb && breadcrumb.linkLast){
+                <a class="ellipsis name" [smTooltip]="breadcrumb.name" smShowTooltipIfEllipsis [routerLink]="breadcrumb.linkLast && breadcrumb.url"
+                   [queryParamsHandling]="breadcrumb.queryParamsHandling"
+                >{{breadcrumb.name}}{{breadcrumb.example ? ' (example)' : ''}}</a>
+              } @else {
+                <div class="ellipsis name" [smTooltip]="breadcrumb.name" smShowTooltipIfEllipsis
+                >{{breadcrumb.name}}{{breadcrumb.example ? ' (example)' : ''}}</div>
+              }
+
+              @if (breadcrumb.id) {
+                <sm-id-badge [short]="true" [id]="breadcrumb.id" (copied)="copyToClipboard()"></sm-id-badge>
+              }
+              @if (breadcrumb.tags?.length) {
+                <sm-tag-list [tags]="breadcrumb.tags"></sm-tag-list>
+              }
+              @if (breadcrumb.badge) {
+                <span class="badge" [smTooltip]="breadcrumb.badgeTooltip" customClass="break-line" [matTooltipShowDelay]="300"
+                      [matBadge]="breadcrumb.badgeWarn ? 1 : null" matBadgeSize="small" matBadgePosition="below after"
+                >{{breadcrumb.badge}}</span>
+              }
+            </div>
+          }
+        </span>
+        @if (!(lastCrumb && lastGroup)) {
+          <i class="al-icon al-ico-slash"></i>
+        }
+      }
+    } @else {
+      @if (breadcrumbGroup?.length > 0) {
+        <i [matMenuTriggerFor]="subProjectsMenu"
+          class="menu-trigger-icon al-icon msm pointer"
+          [class.al-ico-d-menu-down]="!subProjectsMenuIsOpen"
+          [class.al-ico-d-menu-up]="subProjectsMenuIsOpen" (menuOpened)="subProjectsMenuOpened(true)"
+        (menuClosed)="subProjectsMenuOpened(false)"></i>
+      }
+      @if (breadcrumbGroup?.length>0) {
+        <ng-container class="d-flex">
+          <i class="al-icon al-ico-slash"></i>
+        </ng-container>
+      }
+      <mat-menu #subProjectsMenu="matMenu" >
+        @for (breadcrumb of breadcrumbGroup; track breadcrumb) {
+          <span mat-menu-item
+            class="sub-project-menu-item"
+            [smTooltip]="breadcrumb.name"
+            smShowTooltipIfEllipsis
+            [routerLink]="breadcrumb.url!=='projects/*/projects'? breadcrumb.url: 'projects/*'"
+            >
+            @if (breadcrumb.hidden) {
+              <mat-icon fontSet="al" fontIcon="al-ico-ghost"></mat-icon>
+            }
+            {{breadcrumb.name}}
+            </span>
+          }
+        </mat-menu>
+      }
+    }
+    <div>
+      <div
+        #menuTrigger="matMenuTrigger"
+        [matMenuTriggerFor]="shareModal"
+        (menuOpened)="openShareModal()"
+        >
+        @if (showShareButton && !isCommunity()) {
+          <mat-icon fontSet="al" fontIcon="al-ico-shared-item" class="share pointer" smTooltip="Share"></mat-icon>
+        }
+      </div>
+      <mat-menu #shareModal="matMenu">
+        <div class="share-menu-container" smClickStopPropagation>
+          <div class="d-flex align-items-center justify-content-between top">
+            <div class="share-title">SHARE VIEW</div>
+            <button mat-icon-button (click)="menuTrigger.closeMenu()" smClickStopPropagation>
+              <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+            </button>
+          </div>
+          <div class="copy-title">Copy the following URL to share this view with others</div>
+
+          <div class="share-link-container" [class.hidden]="!(currentUrl)">
+            <div class="ellipsis share-link">
+            {{currentUrl}}</div>
+            <div ngxClipboard
+              smClickStopPropagation
+              [cbContent]="currentUrl"
+              class="copy pointer"
+              (cbOnSuccess)="copyToClipboardSuccess(); menuTrigger.closeMenu()">
+              <mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>
+            </div>
+          </div>
+        </div>
+      </mat-menu>
+    </div>
+    @if (showArchive()) {
+      <div data-id="Archive Label" class="archive"><mat-icon fontSet="al" fontIcon="al-ico-archive" class="xs me-1"></mat-icon>Archive
+    </div>
+  }
+</div>

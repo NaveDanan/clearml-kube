@@ -1,0 +1,94 @@
+<div #tableContainer class="queues-container" [class.short]="!short()">
+  <sm-queues-menu-extended
+    [menuOpen]="menuOpen()"
+    [menuPosition]="menuPosition()"
+    [selectedQueue]="contextQueue"
+    (deleteQueue)="deleteQueue.emit($event)"
+    (renameQueue)="renameQueue.emit($event)"
+    (clearQueue)="clearQueue.emit($event)"
+    (menuOpened)="menuOpen.set(true)"
+    (menuClosed)="menuOpen.set(false)"
+  ></sm-queues-menu-extended>
+  <sm-table
+    [tableData]="queues()"
+    [columns]="cols()"
+    [rowsNumber]="100"
+    [rowHeight]="40"
+    [reorderableColumns]="false"
+    [resizableColumns]="false"
+    [scrollable]="true"
+    [virtualScroll]="true"
+    [columnResizeMode]="'fit'"
+    [selection]="selectedQueue()"
+    [contextMenuOpen]="menuOpen()"
+    [activeContextRow]="contextQueue"
+    (rowSelectionChanged)="queueSelected.emit($event.data?.id)"
+    (rowRightClick)="openContextMenu($event)"
+  >
+    <ng-template let-col pTemplate="sort-filter">
+      <sm-table-filter-sort
+        [class.first]="col.id === QUEUES_TABLE_COL_FIELDS.NAME"
+        (sortOrderChanged)="onSortChanged($event, col.id)"
+        [column]="col"
+        [sortOrder]="tableSortFieldsObject()[col.id]">
+      </sm-table-filter-sort>
+    </ng-template>
+    <ng-template let-col let-queue="rowData" pTemplate="body">
+      @switch (col.id) {
+        @case (QUEUES_TABLE_COL_FIELDS.NAME) {
+          <div class="d-flex align-items-center first id-cell">
+            <div class="queue-name" [smTooltip]="queue?.caption" smShowTooltipIfEllipsis>{{queue?.caption}}</div>
+            <div class="copy-btn">
+              <sm-menu iconClass="al-ico-copy-to-clipboard" [class.selected]="queue.id === selectedQueue()?.[0]?.id">
+                <button
+                  mat-menu-item
+                  smTooltip="Copy Queue ID"
+                  [matTooltipShowDelay]="500"
+                  ngxClipboard
+                  [cbContent]="queue?.id"
+                  (cbOnSuccess)="copySuccess.emit('ID')"
+                >
+                  <mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>
+                  ID
+                </button>
+                <button
+                  mat-menu-item
+                  smTooltip="Copy Queue Resource Name"
+                  [matTooltipShowDelay]="500"
+                  ngxClipboard
+                  [cbContent]="queue?.name"
+                  (cbOnSuccess)="copySuccess.emit('name')"
+                >
+                  <mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>
+                  Name
+                </button>
+              </sm-menu>
+            </div>
+          </div>
+        }
+        @case (QUEUES_TABLE_COL_FIELDS.TASK) {
+          <span class="ellipsis"  [smTooltip]="queue?.entries[0]?.task?.name" smShowTooltipIfEllipsis>{{queue?.entries[0]?.task?.name}}</span>
+          @if (!queue?.entries[0]?.task?.name) {
+            <span>&mdash;</span>
+          }
+        }
+        @case (QUEUES_TABLE_COL_FIELDS.LAST_UPDATED) {
+          <span class="ellipsis">{{queue?.last_update | timeAgo}}</span>
+          @if (!queue?.last_update) {
+            <span>&mdash;</span>
+          }
+        }
+        @case (QUEUES_TABLE_COL_FIELDS.IN_QUEUE) {
+          @if (queue?.entries_count === 0) {
+            <span>&mdash;</span>
+          } @else {
+            <span class="ellipsis">{{queue?.entries_count || ''}}</span>
+          }
+        }
+        @default {
+          <span class="ellipsis">{{getBodyData(queue, col)}}</span>
+        }
+      }
+    </ng-template>
+  </sm-table>
+</div>

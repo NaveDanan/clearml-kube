@@ -1,0 +1,65 @@
+<sm-dialog-template header="MOVE TO PROJECT" [iconClass]="'al-ico-move-to'">
+  <div class="message">
+    @if (reference) {
+      <b [smTooltip]="reference.length > 80 ? reference : undefined"> {{ reference.length > 80 ? (reference | slice:0:77) + '...' : reference }} </b>
+    } will be moved
+    @if (currentProjectInstance()) {
+      <span> from
+          <b [smTooltip]="currentProjectInstance().name.length > 80 ? data.currentProjects[0] : undefined">
+            {{ currentProjectInstance().name.length > 80 ? (currentProjectInstance().name | slice:0:77) + '...' : currentProjectInstance().name }}
+          </b>
+        </span>
+    } to the selected project.
+  </div>
+  <form (submit)="closeDialog()" class="light-theme" [formGroup]="moveProjectForm">
+    <div class="position-relative">
+      <sm-paginated-entity-selector
+        formControlName="project"
+        [data]="allProjects()"
+        label="Project"
+        placeHolder="Search for project path"
+        [isRequired]="true"
+        [embeddedErrors]="false"
+        [emptyNameValidator]="true"
+        [createNewSuffix]="!moveProjectForm.controls.project.errors && allProjects() !== null && moveProjectForm.controls.project.value && !(moveProjectForm.controls.project.value?.trim() | stringIncludedInArray: projectsNames())"
+        (getEntities)="searchChanged($event)"
+        (loadMore)="loadMore($event)"
+      ></sm-paginated-entity-selector>
+      @if (!moveProjectForm.controls.project.untouched && moveProjectForm.controls.project.errors || moveProjectForm.errors; as errors) {
+        <div class="extra-errors">
+          @if (errors?.required) {
+            <mat-error>Please provide a Project</mat-error>
+          }
+          @else if (errors?.emptyName) {
+            <mat-error>Name can't contain only spaces.</mat-error>
+          }
+          @else if (errors?.sameProject) {
+            <mat-error>
+              Can't move the {{data.type ?? 'item'}} to its current location
+            </mat-error>
+          }
+          @else if (errors?.exampleProject) {
+            <mat-error>
+              Please provide a different name as this project name is taken as an Example project
+            </mat-error>
+          }
+          @else if (errors?.[data.asyncValidator?.errorName]) {
+            <mat-error>
+              {{data.asyncValidator?.errorMessage}}
+            </mat-error>
+          }
+        </div>
+      }
+    </div>
+  </form>
+  <div class="buttons">
+    <button
+      mat-flat-button
+      [disabled]="moveProjectForm.invalid"
+      (click)="closeDialog()"
+      class="yes-button"
+      data-id="MoveButton"
+    >MOVE</button>
+    <button mat-stroked-button [mat-dialog-close]="null" data-id="CancelButton">CANCEL</button>
+  </div>
+</sm-dialog-template>

@@ -1,0 +1,15 @@
+<sm-dialog-template header="ABORT PIPELINE RUN{{experiments.length > 1 ? 's' : ''}}" [iconClass]="'al-ico-abort'">
+  @if (shouldBeAbortedTasks !== null) {
+    <div>
+      <div>This will abort the execution of {{experiments.length > 1 ? experiments.length : 'the '}}
+        @if (experiments.length === 1) {
+          <b>{{experiments[0]?.name ? '"' + experiments[0]?.name + '"' : ''}} </b>
+        } pipeline run{{experiments.length > 1 ? 's' : ''}}
+      </div>
+    </div>
+  }
+</sm-dialog-template>
+<div mat-dialog-actions>
+  <button mat-stroked-button mat-dialog-close data-id ="CancelButton">CANCEL</button>
+  <button mat-flat-button [mat-dialog-close]="{shouldBeAbortedTasks}" data-id ="AbortButton">ABORT</button>
+</div>

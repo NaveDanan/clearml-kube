@@ -1,0 +1,42 @@
+<div class="sm-card-list-layout" [class.in-empty-state]="!(!newReport.observed || reports() === null || reports()?.length > 0)">
+  <ng-content></ng-content>
+  @if (!newReport.observed || reports() === null || reports()?.length > 0) {
+    @for (report of reports(); track report.id + $index) {
+      <sm-report-card
+        class="report"
+        [hideMenu]="hideMenu()"
+        [report]="report"
+        [allTags]="allTags()"
+        [isArchive]="archive()"
+        (cardClicked)="reportSelected.emit($event)"
+        (nameChanged)="reportCardUpdateName.emit({name: $event, report})"
+        (moveTo)="moveTo.emit(report)"
+        (addTag)="addTag.emit({report: report, tag: $event})"
+        (share)="share.emit(report)"
+        (archive)="moveToArchive.emit({report: report, archive: $event})"
+        (delete)="delete.emit(report)"
+        (removeTag)="removeTag.emit({report: report, tag: $event})"
+        >
+      </sm-report-card>
+    }
+    @if (!noMoreReports() && reports()?.length > 0) {
+      <div class="load-more">
+        <sm-dots-load-more
+          [loading]="loading"
+          (loadMore)="loadMoreAction()"
+          class="mx-auto my-2"
+        ></sm-dots-load-more>
+      </div>
+    }
+  } @else {
+    <div class="empty-state">
+      <mat-icon fontSet="al" fontIcon="al-ico-reports" class="xxl"></mat-icon>
+      <h4 class="title">NO REPORTS TO SHOW</h4>
+      @if (!archive()) {
+        <button mat-flat-button (click)="newReport.emit(projectId())">
+          NEW REPORT
+        </button>
+      }
+    </div>
+  }
+</div>

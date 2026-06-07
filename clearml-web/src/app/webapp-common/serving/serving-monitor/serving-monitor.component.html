@@ -1,0 +1,46 @@
+<mat-drawer-container autosize>
+  <mat-drawer #drawer [mode]="'over'">
+    <button mat-icon-button class="close sm" (click)="drawer.close()" data-id="closeToggleGraph">
+      <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+    </button>
+    <div class="list-container">
+      <sm-selectable-grouped-filter-list
+        [list]="chartsList"
+        [checkedList]="selectedCharts()"
+        [searchTerm]="searchTerm()"
+        (itemSelect)="metricSelected($event)"
+        (selectedChanged)="selectedMetricListChanged($event)"
+        (searchTermChanged)="searchTermChanged($event)"
+      ></sm-selectable-grouped-filter-list>
+    </div>
+  </mat-drawer>
+  <mat-drawer-content class="overflow-hidden">
+    <div class="header">
+      <button mat-flat-button class="icon-only" (click)="drawer.open()" smTooltip="Toggle Graphs" data-id="eyeIcon">
+        <mat-icon fontSet="al" fontIcon="al-ico-eye-outline"></mat-icon>
+      </button>
+      <mat-form-field appearance="outline" subscriptSizing="dynamic" class="time-selector">
+        <mat-select [ngModel]="currentTimeFrame()" (ngModelChange)="timeFrameChange($event)" name="time-frame">
+          @for (timeFrame of timeFrameOptions; track timeFrame.label) {
+            <mat-option [value]="timeFrame.value">
+              {{ timeFrame.label }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+    <div #charts class="charts-container">
+      @for (params of chartParamOptions; track params.label) {
+<!--        @if (!hiddenCharts().includes(params.label)) {  CHANE TO HIDDEN TO PRESERVE LEGEND (CHART) STATE-->
+          @defer (on viewport) {
+            <sm-serving-stats class="overflow-hidden" [class]="params.label" [class.d-none]="hiddenCharts().includes(params.label)"
+                              [metricType]="params" [currentTimeFrame]="currentTimeFrame()"
+            ></sm-serving-stats>
+          } @placeholder {
+            <div style="height: 364px; width: 100%" class="chart-placeholder" [class]="params.label" ></div>
+          }
+<!--        }-->
+      }
+    </div>
+  </mat-drawer-content>
+</mat-drawer-container>

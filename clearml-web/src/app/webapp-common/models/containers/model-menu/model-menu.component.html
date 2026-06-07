@@ -1,0 +1,69 @@
+@if (activateFromMenuButton()) {
+  <button mat-icon-button [matMenuTriggerFor]="modelMenu" #trigger="matMenuTrigger" [class.menu-opened]="trigger.menuOpen">
+    <mat-icon fontSet="al" fontIcon="al-ico-bars-menu"></mat-icon>
+  </button>
+}
+@if (!activateFromMenuButton()) {
+  <div
+    style="visibility: hidden; position: fixed"
+    [style.left.px]="position.x"
+    [style.top.px]="position.y"
+    [matMenuTriggerFor]="modelMenu">
+  </div>
+}
+<mat-menu #modelMenu="matMenu" [hasBackdrop]="backdrop()" class="light-theme entity-context-menu">
+  @if (selectedDisableAvailable()[menuItems.publish]) {
+    @if (tableMode()) {
+      <button mat-menu-item (click)="toggleDetails()">
+        <mat-icon fontSet="al" [fontIcon]="icons.DETAILS"></mat-icon>Details
+      </button>
+    }
+    @if (tableMode()) {
+      <hr>
+    }
+    <button mat-menu-item (click)="publishPopup()" [disabled]="selectedDisableAvailable()[menuItems.publish].disable" data-id="publishOption">
+      <mat-icon fontSet="al" [fontIcon]="icons.PUBLISHED"></mat-icon>
+      {{selectedDisableAvailable()[menuItems.publish].available | menuItemText : 'Publish' : selectedDisableAvailableIsMultiple()}}
+    </button>
+    @if (isArchive()) {
+      <button mat-menu-item (click)="deleteModelPopup()" [disabled]="selectedDisableAvailable()[menuItems.delete].disable" data-id="removeOption">
+        <mat-icon fontSet="al" [fontIcon]="icons.REMOVE"></mat-icon>
+        {{selectedDisableAvailable()[menuItems.delete].available | menuItemText : 'Delete' : selectedDisableAvailableIsMultiple()}}
+      </button>
+    }
+    <button mat-menu-item (click)="archiveClicked()"
+            [disabled]="selectedDisableAvailable()[menuItems.archive].disable" data-id="archiveOption">
+      <mat-icon fontSet="al" [fontIcon]="isArchive() ? icons.RESTORE : icons.ARCHIVE"></mat-icon>
+      {{selectedDisableAvailable()[menuItems.archive].available | menuItemText : isArchive() ? 'Restore from Archive' : 'Archive' : selectedDisableAvailableIsMultiple()}}
+    </button>
+    <hr>
+    <button mat-menu-item
+            [matMenuTriggerFor]="tagsMenu.matMenu"
+            [disabled]="isExample()"
+            (menuOpened)="tagMenuOpened()"
+            (menuClosed)="tagMenuClosed()"
+            data-id="addTagOption"
+    >
+      <mat-icon fontSet="al" [fontIcon]="icons.TAG"></mat-icon>
+      <span>{{numSelected() | menuItemText : 'Add Tag'  : selectedDisableAvailableIsMultiple()}}</span>
+    </button>
+    <sm-tags-menu
+      #tagsMenu
+      [tags]="model()?.tags"
+      [tagsFilterByProject]="!allProjects() && tagsFilterByProject()"
+      [projectTags]="projectTags()"
+      [companyTags]="companyTags()"
+      (tagSelected)="tagSelected.emit($event)">
+    </sm-tags-menu>
+    <hr>
+    <button mat-menu-item (click)="downloadModelFileClicked()" [disabled]="isLocalFile()" data-id="downloadOption">
+      <mat-icon fontSet="al" [fontIcon]="icons.DOWNLOAD"></mat-icon>
+      Download
+    </button>
+    <button mat-menu-item (click)="moveToProjectPopup()" [disabled]="isExample()" data-id="moveToProjectOption">
+      <mat-icon fontSet="al" [fontIcon]="icons.MOVE_TO"></mat-icon>
+      {{selectedDisableAvailable()[menuItems.moveTo].available | menuItemText : 'Move to Project' : selectedDisableAvailableIsMultiple()}}
+    </button>
+    <ng-content select="[extended]"></ng-content>
+  }
+</mat-menu>

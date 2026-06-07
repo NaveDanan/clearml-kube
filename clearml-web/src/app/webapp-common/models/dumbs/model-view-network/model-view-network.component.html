@@ -1,0 +1,30 @@
+<sm-editable-section
+  [editable]="!model()?.ready && model()?.company?.id && !isSharedAndNotOwner()"
+  [saving]="saving()"
+  [hideEditButton]="!!design()"
+  [disableInEditMode]="true"
+  (activateEditClicked)="activateEdit(); editProtoText()"
+  (saveClicked)="saveClicked()"
+  (cancelClicked)="cancelEdit()"
+  >
+  <sm-section-header label="MODEL CONFIGURATION"></sm-section-header>
+  <sm-scroll-textarea
+    class="flex-grow-1"
+    [editable]="inEditMode() && protoTextSection().inEditMode()"
+    [formData]="design() ?? ''"
+    [showSpinner]="false"
+    >
+    @if (!model()?.ready && model()?.company?.id && !isSharedAndNotOwner()) {
+      <button extra-buttons mat-flat-button
+        class="terminal flex-1"
+        (click)="protoTextSection().editModeChanged(true)"
+      >EDIT</button>
+    }
+    @if (!model()?.ready && model()?.company?.id && !isSharedAndNotOwner() && design()) {
+      <button extra-buttons mat-stroked-button
+              class="terminal flex-1"
+              (click)="clearProtoText()"
+      ><mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>CLEAR</button>
+    }
+    </sm-scroll-textarea>
+  </sm-editable-section>

@@ -1,0 +1,28 @@
+@use '../../../../webapp-common/layout/layout';
+
+:host {
+  .header-container {
+    padding-left: 24px;
+    height: layout.$project-header-height;
+    transition: background-color 0.5s;
+
+    .hide-item {
+      visibility: hidden;
+    }
+
+    &.archive-mode {
+      transition: background-color 0.5s;
+      background-color: var(--color-surface-variant);
+    }
+  }
+
+  .right-buttons {
+    margin-right: 24px;
+  }
+}
+
+sm-select-metric-for-custom-col {
+  display: block;
+  height: 640px;
+  max-height: calc(100vh - 120px);
+}

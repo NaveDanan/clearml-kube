@@ -1,0 +1,210 @@
+:host {
+  .hide-me {
+    position: absolute;
+    width:0;
+    height:0;
+    padding: 0;
+    outline: 0;
+    border: none;
+    box-shadow: none;
+  }
+
+  .actions {
+    justify-content: end;
+    gap: 14px
+  }
+
+  .modal-container {
+    background-color: var(--color-surface-container-low);
+    height: 100%;
+  }
+
+  .viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0 24px;
+    width: 100%;
+    height: 58px;
+    background-color: var(--color-surface-container-low);
+    padding: 0 24px;
+    border-bottom: solid 1px var(--color-outline-variant);
+    position: relative;
+    z-index: 1;
+
+    .third {
+      width: 33.3%;
+    }
+
+    .viewer-iteration {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+
+      .number {
+        color: var(--color-secondary);
+      }
+
+      @media screen and (min-width: 960px) {
+        .mat-mdc-slider {
+          min-width: 280px;
+        }
+      }
+
+    }
+
+    .image-title {
+      h1 {
+        font-size: 16px;
+        font-weight: 400;
+        color: var(--color-secondary);
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        padding:0;
+        margin:0;
+      }
+    }
+  }
+
+  .footer-info {
+    position: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 38px;
+    bottom: 0;
+    left: 50%;
+    transform: translate(-50%, 0);
+    background-color: var(--color-surface-container-low);
+    box-shadow: 0 -3px 3px 0 rgba(0, 0, 0, 0.1);
+    border-radius: 4px 4px 0 0;
+    padding: 0 24px;
+    white-space: nowrap;
+
+    .params {
+      margin: 0 12px;
+
+      > .single-parameter {
+        min-width: 45px;
+        margin: 0 6px;
+      }
+
+      > .double-parameter {
+        width: 90px;
+        margin: 0 6px;
+      }
+
+      label {
+        padding-right: 4px;
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  .icon-container {
+    display: inherit;
+    color: var(--color-secondary);
+
+    &.disabled {
+      opacity: 0.5;
+    }
+
+    &:not(.disabled) {
+      cursor: pointer;
+    }
+  }
+
+  .debug-image-container {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--color-surface-container-low);
+    background-image: linear-gradient(45deg, var(--color-surface-container) 25%, transparent 25%, transparent 75%, var(--color-surface-container) 75%,  var(--color-surface-container)),
+      linear-gradient(45deg, var(--color-surface-container) 25%, transparent 25%, transparent 75%, var(--color-surface-container) 75%,  var(--color-surface-container));
+    background-size: 24px 24px;
+    background-position: 0 0, 12px 12px;
+    height: calc(100% - 58px);
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    .sizeable-container {
+      position: absolute;
+      transition: height 0.25s, width 0.25s, transform 0.25s;
+      transition-timing-function: cubic-bezier(0.43, 0, 0.19, 0.93);
+      &.wheeling{
+        transition: none;
+      }
+
+      &.dragging {
+        transition: height 0.25s, width 0.25s;
+
+        img {
+          cursor: grabbing;
+        }
+      }
+
+      img {
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--color-surface-container-low);
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+      }
+    }
+
+    .controller {
+      position: fixed;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      align-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 30px;
+      box-shadow: 0 3px 6px 0 rgba(0, 0, 0, 0.16);
+      background-color: rgba(from var(--color-inverse-on-surface) r g b / 0.85);
+      transition: background-color 0.35s ease;
+
+
+      &.zoom {
+        height: 120px;
+      }
+
+      &:hover {
+        background-color: rgba(from var(--color-inverse-on-surface) r g b / 1);
+      }
+    }
+
+    .navigation {
+      position: fixed;
+      top: 50%;
+
+      .next {
+        right: 75px;
+      }
+
+      .previous {
+        left: 75px;
+      }
+    }
+
+    .controllers {
+      position: fixed;
+      display: flex;
+      flex-direction: column;
+
+      .zoom {
+        right: 75px;
+        bottom: 75px;
+      }
+
+      .fit-to-screen {
+        right: 75px;
+        bottom: 206px;
+      }
+    }
+  }
+}
