@@ -3,14 +3,18 @@ import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {concat, of, timer} from 'rxjs';
 import {catchError, exhaustMap, map, startWith, switchMap, takeWhile} from 'rxjs/operators';
 import {AutoscalerExecution, autoscalerActions} from '../actions/autoscaler.actions';
-import {addMessage} from '@common/core/actions/layout.actions';
+import {addMessage, setNotificationDialog, setServerError} from '@common/core/actions/layout.actions';
 import {ApiAutoscalerService} from '~/business-logic/api-services/autoscaler.service';
+import {ErrorService} from '@common/shared/services/error.service';
+import {inject} from '@angular/core';
+import {escape} from 'lodash-es';
 
 const EXECUTION_POLL_INTERVAL = 2000;
 const ACTIVE_EXECUTION_STATUSES = new Set(['queued', 'pending', 'running']);
 
 @Injectable()
 export class AutoscalerEffects {
+  private errService = inject(ErrorService);
 
   constructor(
     private actions$: Actions,
@@ -22,9 +26,7 @@ export class AutoscalerEffects {
     ofType(autoscalerActions.getSettings),
     switchMap(() => this.autoscalerApi.autoscalerGetSettings({}).pipe(
       map((res: any) => autoscalerActions.setSettings({settings: res.settings ?? {}})),
-      catchError(() => [
-        addMessage('error', 'Failed to load autoscaler settings'),
-      ]),
+      catchError(error => this.requestErrorActions(error, 'Failed to load autoscaler settings')),
     )),
   ));
 
@@ -34,9 +36,9 @@ export class AutoscalerEffects {
       switchMap((res: any) => [
         autoscalerActions.setDashboard({dashboard: res}),
       ]),
-      catchError(() => [
-        autoscalerActions.setDashboardError({error: 'Failed to refresh Run:ai dashboard'}),
-      ]),
+      catchError(error => this.requestErrorActions(error, 'Failed to refresh Run:ai dashboard', [
+        autoscalerActions.setDashboardError({error: this.errorMessage(error, 'Failed to refresh Run:ai dashboard')}),
+      ])),
     )),
   ));
 
@@ -47,9 +49,7 @@ export class AutoscalerEffects {
         autoscalerActions.setSettings({settings: action.settings}),
         addMessage('success', 'Autoscaler settings saved'),
       ]),
-      catchError(() => [
-        addMessage('error', 'Failed to save autoscaler settings'),
-      ]),
+      catchError(error => this.requestErrorActions(error, 'Failed to save autoscaler settings')),
     )),
   ));
 
@@ -57,14 +57,22 @@ export class AutoscalerEffects {
     ofType(autoscalerActions.testConnection),
     switchMap(action => {
       return this.autoscalerApi.autoscalerTestConnection(action.settings).pipe(
-        switchMap((res: any) => [
-          autoscalerActions.setConnectionResult({result: res}),
-          autoscalerActions.setConnectionStatus({status: res.connected ? 'success' : 'error'}),
-        ]),
-        catchError(() => [
-          autoscalerActions.setConnectionResult({result: {connected: false, error: 'Connection request failed'}}),
+        switchMap((res: any) => {
+          const actions: any[] = [
+            autoscalerActions.setConnectionResult({result: res}),
+            autoscalerActions.setConnectionStatus({status: res.connected ? 'success' : 'error'}),
+          ];
+
+          if (!res.connected) {
+            actions.push(this.errorDialogAction('Run:ai connection failed', res.error || 'Connection request failed'));
+          }
+
+          return actions;
+        }),
+        catchError(error => this.requestErrorActions(error, 'Run:ai connection failed', [
+          autoscalerActions.setConnectionResult({result: {connected: false, error: this.errorMessage(error, 'Connection request failed')}}),
           autoscalerActions.setConnectionStatus({status: 'error'}),
-        ]),
+        ])),
         startWith(
           autoscalerActions.setConnectionResult({result: null}),
           autoscalerActions.setConnectionStatus({status: 'testing'}),
@@ -83,12 +91,11 @@ export class AutoscalerEffects {
         success: 'Workload submitted successfully',
         error: 'Workload submission failed',
       })),
-      catchError(() => [
+      catchError(error => this.requestErrorActions(error, 'Workload submission failed', [
         autoscalerActions.setLastExecution({
-          execution: {status: 'error', stderr: 'Request failed', timestamp: new Date().toISOString()},
+          execution: {status: 'error', stderr: this.errorMessage(error, 'Request failed'), timestamp: new Date().toISOString()},
         }),
-        addMessage('error', 'Workload submission failed'),
-      ]),
+      ])),
     )),
   ));
 
@@ -99,9 +106,7 @@ export class AutoscalerEffects {
         autoscalerActions.getDashboard(),
         ...(res.status === 'error' ? [addMessage('error', 'Failed to save app instance')] : []),
       ]),
-      catchError(() => [
-        addMessage('error', 'Failed to save app instance'),
-      ]),
+      catchError(error => this.requestErrorActions(error, 'Failed to save app instance')),
     )),
   ));
 
@@ -113,9 +118,7 @@ export class AutoscalerEffects {
         success: 'Workload deleted successfully',
         error: 'Failed to delete workload',
       })),
-      catchError(() => [
-        addMessage('error', 'Failed to delete workload'),
-      ]),
+      catchError(error => this.requestErrorActions(error, 'Failed to delete workload')),
     )),
   ));
 
@@ -123,9 +126,7 @@ export class AutoscalerEffects {
     ofType(autoscalerActions.resetSettings),
     switchMap(() => this.autoscalerApi.autoscalerResetSettings({}).pipe(
       map(() => autoscalerActions.setSettings({settings: {}})),
-      catchError(() => [
-        addMessage('error', 'Failed to reset autoscaler settings'),
-      ]),
+      catchError(error => this.requestErrorActions(error, 'Failed to reset autoscaler settings')),
     )),
   ));
 
@@ -166,16 +167,17 @@ export class AutoscalerEffects {
 
           return actions;
         }),
-        catchError(() => [
+        catchError(error => [
           autoscalerActions.setLastExecution({
             execution: {
               status: 'error',
-              stderr: 'Execution polling failed',
+              stderr: this.errorMessage(error, 'Execution polling failed'),
               execution_id: result.execution_id,
               timestamp: new Date().toISOString(),
             },
           }),
           addMessage('error', messages.error),
+          this.errorDialogAction(messages.error, this.errorMessage(error, 'Execution polling failed')),
         ]),
       ),
     );
@@ -201,5 +203,42 @@ export class AutoscalerEffects {
       (status || '').toLowerCase() === 'error' ? 'error' : 'success',
       (status || '').toLowerCase() === 'error' ? error : success,
     );
+  }
+
+  private requestErrorActions(error: any, fallback: string, actions: any[] = []) {
+    const message = this.errorMessage(error, fallback);
+
+    return [
+      ...actions,
+      addMessage('error', `${fallback}: ${message}`),
+      error?.error
+        ? setServerError(error, null, fallback, true, 'Autoscaler Error')
+        : this.errorDialogAction(fallback, message),
+    ];
+  }
+
+  private errorDialogAction(title: string, message: string) {
+    return setNotificationDialog({
+      notification: {
+        title: 'Autoscaler Error',
+        message: `<b>${escape(title)}</b><br><br>${escape(message)}`,
+      },
+    });
+  }
+
+  private errorMessage(error: any, fallback: string): string {
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    if (typeof error?.error === 'string') {
+      return error.error;
+    }
+
+    return this.errService.getErrorMsg(error?.error) ||
+      error?.error?.message ||
+      error?.message ||
+      error?.statusText ||
+      fallback;
   }
 }

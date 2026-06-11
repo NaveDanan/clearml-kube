@@ -60,6 +60,7 @@ function Start-MinikubeProfile {
     }
 
     & $script:kubectl config use-context $ProfileName | Out-Null
+    & $script:minikube update-context -p $ProfileName | Out-Null
 }
 
 function Wait-ArgoApplications {
@@ -137,17 +138,24 @@ if ($Port) {
 $script:minikube = Resolve-CommandPath -Name "minikube" -Fallback (Join-Path $env:USERPROFILE "bin\minikube.exe")
 $script:kubectl = Resolve-CommandPath -Name "kubectl" -Fallback ""
 
-Start-MinikubeProfile -ProfileName $config.profile
-
-if (-not (Wait-KubectlResource -Args @("get", "svc", "-n", "argocd", "argocd-server") -TimeoutSeconds 180)) {
-    throw "Argo CD service argocd/argocd-server is not available"
-}
-
-Wait-ArgoApplications -Applications @($config.applications)
-
 while ($true) {
-    foreach ($forward in $config.forwards) {
-        Start-PortForward -Forward $forward
+    try {
+        Start-MinikubeProfile -ProfileName $config.profile
+
+        if (-not (Wait-KubectlResource -Args @("get", "svc", "-n", "argocd", "argocd-server") -TimeoutSeconds 180)) {
+            Write-Warning "Argo CD service argocd/argocd-server is not available"
+            Start-Sleep -Seconds 30
+            continue
+        }
+
+        Wait-ArgoApplications -Applications @($config.applications)
+
+        foreach ($forward in $config.forwards) {
+            Start-PortForward -Forward $forward
+        }
+    } catch {
+        Write-Warning $_
     }
+
     Start-Sleep -Seconds 30
 }

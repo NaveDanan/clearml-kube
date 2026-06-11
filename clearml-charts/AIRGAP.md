@@ -4,30 +4,34 @@ This chart is prepared for the ESA cluster values in `esa-values.yaml`.
 
 ## Images
 
-`esa-values.yaml` expects these images in the air-gapped registry:
+`esa-values.yaml` expects these image names to exist in the air-gapped cluster
+or in the registry/mirror used by the cluster:
 
 ```text
-dvd12af:5113/clearml/clearml:autoscalar-v2026-06-07
-dvd12af:5113/clearml/runai-worker:2026-06-07
-dvd12af:5113/clearml/redis:7.0.9-debian-11-r1
-dvd12af:5113/clearml/mongodb:6.0.10-debian-11-r8
-dvd12af:5113/clearml/elasticsearch:7.17.3
+clearml/clearml:autoscalar-v2026-06-11
+clearml/runai-worker:2026-06-11
+clearml/redis:7.0.9-debian-11-r1
+clearml/mongodb:6.0.10-debian-11-r8
+clearml/elasticsearch:7.17.3
 ```
 
-Load the exported tar on the connected staging host or registry host:
+Load the exported slim tar on the connected staging host or registry host:
 
 ```bash
-docker load -i clearml-airgap-images-2026-06-07.tar
+docker load -i clearml-images-slim-2026-06-11.tar
 ```
 
-If the load target is not already the final registry host, push the images:
+The slim tar contains only the ClearML application images. The Redis, MongoDB,
+and Elasticsearch images listed above must already exist in the cluster registry,
+registry mirror, or node image cache. If your final cluster uses an internal
+registry hostname, retag these images for that registry and update
+`global.imageRegistry` in `esa-values.yaml` to match.
 
 ```bash
-docker push dvd12af:5113/clearml/clearml:autoscalar-v2026-06-07
-docker push dvd12af:5113/clearml/runai-worker:2026-06-07
-docker push dvd12af:5113/clearml/redis:7.0.9-debian-11-r1
-docker push dvd12af:5113/clearml/mongodb:6.0.10-debian-11-r8
-docker push dvd12af:5113/clearml/elasticsearch:7.17.3
+docker tag clearml/clearml:autoscalar-v2026-06-11 <registry>/clearml/clearml:autoscalar-v2026-06-11
+docker tag clearml/runai-worker:2026-06-11 <registry>/clearml/runai-worker:2026-06-11
+docker push <registry>/clearml/clearml:autoscalar-v2026-06-11
+docker push <registry>/clearml/runai-worker:2026-06-11
 ```
 
 ## Required Existing Cluster Resources
@@ -54,7 +58,7 @@ Create or copy it before syncing the ArgoCD application:
 kubectl create namespace clearml-server
 kubectl create secret docker-registry nave-pull-secret \
   --namespace clearml-server \
-  --docker-server=dvd12af:5113 \
+  --docker-server=<registry> \
   --docker-username=<username> \
   --docker-password=<password>
 ```

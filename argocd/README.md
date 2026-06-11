@@ -76,9 +76,12 @@ http://localhost:8081   -> clearml-server/clearml-server-fileserver
 
 This workstation also has a per-user Startup shortcut named `ClearML ArgoCD Port
 Forward.lnk`, so the helper runs after login. If the minikube profile was
-stopped, the helper starts it again. Kubernetes resources and ArgoCD
-Applications persist across `minikube stop` / `minikube start`; if the profile is
-deleted, recreate/apply the ArgoCD app first.
+stopped, the helper starts it again. If you stop the minikube container from
+Docker Desktop, do not start only the container there; run `minikube start -p
+clearml` or run this helper so Minikube restarts the kubelet, apiserver, and
+kubeconfig correctly. Kubernetes resources and ArgoCD Applications persist
+across `minikube stop` / `minikube start`; if the profile is deleted,
+recreate/apply the ArgoCD app first.
 
 To check whether the forwards are active:
 
