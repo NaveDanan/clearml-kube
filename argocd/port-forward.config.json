@@ -1,0 +1,44 @@
+{
+  "profile": "clearml",
+  "applications": [
+    {
+      "namespace": "argocd",
+      "name": "clearml-server",
+      "waitForHealthy": true
+    }
+  ],
+  "forwards": [
+    {
+      "name": "argocd",
+      "namespace": "argocd",
+      "service": "argocd-server",
+      "localPort": 8443,
+      "remotePort": 443,
+      "url": "https://localhost:8443"
+    },
+    {
+      "name": "clearml-web",
+      "namespace": "clearml-server",
+      "service": "clearml-server-webserver",
+      "localPort": 8080,
+      "remotePort": 8080,
+      "url": "http://localhost:8080"
+    },
+    {
+      "name": "clearml-api",
+      "namespace": "clearml-server",
+      "service": "clearml-server-apiserver",
+      "localPort": 8008,
+      "remotePort": 8008,
+      "url": "http://localhost:8008"
+    },
+    {
+      "name": "clearml-files",
+      "namespace": "clearml-server",
+      "service": "clearml-server-fileserver",
+      "localPort": 8081,
+      "remotePort": 8081,
+      "url": "http://localhost:8081"
+    }
+  ]
+}

@@ -82,6 +82,28 @@ spec:
             value: "http://{{ include "apiserver.referenceName" . }}:{{ .Values.apiserver.service.port }}"
           - name: NGINX_FILESERVER_ADDRESS
             value: "http://{{ include "fileserver.referenceName" . }}:{{ .Values.fileserver.service.port }}"
+          {{- if .Values.clearml.clientConfigurationApiUrl }}
+          - name: WEBSERVER__apiBaseUrl
+            value: {{ .Values.clearml.clientConfigurationApiUrl | toJson | quote }}
+          {{- else if .Values.apiserver.ingress.enabled }}
+          {{- $apiProtocol := "http" }}
+          {{- if .Values.apiserver.ingress.tlsSecretName }}
+          {{- $apiProtocol = "https" }}
+          {{- end }}
+          - name: WEBSERVER__apiBaseUrl
+            value: {{ printf "%s://%s" $apiProtocol .Values.apiserver.ingress.hostName | toJson | quote }}
+          {{- end }}
+          {{- if .Values.clearml.clientConfigurationFilesUrl }}
+          - name: WEBSERVER__fileBaseUrl
+            value: {{ .Values.clearml.clientConfigurationFilesUrl | toJson | quote }}
+          {{- else if .Values.fileserver.ingress.enabled }}
+          {{- $filesProtocol := "http" }}
+          {{- if .Values.fileserver.ingress.tlsSecretName }}
+          {{- $filesProtocol = "https" }}
+          {{- end }}
+          - name: WEBSERVER__fileBaseUrl
+            value: {{ printf "%s://%s" $filesProtocol .Values.fileserver.ingress.hostName | toJson | quote }}
+          {{- end }}
           {{- if include "clearml.clientConfiguration" . }}
           - name: WEBSERVER__displayedServerUrls
             value: {{ include "clearml.clientConfiguration" . | quote }} 

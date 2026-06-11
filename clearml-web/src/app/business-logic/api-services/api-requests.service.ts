@@ -7,6 +7,19 @@ import {HttpHeaders} from '@angular/common/http';
 import {map} from 'rxjs/operators';
 import {ApiOptions} from '~/business-logic/api-services/api';
 
+type ApiRequestOptions = {
+  headers?: HttpHeaders | {
+    [header: string]: string | string[];
+  };
+  observe?: 'body';
+  params?: HttpParams | {
+    [param: string]: string | string[];
+  };
+  reportProgress?: boolean;
+  responseType?: 'json';
+  withCredentials?: boolean;
+};
+
 @Injectable()
 export class SmApiRequestsService {
 
@@ -25,36 +38,19 @@ export class SmApiRequestsService {
       });
   }
 
-  post<T>(url: string, body: any | null, options?: {
-    headers?: HttpHeaders | {
-      [header: string]: string | string[];
-    };
-    observe?: 'body';
-    params?: HttpParams | {
-      [param: string]: string | string[];
-    };
-    reportProgress?: boolean;
-    responseType?: 'json';
-    withCredentials?: boolean;
-  }, extOptions?: ApiOptions): Observable<T> {
-    options.withCredentials = true;
-    return this.http.post<SmHttpResponse>(url, body, options).pipe(map(res => res.data));
+  post<T>(url: string, body: any | null, options?: ApiRequestOptions, extOptions?: ApiOptions): Observable<T> {
+    return this.http.post<SmHttpResponse>(url, body, this.withCredentials(options)).pipe(map(res => res.data));
   }
 
-  posti(url: string, body: any | null, options?: {
-    headers?: HttpHeaders | {
-      [header: string]: string | string[];
+  posti(url: string, body: any | null, options?: ApiRequestOptions): Observable<SmHttpResponse> {
+    return this.http.post<SmHttpResponse>(url, body, this.withCredentials(options));
+  }
+
+  private withCredentials(options?: ApiRequestOptions): ApiRequestOptions {
+    return {
+      ...(options ?? {}),
+      withCredentials: true,
     };
-    observe?: 'body';
-    params?: HttpParams | {
-      [param: string]: string | string[];
-    };
-    reportProgress?: boolean;
-    responseType?: 'json';
-    withCredentials?: boolean;
-  }): Observable<SmHttpResponse> {
-    options.withCredentials = true;
-    return this.http.post<SmHttpResponse>(url, body, options);
   }
 
   private getParams(actionParams) {

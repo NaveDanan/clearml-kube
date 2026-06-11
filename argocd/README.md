@@ -54,6 +54,42 @@ If ArgoCD is already port-forwarded to `8443`, open:
 https://localhost:8443
 ```
 
+## Restore minikube and local forwards
+
+Use the helper script to start the `clearml` minikube profile if needed, wait
+for ArgoCD applications to become healthy, and restore the saved local
+port-forwards:
+
+```powershell
+.\argocd\start-argocd-port-forward.ps1
+```
+
+The saved configuration lives in `argocd/port-forward.config.json`. It
+currently restores:
+
+```text
+https://localhost:8443  -> argocd/argocd-server
+http://localhost:8080   -> clearml-server/clearml-server-webserver
+http://localhost:8008   -> clearml-server/clearml-server-apiserver
+http://localhost:8081   -> clearml-server/clearml-server-fileserver
+```
+
+This workstation also has a per-user Startup shortcut named `ClearML ArgoCD Port
+Forward.lnk`, so the helper runs after login. If the minikube profile was
+stopped, the helper starts it again. Kubernetes resources and ArgoCD
+Applications persist across `minikube stop` / `minikube start`; if the profile is
+deleted, recreate/apply the ArgoCD app first.
+
+To check whether the forwards are active:
+
+```powershell
+Get-NetTCPConnection -State Listen | Where-Object LocalPort -in @(8443,8080,8008,8081)
+kubectl get svc -n argocd argocd-server
+kubectl get applications -n argocd
+kubectl get pods -n argocd
+kubectl get svc -n clearml-server
+```
+
 ## Local ClearML access
 
 The testing values expose the services as NodePorts, but on Docker Desktop

@@ -29,7 +29,16 @@ def process_pending():
             f"(type={execution.workload_type}, name={execution.workload_name})"
         )
 
-        result = autoscaler_bll.process_execution(execution)
+        try:
+            result = autoscaler_bll.process_execution(execution)
+        except Exception as ex:
+            log.exception(f"Failed processing execution {execution.id}")
+            try:
+                result = autoscaler_bll._fail_execution(execution, str(ex))
+            except Exception:
+                log.exception(f"Failed marking execution {execution.id} as failed")
+                result = {"status": "error", "return_code": ""}
+
         log.info(
             f"Finished execution {execution.id} with status={result.get('status')} "
             f"return_code={result.get('return_code', '')}"

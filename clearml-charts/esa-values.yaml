@@ -1,7 +1,7 @@
 global:
   imageRegistry: "dvd12af:5113/clearml"
   imagePullSecrets:
-  - name: nave-pull-secret
+  - nave-pull-secret
 
 imageCredentials:
   enabled: true
@@ -49,6 +49,8 @@ apiserver:
     repository: "clearml"
     pullPolicy: IfNotPresent
     tag: "autoscalar-v2026-06-07"
+  service:
+    type: ClusterIP
   ingress:
     enabled: true
     ingressClassName: "nginx"
@@ -72,6 +74,8 @@ fileserver:
     repository: "clearml"
     pullPolicy: IfNotPresent
     tag: "autoscalar-v2026-06-07"
+  service:
+    type: ClusterIP
   ingress:
     enabled: true
     ingressClassName: "nginx"
@@ -116,6 +120,18 @@ webserver:
     repository: "clearml"
     pullPolicy: IfNotPresent
     tag: "autoscalar-v2026-06-07"
+  service:
+    type: ClusterIP
+  additionalConfigs:
+    configuration.json: |
+      {
+        "apiBaseUrl": "https://api-clearml.mems.rafael.co.il",
+        "fileBaseUrl": "https://files-clearml.mems.rafael.co.il",
+        "displayedServerUrls": {
+          "apiServer": "https://api-clearml.mems.rafael.co.il",
+          "filesServer": "https://files-clearml.mems.rafael.co.il"
+        }
+      }
   ingress:
     enabled: true
     ingressClassName: "nginx"
@@ -168,7 +184,7 @@ redis:
     tag: 7.0.9-debian-11-r1
     pullPolicy: IfNotPresent
     pullSecrets:
-    - artifactory-pull-secret
+    - nave-pull-secret
 
 mongodb:
   enabled: true
@@ -190,7 +206,7 @@ elasticsearch:
   imageTag: "7.17.3"
   imagePullPolicy: "IfNotPresent"
   imagePullSecrets:
-    - name: artifactory-pull-secret
+    - name: nave-pull-secret
   persistence:
     enabled: true
   volumeClaimTemplate:

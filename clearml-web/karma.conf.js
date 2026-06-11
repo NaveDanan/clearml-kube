@@ -22,7 +22,7 @@ module.exports = function (config) {
     angularCli: {
       environment: 'dev'
     },
-    exclude: ['node_modules/', 'src/app/business-logic/**'],
+    exclude: ['node_modules/'],
     reporters: ['progress', 'kjhtml'],
     port: 9876,
     colors: true,

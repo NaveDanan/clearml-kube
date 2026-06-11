@@ -36,8 +36,8 @@ imageCredentials:
 clearml:
   cookieName: clearml-token-k8s
   cookieDomain: ""
-  clientConfigurationApiUrl: "http://localhost:8008"
-  clientConfigurationFilesUrl: "http://localhost:8081"
+  clientConfigurationApiUrl: "http://127.0.0.1:8008"
+  clientConfigurationFilesUrl: "http://127.0.0.1:8081"
 
 apiserver:
   enabled: true
@@ -105,6 +105,16 @@ webserver:
   service:
     type: NodePort
     nodePort: 30080
+  additionalConfigs:
+    configuration.json: |
+      {
+        "apiBaseUrl": "http://127.0.0.1:8008",
+        "fileBaseUrl": "http://127.0.0.1:8081",
+        "displayedServerUrls": {
+          "apiServer": "http://127.0.0.1:8008",
+          "filesServer": "http://127.0.0.1:8081"
+        }
+      }
   ingress:
     enabled: false
   podSecurityContext:

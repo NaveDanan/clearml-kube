@@ -364,7 +364,7 @@ class AutoscalerBLL:
     def process_execution(self, execution: AutoscalerExecution) -> dict:
         conn = AutoscalerSettings.objects(company=execution.company).first()
         if not conn:
-            raise RuntimeError("No stored Run:ai connection settings configured")
+            return self._fail_execution(execution, "No stored Run:ai connection settings configured")
 
         config_dir = tempfile.mkdtemp(prefix="runai_")
         operation = (getattr(execution, "operation", None) or "submit").lower()
