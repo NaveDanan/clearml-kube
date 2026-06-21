@@ -207,40 +207,72 @@ export class AutoscalerComponent implements OnDestroy {
       (dashboard?.instances ?? []).some(instance => this.isCompletedWorkloadStatus(instance.status));
   });
   protected appInstances = computed<AppInstance[]>(() => {
-    const savedInstances = (this.dashboard()?.saved_instances ?? []).map((instance, index) => ({
-      key: this.instanceKey('local', instance.name, instance.project, index),
-      id: instance.id,
-      source: 'local' as const,
-      name: instance.name || `Saved workload ${index + 1}`,
-      type: instance.type,
-      status: instance.status || 'saved',
-      project: instance.project,
-      gpus: Number(instance.workload?.gpu_devices_request) || 0,
-      age: instance.created || '',
-      workload: instance.workload as WorkloadFormValue,
-    }));
-    const liveInstances = (this.dashboard()?.instances ?? []).map(instance => ({
-      key: this.instanceKey('runai', instance.name, instance.project),
-      source: 'runai' as const,
-      name: instance.name || 'Unnamed workload',
-      type: instance.type,
-      status: instance.status,
-      project: instance.project,
-      gpus: instance.gpus,
-      age: instance.age,
-    }));
-    const localInstances = this.importedWorkloads().map((workload, index) => ({
-      key: this.instanceKey('local', workload.workload_name || `imported-${index}`, workload.project),
-      source: 'local' as const,
-      name: workload.workload_name || `Imported workload ${index + 1}`,
-      type: workload.workload_type,
-      status: 'imported',
-      project: workload.project,
-      gpus: Number(workload.gpu_devices_request) || 0,
-      age: '',
-      workload,
-    })).filter(instance => !savedInstances.some(saved => saved.name === instance.name && saved.project === instance.project));
-    return [...liveInstances, ...savedInstances, ...localInstances];
+    // A single workload (identified by project + name) must appear as exactly one
+    // app instance, regardless of how many sources report it. We merge the saved
+    // (Mongo) record, the live Run:ai status, and any locally imported draft into
+    // one entry keyed by workload identity.
+    const merged = new Map<string, AppInstance>();
+
+    // Saved instances from Mongo carry the persistent id + full workload params.
+    (this.dashboard()?.saved_instances ?? []).forEach((instance, index) => {
+      const name = instance.name || `Saved workload ${index + 1}`;
+      const key = this.instanceKey(name, instance.project);
+      merged.set(key, {
+        key,
+        id: instance.id,
+        source: 'local',
+        name,
+        type: instance.type,
+        status: instance.status || 'saved',
+        project: instance.project,
+        gpus: Number(instance.workload?.gpu_devices_request) || 0,
+        age: instance.created || '',
+        workload: instance.workload as WorkloadFormValue,
+      });
+    });
+
+    // Live Run:ai workloads reflect the real cluster status; overlay them onto the
+    // matching saved record (keeping its id + workload params) or add a new entry.
+    (this.dashboard()?.instances ?? []).forEach(instance => {
+      const name = instance.name || 'Unnamed workload';
+      const key = this.instanceKey(name, instance.project);
+      const existing = merged.get(key);
+      merged.set(key, {
+        ...existing,
+        key,
+        id: existing?.id,
+        source: 'runai',
+        name,
+        type: instance.type || existing?.type,
+        status: instance.status || existing?.status,
+        project: instance.project ?? existing?.project,
+        gpus: instance.gpus || existing?.gpus || 0,
+        age: instance.age || existing?.age || '',
+        workload: existing?.workload,
+      });
+    });
+
+    // Locally imported workloads that have not been persisted/launched yet.
+    this.importedWorkloads().forEach((workload, index) => {
+      const name = workload.workload_name || `Imported workload ${index + 1}`;
+      const key = this.instanceKey(name, workload.project);
+      if (merged.has(key)) {
+        return;
+      }
+      merged.set(key, {
+        key,
+        source: 'local',
+        name,
+        type: workload.workload_type,
+        status: 'imported',
+        project: workload.project,
+        gpus: Number(workload.gpu_devices_request) || 0,
+        age: '',
+        workload,
+      });
+    });
+
+    return [...merged.values()];
   });
   protected selectedInstance = computed(() => {
     const instances = this.appInstances();
@@ -445,6 +477,23 @@ export class AutoscalerComponent implements OnDestroy {
 
   selectInstance(instance: AppInstance) {
     this.selectedInstanceKey.set(instance.key);
+  }
+
+  protected canStopInstance(instance: AppInstance): boolean {
+    const status = (instance.status || '').toLowerCase();
+    return instance.source === 'runai' || !['imported', 'stopped', 'stopping'].includes(status);
+  }
+
+  stopInstance(event: Event, instance: AppInstance) {
+    event.stopPropagation();
+    this.store.dispatch(autoscalerActions.stopWorkload({
+      workload: {
+        instance_id: instance.id,
+        workload_name: instance.name,
+        workload_type: instance.type,
+        project: instance.project,
+      },
+    }));
   }
 
   deleteInstance(event: Event, instance: AppInstance) {
@@ -892,7 +941,7 @@ export class AutoscalerComponent implements OnDestroy {
       }
       return next;
     });
-    this.selectedInstanceKey.set(this.instanceKey('local', workload.workload_name || 'imported', workload.project));
+    this.selectedInstanceKey.set(this.instanceKey(workload.workload_name || 'imported', workload.project));
     this.store.dispatch(autoscalerActions.saveAppInstance({workload}));
   }
 
@@ -1201,7 +1250,7 @@ export class AutoscalerComponent implements OnDestroy {
     return /\s/.test(part) ? `"${part.replace(/"/g, '\\"')}"` : part;
   }
 
-  private instanceKey(source: AppInstanceSource, name?: string, project?: string, index?: number) {
-    return [source, project || 'default', name || 'unnamed', index ?? ''].join(':');
+  private instanceKey(name?: string, project?: string) {
+    return [project || 'default', name || 'unnamed'].join(':');
   }
 }

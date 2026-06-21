@@ -12,6 +12,7 @@ from apiserver.apimodels.autoscaler import (
     DeleteWorkloadRequest,
     SaveAppInstanceRequest,
     SetSettingsRequest,
+    StopWorkloadRequest,
     SubmitWorkloadRequest,
     WorkloadRequest,
 )
@@ -279,6 +280,30 @@ class AutoscalerBLL:
             "execution_id": execution_id,
         }
 
+    def stop_workload(
+        self, company_id: str, request: StopWorkloadRequest, user_id: str = None, worker_id: str = None
+    ) -> dict:
+        if not request.workload_name:
+            return {"status": "error", "stderr": "Missing workload name"}
+
+        settings = AutoscalerSettings.objects(company=company_id).first()
+        if not settings:
+            return {"status": "error", "stderr": "No stored Run:ai connection settings configured"}
+
+        execution_id = self._enqueue_execution(
+            company_id=company_id,
+            operation="stop",
+            payload=request.to_struct(),
+            workload_type=request.workload_type,
+            workload_name=request.workload_name,
+            user_id=user_id,
+            worker_id=worker_id or getattr(settings, "worker", None),
+        )
+        return {
+            "status": "queued",
+            "execution_id": execution_id,
+        }
+
     def get_dashboard(self, company_id: str) -> dict:
         settings = AutoscalerSettings.objects(company=company_id).first()
         if not settings:
@@ -506,6 +531,14 @@ class AutoscalerBLL:
             self._set_runai_context(conn, env, request.project)
             return self._run_with_fallback(
                 self._delete_workload_commands(conn, request),
+                env,
+                timeout=60,
+            )
+        if operation == "stop":
+            request = self._delete_request_from_execution(execution)
+            self._set_runai_context(conn, env, request.project)
+            return self._run_with_fallback(
+                self._stop_workload_commands(conn, request),
                 env,
                 timeout=60,
             )
@@ -795,7 +828,12 @@ class AutoscalerBLL:
 
     @classmethod
     def _sync_saved_instance_status(cls, execution: AutoscalerExecution, status: str):
-        if (getattr(execution, "operation", None) or "submit").lower() != "submit":
+        operation = (getattr(execution, "operation", None) or "submit").lower()
+        if operation == "submit":
+            instance_status = status
+        elif operation == "stop":
+            instance_status = "stopped" if status == "success" else status
+        else:
             return
 
         try:
@@ -808,7 +846,7 @@ class AutoscalerBLL:
             project=payload.get("project") or "",
             name=execution.workload_name,
         ).update_one(
-            set__status=status,
+            set__status=instance_status,
             set__last_update=datetime.utcnow(),
         )
 
@@ -945,6 +983,28 @@ class AutoscalerBLL:
         v1_commands = [
             ["runai", "delete", name],
             ["runai", "delete", "job", name],
+        ]
+        if project:
+            v1_commands = [[*cmd, "--project", project] for cmd in v1_commands]
+        return cls._cli_candidates(conn, v2_commands, v1_commands)
+
+    @classmethod
+    def _stop_workload_commands(cls, conn, request: StopWorkloadRequest) -> list:
+        name = request.workload_name
+        project = request.project or getattr(conn, "runai_project", None)
+        workload_type = request.workload_type or "workload"
+        v2_commands = [
+            ["runai", "workload", "suspend", name],
+            ["runai", "suspend", "workload", name],
+        ]
+        if workload_type in {"training", "workspace", "inference"}:
+            v2_commands.insert(0, ["runai", workload_type, "suspend", name])
+        if project:
+            v2_commands = [[*cmd, "--project", project] for cmd in v2_commands]
+
+        v1_commands = [
+            ["runai", "suspend", name],
+            ["runai", "suspend", "job", name],
         ]
         if project:
             v1_commands = [[*cmd, "--project", project] for cmd in v1_commands]

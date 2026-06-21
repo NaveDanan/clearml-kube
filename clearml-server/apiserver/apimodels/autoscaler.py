@@ -86,3 +86,10 @@ class DeleteWorkloadRequest(Base):
     workload_name = StringField()
     workload_type = StringField()
     project = StringField()
+
+
+class StopWorkloadRequest(Base):
+    instance_id = StringField()
+    workload_name = StringField()
+    workload_type = StringField()
+    project = StringField()

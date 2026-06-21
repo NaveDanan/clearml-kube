@@ -110,6 +110,18 @@ export class AutoscalerEffects {
     )),
   ));
 
+  stopWorkload = createEffect(() => this.actions$.pipe(
+    ofType(autoscalerActions.stopWorkload),
+    switchMap(action => this.autoscalerApi.autoscalerStopWorkload(action.workload).pipe(
+      switchMap(res => this.trackExecution(res, {
+        queued: 'Workload stop queued',
+        success: 'Workload stopped successfully',
+        error: 'Failed to stop workload',
+      })),
+      catchError(error => this.requestErrorActions(error, 'Failed to stop workload')),
+    )),
+  ));
+
   resetSettings = createEffect(() => this.actions$.pipe(
     ofType(autoscalerActions.resetSettings),
     switchMap(() => this.autoscalerApi.autoscalerResetSettings({}).pipe(

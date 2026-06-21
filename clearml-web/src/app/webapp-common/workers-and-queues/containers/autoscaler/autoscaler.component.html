@@ -737,6 +737,13 @@
                           (click)="openInstanceDetails($event, instance, workloadDialog)">
                     <mat-icon fontSet="al" fontIcon="al-ico-info-circle"></mat-icon>
                   </button>
+                  @if (canStopInstance(instance)) {
+                    <button mat-icon-button type="button"
+                            aria-label="Stop app instance"
+                            (click)="stopInstance($event, instance)">
+                      <mat-icon fontSet="al" fontIcon="al-ico-abort"></mat-icon>
+                    </button>
+                  }
                   <button mat-icon-button type="button"
                           aria-label="Delete app instance"
                           (click)="deleteInstance($event, instance)">

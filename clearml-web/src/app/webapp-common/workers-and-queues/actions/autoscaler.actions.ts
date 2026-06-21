@@ -182,6 +182,7 @@ export const autoscalerActions = createActionGroup({
     'Set Project Resources Loading': props<{loading: boolean}>(),
     'Set Project Resources': props<{resources: AutoscalerProjectResources}>(),
     'Delete Workload': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),
+    'Stop Workload': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),
     'Reset Settings': emptyProps(),
   }
 });

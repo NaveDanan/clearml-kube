@@ -5,6 +5,7 @@ from apiserver.apimodels.autoscaler import (
     GetDashboardRequest,
     GetProjectResourcesRequest,
     DeleteWorkloadRequest,
+    StopWorkloadRequest,
     SaveAppInstanceRequest,
 )
 from apiserver.bll.autoscaler import AutoscalerBLL
@@ -75,5 +76,12 @@ def save_app_instance(call: APICall, company: str, request: SaveAppInstanceReque
 @endpoint("autoscaler.delete_workload")
 def delete_workload(call: APICall, company: str, request: DeleteWorkloadRequest):
     call.result.data = autoscaler_bll.delete_workload(
+        company, request, user_id=call.identity.user, worker_id=call.worker
+    )
+
+
+@endpoint("autoscaler.stop_workload")
+def stop_workload(call: APICall, company: str, request: StopWorkloadRequest):
+    call.result.data = autoscaler_bll.stop_workload(
         company, request, user_id=call.identity.user, worker_id=call.worker
     )

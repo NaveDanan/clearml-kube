@@ -68,4 +68,8 @@ export class ApiAutoscalerService {
   public autoscalerDeleteWorkload(request: object): Observable<any> {
     return this.apiRequest.post<any>(`${this.basePath}/autoscaler.delete_workload`, request);
   }
+
+  public autoscalerStopWorkload(request: object): Observable<any> {
+    return this.apiRequest.post<any>(`${this.basePath}/autoscaler.stop_workload`, request);
+  }
 }
