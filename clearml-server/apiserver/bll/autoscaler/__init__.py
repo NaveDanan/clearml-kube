@@ -29,6 +29,20 @@ log = config.logger(__file__)
 class AutoscalerBLL:
 
     _execution_log_limit = 10000
+    _default_cli_paths = (
+        "/usr/local/sbin",
+        "/usr/local/bin",
+        "/usr/sbin",
+        "/usr/bin",
+        "/sbin",
+        "/bin",
+        "/opt/bin",
+    )
+    _openshift_cli_env_vars = (
+        "CLEARML_OPENSHIFT_CLI",
+        "OPENSHIFT_CLI",
+        "OC_BINARY",
+    )
     _workload_fields = (
         "workload_type",
         "workload_name",
@@ -351,6 +365,7 @@ class AutoscalerBLL:
     @staticmethod
     def _build_env(conn, config_dir: str) -> dict:
         env = os.environ.copy()
+        AutoscalerBLL._add_default_cli_paths(env)
         env["KUBECONFIG"] = os.path.join(config_dir, "kubeconfig")
         env["RUNAI_CONFIG_DIR"] = os.path.join(config_dir, "runai")
         env["RUNAI_CLI_CONFIG_PATH"] = os.path.join(config_dir, "runai")
@@ -450,9 +465,14 @@ class AutoscalerBLL:
         if not api_url or not token:
             raise RuntimeError("OpenShift API URL and token are required")
 
+        oc_binary = AutoscalerBLL._resolve_cli_binary(
+            "oc",
+            env,
+            env_vars=AutoscalerBLL._openshift_cli_env_vars,
+        )
         result = subprocess.run(
             [
-                "oc", "login",
+                oc_binary, "login",
                 api_url,
                 "--token", token,
                 "--insecure-skip-tls-verify=true",
@@ -461,6 +481,34 @@ class AutoscalerBLL:
         )
         if result.returncode != 0:
             raise RuntimeError(f"oc login failed: {result.stderr}")
+
+    @classmethod
+    def _add_default_cli_paths(cls, env: dict):
+        path = env.get("PATH") or ""
+        entries = [entry for entry in path.split(os.pathsep) if entry]
+        for entry in cls._default_cli_paths:
+            if entry not in entries:
+                entries.append(entry)
+        env["PATH"] = os.pathsep.join(entries)
+
+    @classmethod
+    def _resolve_cli_binary(cls, binary: str, env: dict = None, env_vars: tuple = ()) -> str:
+        env = env or {}
+        for env_var in env_vars:
+            configured = env.get(env_var) or os.environ.get(env_var)
+            if configured:
+                return configured
+
+        resolved = shutil.which(binary, path=env.get("PATH"))
+        if resolved:
+            return resolved
+
+        for directory in cls._default_cli_paths:
+            candidate = os.path.join(directory, binary)
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+
+        return binary
 
     @staticmethod
     def _do_runai_login(conn, env: dict):
@@ -808,7 +856,12 @@ class AutoscalerBLL:
                 continue
             if set(text) <= {"-", "+", "|", " "}:
                 continue
-            if any(header in lowered for header in ("project", "name", "status")) and not lines:
+            header_tokens = set(lowered.split())
+            if (
+                not lines
+                and header_tokens & {"project", "name"}
+                and header_tokens & {"status", "state", "phase"}
+            ):
                 continue
             lines.append({"raw": text})
         return lines

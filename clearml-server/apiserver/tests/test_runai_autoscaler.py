@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import unittest
 from datetime import datetime, timedelta
@@ -34,6 +35,9 @@ class FakeQuery:
     def order_by(self, *fields):
         self._order_by = fields
         return self
+
+    def __iter__(self):
+        return iter(self._items())
 
     def modify(self, new=False, **updates):
         item = self.first()
@@ -320,6 +324,51 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertTrue(all(command[0] == "runai-v2" for command in v2))
         self.assertEqual(auto[0][0], "runai-v2")
         self.assertEqual(auto[-1][0], "runai-v1")
+
+    def test_build_env_adds_default_cli_paths(self):
+        with patch.dict(autoscaler_mod.os.environ, {"PATH": "/custom/bin"}, clear=True):
+            env = self.bll._build_env(SimpleNamespace(), "runai-tmp")
+
+        path_entries = env["PATH"].split(os.pathsep)
+        self.assertEqual(path_entries[0], "/custom/bin")
+        self.assertIn("/usr/local/bin", path_entries)
+        self.assertIn("/opt/bin", path_entries)
+
+    def test_oc_login_resolves_cli_from_subprocess_env_path(self):
+        settings = SimpleNamespace(
+            openshift_api_url="https://api.example:6443",
+            openshift_token="token",
+        )
+        env = {"PATH": "/usr/local/bin:/usr/bin"}
+
+        with patch.object(autoscaler_mod.shutil, "which", return_value="/usr/local/bin/oc") as which, \
+             patch.object(autoscaler_mod.subprocess, "run", return_value=completed()) as run:
+            self.bll._do_oc_login(settings, env)
+
+        which.assert_called_once_with("oc", path=env["PATH"])
+        run.assert_called_once()
+        command = run.call_args.args[0]
+        self.assertEqual(command[0], "/usr/local/bin/oc")
+        self.assertEqual(command[1:4], ["login", "https://api.example:6443", "--token"])
+        self.assertEqual(command[4], "token")
+        self.assertIn("--insecure-skip-tls-verify=true", command)
+
+    def test_oc_login_allows_configured_cli_path_override(self):
+        settings = SimpleNamespace(
+            openshift_api_url="https://api.example:6443",
+            openshift_token="token",
+        )
+        env = {
+            "PATH": "/usr/bin",
+            "CLEARML_OPENSHIFT_CLI": "/custom/oc",
+        }
+
+        with patch.object(autoscaler_mod.shutil, "which") as which, \
+             patch.object(autoscaler_mod.subprocess, "run", return_value=completed()) as run:
+            self.bll._do_oc_login(settings, env)
+
+        which.assert_not_called()
+        self.assertEqual(run.call_args.args[0][0], "/custom/oc")
 
     def test_command_redaction_hides_sensitive_values(self):
         redacted = self.bll._redact_command([

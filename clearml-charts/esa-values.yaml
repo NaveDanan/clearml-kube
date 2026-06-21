@@ -48,7 +48,7 @@ apiserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "autoscalar-v2026-06-11"
+    tag: "autoscalar-v2026-06-14"
   service:
     type: ClusterIP
   ingress:
@@ -73,7 +73,7 @@ fileserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "autoscalar-v2026-06-11"
+    tag: "autoscalar-v2026-06-14"
   service:
     type: ClusterIP
   ingress:
@@ -119,7 +119,7 @@ webserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "autoscalar-v2026-06-11"
+    tag: "autoscalar-v2026-06-14"
   service:
     type: ClusterIP
   additionalConfigs:
@@ -155,7 +155,7 @@ runaiWorker:
   image:
     repository: "runai-worker"
     pullPolicy: IfNotPresent
-    tag: "2026-06-11"
+    tag: "2026-06-14"
   replicaCount: 1
   pollInterval: 10
   batchSize: 5

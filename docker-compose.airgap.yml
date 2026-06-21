@@ -1,0 +1,22 @@
+# Air-gapped image build driven entirely by build args from a .env file.
+# Docker Compose automatically loads variables from a ".env" file in this
+# directory, so every build arg below is sourced from .env (copy .env.example).
+#
+# Build:   docker compose -f docker-compose.airgap.yml build
+# (equivalent to a docker build with all --build-arg values from .env)
+services:
+  clearml-airgap:
+    image: ${AIRGAP_IMAGE_TAG:-clearml/clearml:airgap}
+    build:
+      context: .
+      dockerfile: Dockerfile.airgap
+      args:
+        WEBAPP_BUILDER_IMAGE: ${WEBAPP_BUILDER_IMAGE}
+        PYTHON_RUNTIME_IMAGE: ${PYTHON_RUNTIME_IMAGE}
+        AIRGAP_CA_CERT_B64: ${AIRGAP_CA_CERT_B64}
+        NPM_REGISTRY_URL: ${NPM_REGISTRY_URL}
+        NPM_STRICT_SSL: ${NPM_STRICT_SSL}
+        PIP_INDEX_URL: ${PIP_INDEX_URL}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST}
+        APT_MIRROR_URL: ${APT_MIRROR_URL}
+        APT_SECURITY_MIRROR_URL: ${APT_SECURITY_MIRROR_URL}

@@ -1,0 +1,113 @@
+# Build with internal mirrors only. Replace these defaults or override them
+# with --build-arg values that point to your self-hosted registry/mirrors.
+# NOTE: PYTHON_RUNTIME_IMAGE must be an Ubuntu jammy (22.04) based image so that
+# apt packages resolve against an internal Ubuntu jammy apt mirror.
+ARG WEBAPP_BUILDER_IMAGE=registry.internal.example/library/node:20-bookworm-slim
+ARG PYTHON_RUNTIME_IMAGE=registry.internal.example/library/python:3.11-jammy
+ARG AIRGAP_CA_CERT_B64=
+
+FROM ${WEBAPP_BUILDER_IMAGE} AS webapp_builder
+
+ARG NPM_REGISTRY_URL=https://npm.internal.example/repository/npm/
+ARG NPM_STRICT_SSL=true
+ARG AIRGAP_CA_CERT_B64
+
+ENV AIRGAP_CA_CERT_PATH=/usr/local/share/ca-certificates/airgap-custom-ca.crt \
+    NPM_CONFIG_REGISTRY=${NPM_REGISTRY_URL} \
+    NPM_CONFIG_STRICT_SSL=${NPM_STRICT_SSL} \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_FUND=false
+
+USER root
+WORKDIR /opt
+
+RUN if [ -n "${AIRGAP_CA_CERT_B64}" ]; then \
+    mkdir -p $(dirname ${AIRGAP_CA_CERT_PATH}); \
+        printf '%s' "${AIRGAP_CA_CERT_B64}" | base64 -d > ${AIRGAP_CA_CERT_PATH}; \
+        chmod 0644 ${AIRGAP_CA_CERT_PATH}; \
+        if command -v update-ca-certificates >/dev/null 2>&1; then update-ca-certificates; fi; \
+    fi
+
+# Copy local clearml-web source instead of cloning from git.
+COPY clearml-web /opt/open-webapp
+COPY clearml-server/docker/build/internal_files/build_webapp.sh /tmp/internal_files/
+RUN if [ -n "${AIRGAP_CA_CERT_B64}" ]; then \
+        export NODE_EXTRA_CA_CERTS=${AIRGAP_CA_CERT_PATH} NPM_CONFIG_CAFILE=${AIRGAP_CA_CERT_PATH}; \
+    fi; \
+    sed -i 's/\r$//' /tmp/internal_files/build_webapp.sh && /bin/bash -c '/tmp/internal_files/build_webapp.sh'
+
+FROM ${PYTHON_RUNTIME_IMAGE}
+
+ARG PIP_INDEX_URL=https://pypi.internal.example/simple
+ARG PIP_TRUSTED_HOST=pypi.internal.example
+ARG AIRGAP_CA_CERT_B64
+
+# Internal Ubuntu (jammy) apt mirror. Leave empty to keep the image's default
+# apt sources. When set, the Debian/Ubuntu upstream hosts in the apt sources are
+# rewritten to point at these internal mirror URLs.
+# Example: APT_MIRROR_URL=https://artifactory.rafael.co.il/artifactory/ubuntu
+ARG APT_MIRROR_URL=
+ARG APT_SECURITY_MIRROR_URL=
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
+    PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN if [ -n "${AIRGAP_CA_CERT_B64}" ]; then \
+    mkdir -p /usr/local/share/ca-certificates; \
+        printf '%s' "${AIRGAP_CA_CERT_B64}" | base64 -d > /usr/local/share/ca-certificates/airgap-custom-ca.crt; \
+        chmod 0644 /usr/local/share/ca-certificates/airgap-custom-ca.crt; \
+        update-ca-certificates; \
+    fi
+
+# Redirect apt to the internal mirror so package installation works air-gapped.
+RUN if [ -n "${APT_MIRROR_URL}" ]; then \
+        sec="${APT_SECURITY_MIRROR_URL:-${APT_MIRROR_URL}}"; \
+        for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do \
+            [ -e "$f" ] || continue; \
+            sed -i \
+                -e "s|https\?://security.ubuntu.com/ubuntu|${sec}|g" \
+                -e "s|https\?://ports.ubuntu.com/ubuntu-ports|${APT_MIRROR_URL}|g" \
+                -e "s|https\?://archive.ubuntu.com/ubuntu|${APT_MIRROR_URL}|g" \
+                -e "s|https\?://[a-zA-Z0-9.-]*\.archive.ubuntu.com/ubuntu|${APT_MIRROR_URL}|g" \
+                -e "s|https\?://deb.debian.org/debian-security|${sec}|g" \
+                -e "s|https\?://security.debian.org/debian-security|${sec}|g" \
+                -e "s|https\?://deb.debian.org/debian|${APT_MIRROR_URL}|g" \
+                "$f"; \
+        done; \
+    fi
+
+COPY --chmod=744 clearml-server/docker/build/internal_files/entrypoint.sh /opt/clearml/
+COPY --chmod=744 clearml-server/docker/build/internal_files/update_from_env.py /opt/clearml/utilities/
+COPY clearml-server/fileserver /opt/clearml/fileserver/
+ARG CACHEBUST=1
+COPY clearml-server/apiserver /opt/clearml/apiserver/
+
+COPY --chmod=744 clearml-server/docker/build/internal_files/final_image_preparation.sh /tmp/internal_files/
+COPY clearml-server/docker/build/internal_files/clearml.conf.template /tmp/internal_files/
+COPY clearml-server/docker/build/internal_files/clearml_subpath.conf.template /tmp/internal_files/
+RUN find /tmp/internal_files -type f -exec sed -i 's/\r$//' {} + && \
+    sed -i 's/\r$//' /opt/clearml/entrypoint.sh && \
+    find /opt/clearml/utilities -type f -name '*.py' -exec sed -i 's/\r$//' {} + && \
+    find /opt/clearml/fileserver -type f -name '*.py' -exec sed -i 's/\r$//' {} + && \
+    find /opt/clearml/apiserver -type f \( -name '*.py' -o -name '*.sh' \) -exec sed -i 's/\r$//' {} + && \
+    /bin/bash -c '/tmp/internal_files/final_image_preparation.sh'
+
+COPY --from=webapp_builder --chown=1000:1000 /opt/open-webapp/build/browser /usr/share/nginx/html
+COPY --from=webapp_builder --chown=1000:1000 /opt/open-webapp/dist/report-widgets /usr/share/nginx/widgets
+
+EXPOSE 8080
+EXPOSE 8008
+EXPOSE 8081
+
+ENV CLEARML_SERVER_VERSION=dev
+ENV CLEARML_SERVER_BUILD=airgap
+
+USER 1000
+WORKDIR /opt/clearml/
+ENTRYPOINT ["/opt/clearml/entrypoint.sh"]
