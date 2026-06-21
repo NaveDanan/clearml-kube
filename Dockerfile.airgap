@@ -1,9 +1,9 @@
 # Build with internal mirrors only. Replace these defaults or override them
 # with --build-arg values that point to your self-hosted registry/mirrors.
-# NOTE: PYTHON_RUNTIME_IMAGE must be an Ubuntu jammy (22.04) based image so that
-# apt packages resolve against an internal Ubuntu jammy apt mirror.
-ARG WEBAPP_BUILDER_IMAGE=registry.internal.example/library/node:20-bookworm-slim
-ARG PYTHON_RUNTIME_IMAGE=registry.internal.example/library/python:3.11-jammy
+# NOTE: PYTHON_RUNTIME_IMAGE must be a Debian bullseye (11) based image so that
+# apt packages resolve against the internal Debian bullseye apt mirror.
+ARG WEBAPP_BUILDER_IMAGE=registry.internal.example/library/node:20-bullseye-slim
+ARG PYTHON_RUNTIME_IMAGE=registry.internal.example/library/python:3.11-slim-bullseye
 ARG AIRGAP_CA_CERT_B64=
 
 FROM ${WEBAPP_BUILDER_IMAGE} AS webapp_builder
@@ -42,10 +42,10 @@ ARG PIP_INDEX_URL=https://pypi.internal.example/simple
 ARG PIP_TRUSTED_HOST=pypi.internal.example
 ARG AIRGAP_CA_CERT_B64
 
-# Internal Ubuntu (jammy) apt mirror. Leave empty to keep the image's default
+# Internal Debian (bullseye) apt mirror. Leave empty to keep the image's default
 # apt sources. When set, the Debian/Ubuntu upstream hosts in the apt sources are
 # rewritten to point at these internal mirror URLs.
-# Example: APT_MIRROR_URL=https://artifactory.rafael.co.il/artifactory/ubuntu
+# Example: APT_MIRROR_URL=https://artifactory.rafael.co.il/artifactory/debian
 ARG APT_MIRROR_URL=
 ARG APT_SECURITY_MIRROR_URL=
 
