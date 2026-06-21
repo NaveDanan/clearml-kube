@@ -36,8 +36,12 @@ imageCredentials:
 clearml:
   cookieName: clearml-token-k8s
   cookieDomain: ""
-  clientConfigurationApiUrl: "http://127.0.0.1:8008"
-  clientConfigurationFilesUrl: "http://127.0.0.1:8081"
+  # Use same-origin relative paths so the browser routes API/file calls through
+  # the webserver (:8080) nginx proxy. Absolute cross-origin URLs (e.g.
+  # http://127.0.0.1:8008) cause the SameSite=Lax auth cookie from auth.login to
+  # be dropped by the browser, resulting in "401 missing credentials" after login.
+  clientConfigurationApiUrl: "/api"
+  clientConfigurationFilesUrl: "/files"
 
 apiserver:
   enabled: true
