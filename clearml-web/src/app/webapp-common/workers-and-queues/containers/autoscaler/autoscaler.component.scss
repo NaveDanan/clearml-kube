@@ -553,6 +553,123 @@ header {
   font-weight: 600;
 }
 
+.asset-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 4px 0 8px;
+}
+
+.asset-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 8px;
+  background: var(--color-surface-container-low);
+}
+
+.asset-group-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.asset-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.asset-selected {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.asset-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.asset-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 16px;
+  line-height: 1.2;
+  text-align: left;
+
+  &.selected {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+
+  .asset-chip-name {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .asset-chip-meta {
+    font-size: 11px;
+    color: var(--color-on-surface-variant);
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.asset-empty {
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+}
+
+.env-vars-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.env-vars-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.env-vars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.env-var-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.env-var-equals {
+  font-weight: 700;
+  color: var(--color-on-surface-variant);
+}
+
+.env-var-add {
+  align-self: flex-start;
+}
+
 .connection-actions,
 .submit-actions,
 .import-actions {

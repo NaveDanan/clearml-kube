@@ -218,6 +218,103 @@
     </div>
 
     <form [formGroup]="workloadForm" class="form-grid">
+      <h3 class="section-label full-width">Project</h3>
+
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Project</mat-label>
+        <input matInput formControlName="project" [matAutocomplete]="projectAuto"
+               placeholder="Select or type a Run:ai project">
+        <mat-autocomplete #projectAuto="matAutocomplete">
+          @for (project of filteredProjects(); track project) {
+            <mat-option [value]="project">{{ project }}</mat-option>
+          }
+        </mat-autocomplete>
+        @if (projectResourcesLoading()) {
+          <mat-spinner matSuffix diameter="18"></mat-spinner>
+        }
+      </mat-form-field>
+
+      <div class="full-width asset-picker">
+        <div class="asset-group">
+          <div class="asset-group-header">
+            <span class="asset-group-title">Compute resource</span>
+            @if (workloadForm.controls.compute.value) {
+              <span class="asset-selected">{{ workloadForm.controls.compute.value }}</span>
+            }
+          </div>
+          @if (computeResources().length) {
+            <div class="asset-chips">
+              @for (resource of computeResources(); track resource.name) {
+                <button mat-button type="button" class="asset-chip"
+                        [class.selected]="isComputeSelected(resource)"
+                        (click)="selectCompute(resource)">
+                  <span class="asset-chip-name">{{ resource.name }}</span>
+                  @if (resource.gpu_devices_request) {
+                    <span class="asset-chip-meta">{{ resource.gpu_devices_request }} GPU</span>
+                  } @else if (resource.cpu_core_request) {
+                    <span class="asset-chip-meta">{{ resource.cpu_core_request }} CPU</span>
+                  }
+                </button>
+              }
+            </div>
+          } @else {
+            <div class="asset-empty">{{ assetEmptyLabel() }}</div>
+          }
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-header">
+            <span class="asset-group-title">Environment</span>
+            @if (workloadForm.controls.environment.value) {
+              <span class="asset-selected">{{ workloadForm.controls.environment.value }}</span>
+            }
+          </div>
+          @if (environmentResources().length) {
+            <div class="asset-chips">
+              @for (resource of environmentResources(); track resource.name) {
+                <button mat-button type="button" class="asset-chip"
+                        [class.selected]="isEnvironmentSelected(resource)"
+                        (click)="selectEnvironment(resource)">
+                  <span class="asset-chip-name">{{ resource.name }}</span>
+                  @if (resource.image) {
+                    <span class="asset-chip-meta">{{ resource.image }}</span>
+                  }
+                </button>
+              }
+            </div>
+          } @else {
+            <div class="asset-empty">{{ assetEmptyLabel() }}</div>
+          }
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-header">
+            <span class="asset-group-title">Data sources</span>
+            @if (selectedDataSources().length) {
+              <span class="asset-selected">{{ selectedDataSources().length }} selected</span>
+            }
+          </div>
+          @if (dataSourceResources().length) {
+            <div class="asset-chips">
+              @for (resource of dataSourceResources(); track resource.name) {
+                <button mat-button type="button" class="asset-chip"
+                        [class.selected]="isDataSourceSelected(resource)"
+                        (click)="toggleDataSource(resource)">
+                  <span class="asset-chip-name">{{ resource.name }}</span>
+                  @if (resource.type) {
+                    <span class="asset-chip-meta">{{ resource.type }}</span>
+                  }
+                </button>
+              }
+            </div>
+          } @else {
+            <div class="asset-empty">{{ assetEmptyLabel() }}</div>
+          }
+        </div>
+      </div>
+
+      <h3 class="section-label full-width">Workload</h3>
+
       <mat-form-field appearance="outline">
         <mat-label>Workload Type</mat-label>
         <mat-select formControlName="workload_type">
@@ -258,11 +355,45 @@
         <input matInput formControlName="args" placeholder="e.g. --epochs 10 --lr 0.001">
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Environment Variables</mat-label>
-        <input matInput formControlName="environment_variables"
-               placeholder="KEY1=val1,KEY2=val2">
-      </mat-form-field>
+      <div class="full-width env-vars-section">
+        <div class="env-vars-header">
+          <span class="section-label">Environment Variables</span>
+          <div class="env-vars-actions">
+            <button mat-stroked-button type="button" (click)="envFileInput.click()">
+              <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
+              UPLOAD .ENV
+            </button>
+            <input #envFileInput type="file" accept=".env,text/plain" (change)="uploadEnvFile($event)" hidden>
+          </div>
+        </div>
+
+        <div formArrayName="env_vars" class="env-vars-list">
+          @for (group of envVars.controls; track group; let i = $index) {
+            <div class="env-var-row" [formGroupName]="i">
+              <mat-form-field appearance="outline" class="env-var-key">
+                <mat-label>Key</mat-label>
+                <input matInput formControlName="key" placeholder="KEY">
+              </mat-form-field>
+              <span class="env-var-equals">=</span>
+              <mat-form-field appearance="outline" class="env-var-value">
+                <mat-label>Value</mat-label>
+                <input matInput formControlName="value" placeholder="value">
+              </mat-form-field>
+              <button mat-icon-button type="button" class="env-var-remove"
+                      (click)="removeEnvVar(i)" aria-label="Remove environment variable">
+                <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+              </button>
+            </div>
+          } @empty {
+            <div class="asset-empty">No environment variables yet. Add one below or upload a .env file.</div>
+          }
+        </div>
+
+        <button mat-stroked-button type="button" class="env-var-add" (click)="addEnvVar()">
+          <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon>
+          ADD VARIABLE
+        </button>
+      </div>
 
       <h3 class="section-label full-width">Resources</h3>
 

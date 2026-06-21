@@ -21,6 +21,40 @@ export interface AutoscalerConnectionResult {
   error?: string;
 }
 
+export interface AutoscalerComputeResource {
+  name: string;
+  gpu_devices_request?: string;
+  gpu_memory_request?: string;
+  gpu_portion_request?: string;
+  cpu_core_request?: string;
+  cpu_memory_request?: string;
+}
+
+export interface AutoscalerEnvironmentResource {
+  name: string;
+  image?: string;
+  command?: string;
+  args?: string;
+  working_dir?: string;
+}
+
+export interface AutoscalerDataSourceResource {
+  name: string;
+  type?: string;
+  existing_pvc?: string;
+  path?: string;
+}
+
+export interface AutoscalerProjectResources {
+  connected?: boolean;
+  error?: string;
+  project?: string;
+  projects?: string[];
+  compute?: AutoscalerComputeResource[];
+  environments?: AutoscalerEnvironmentResource[];
+  data_sources?: AutoscalerDataSourceResource[];
+}
+
 export interface AutoscalerWorkloadData {
   workload_type: string;
   workload_name: string;
@@ -31,6 +65,9 @@ export interface AutoscalerWorkloadData {
   args?: string;
   environment_variables?: string;
   template?: string;
+  compute?: string;
+  environment?: string;
+  data_sources?: string;
   cpu_core_request?: string;
   cpu_core_limit?: string;
   cpu_memory_request?: string;
@@ -140,6 +177,9 @@ export const autoscalerActions = createActionGroup({
     'Set Dashboard Loading': props<{loading: boolean}>(),
     'Set Dashboard': props<{dashboard: AutoscalerDashboardData}>(),
     'Set Dashboard Error': props<{error: string}>(),
+    'Get Project Resources': props<{project: string}>(),
+    'Set Project Resources Loading': props<{loading: boolean}>(),
+    'Set Project Resources': props<{resources: AutoscalerProjectResources}>(),
     'Delete Workload': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),
     'Reset Settings': emptyProps(),
   }

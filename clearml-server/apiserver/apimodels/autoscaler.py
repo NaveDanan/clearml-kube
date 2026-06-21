@@ -30,6 +30,9 @@ class WorkloadRequest(Base):
     args = StringField()
     environment_variables = StringField()
     template = StringField()
+    compute = StringField()
+    environment = StringField()
+    data_sources = StringField()
     cpu_core_request = StringField()
     cpu_core_limit = StringField()
     cpu_memory_request = StringField()
@@ -72,6 +75,10 @@ class GetExecutionRequest(Base):
 
 class GetDashboardRequest(Base):
     pass
+
+
+class GetProjectResourcesRequest(Base):
+    project = StringField()
 
 
 class DeleteWorkloadRequest(Base):

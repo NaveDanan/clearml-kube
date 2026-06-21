@@ -1,10 +1,11 @@
 import {ChangeDetectionStrategy, Component, OnDestroy, TemplateRef, computed, effect, inject, signal} from '@angular/core';
 import {Store} from '@ngrx/store';
 import {NgTemplateOutlet} from '@angular/common';
-import {AbstractControl, FormBuilder, ReactiveFormsModule, Validators} from '@angular/forms';
+import {AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatInputModule} from '@angular/material/input';
 import {MatSelectModule} from '@angular/material/select';
+import {MatAutocompleteModule} from '@angular/material/autocomplete';
 import {MatCheckboxModule} from '@angular/material/checkbox';
 import {MatButton, MatIconButton} from '@angular/material/button';
 import {MatIcon} from '@angular/material/icon';
@@ -14,7 +15,12 @@ import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatMenuModule} from '@angular/material/menu';
 import {MatDialog, MatDialogModule} from '@angular/material/dialog';
 import {ActivatedRoute, Router} from '@angular/router';
-import {autoscalerActions} from '../../actions/autoscaler.actions';
+import {
+  autoscalerActions,
+  AutoscalerComputeResource,
+  AutoscalerDataSourceResource,
+  AutoscalerEnvironmentResource,
+} from '../../actions/autoscaler.actions';
 import {
   selectAutoscalerSettings,
   selectAutoscalerConnectionStatus,
@@ -22,9 +28,12 @@ import {
   selectAutoscalerDashboard,
   selectAutoscalerDashboardError,
   selectAutoscalerDashboardLoading,
-  selectAutoscalerLastExecution
+  selectAutoscalerLastExecution,
+  selectAutoscalerProjectResources,
+  selectAutoscalerProjectResourcesLoading
 } from '../../reducers/index.reducer';
 import {Subscription} from 'rxjs';
+import {debounceTime, distinctUntilChanged} from 'rxjs/operators';
 
 export type WorkloadType = 'training' | 'workspace' | 'inference';
 type ConnectionMethod = 'openshift' | 'runai_application';
@@ -43,6 +52,9 @@ type WorkloadFormValue = Partial<{
   args: string;
   environment_variables: string;
   template: string;
+  compute: string;
+  environment: string;
+  data_sources: string;
   cpu_core_request: string;
   cpu_core_limit: string;
   cpu_memory_request: string;
@@ -84,6 +96,11 @@ interface AppInstance {
   workload?: WorkloadFormValue;
 }
 
+interface EnvVarGroup {
+  key: FormControl<string>;
+  value: FormControl<string>;
+}
+
 @Component({
   selector: 'sm-autoscaler',
   templateUrl: './autoscaler.component.html',
@@ -93,6 +110,7 @@ interface AppInstance {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
+    MatAutocompleteModule,
     MatCheckboxModule,
     MatButton,
     MatIconButton,
@@ -126,6 +144,35 @@ export class AutoscalerComponent implements OnDestroy {
   protected dashboard = this.store.selectSignal(selectAutoscalerDashboard);
   protected dashboardLoading = this.store.selectSignal(selectAutoscalerDashboardLoading);
   protected dashboardError = this.store.selectSignal(selectAutoscalerDashboardError);
+  protected projectResources = this.store.selectSignal(selectAutoscalerProjectResources);
+  protected projectResourcesLoading = this.store.selectSignal(selectAutoscalerProjectResourcesLoading);
+  protected projectFilter = signal('');
+  protected computeResources = computed<AutoscalerComputeResource[]>(() => this.projectResources()?.compute ?? []);
+  protected environmentResources = computed<AutoscalerEnvironmentResource[]>(() => this.projectResources()?.environments ?? []);
+  protected dataSourceResources = computed<AutoscalerDataSourceResource[]>(() => this.projectResources()?.data_sources ?? []);
+  protected availableProjects = computed<string[]>(() => {
+    const names = new Set<string>();
+    const add = (value?: string | null) => {
+      const cleaned = (value || '').trim();
+      if (cleaned) {
+        names.add(cleaned);
+      }
+    };
+    (this.projectResources()?.projects ?? []).forEach(add);
+    (this.dashboard()?.queues ?? []).forEach(queue => add(queue.name));
+    (this.dashboard()?.instances ?? []).forEach(instance => add(instance.project));
+    (this.dashboard()?.saved_instances ?? []).forEach(instance => add(instance.project));
+    add(this.settings()?.runai_project);
+    return [...names].sort((a, b) => a.localeCompare(b));
+  });
+  protected filteredProjects = computed<string[]>(() => {
+    const filter = this.projectFilter().trim().toLowerCase();
+    const projects = this.availableProjects();
+    if (!filter) {
+      return projects;
+    }
+    return projects.filter(project => project.toLowerCase().includes(filter));
+  });
   protected resourceBars = computed(() => {
     const resources = this.dashboard()?.resources;
     return [
@@ -241,8 +288,11 @@ export class AutoscalerComponent implements OnDestroy {
     command_override: [false],
     command: [''],
     args: [''],
-    environment_variables: [''],
+    env_vars: this.fb.array<FormGroup<EnvVarGroup>>([]),
     template: [''],
+    compute: [''],
+    environment: [''],
+    data_sources: [''],
     // CPU / Memory
     cpu_core_request: [''],
     cpu_core_limit: [''],
@@ -289,6 +339,13 @@ export class AutoscalerComponent implements OnDestroy {
     this.formSubscription.add(this.connectionForm.controls.connection_method.valueChanges.subscribe(() => this.updateConnectionValidators()));
     this.formSubscription.add(this.connectionForm.controls.openshift_login_mode.valueChanges.subscribe(() => this.updateConnectionValidators()));
     this.updateConnectionValidators();
+    this.formSubscription.add(this.workloadForm.controls.project.valueChanges.subscribe(project => {
+      this.projectFilter.set(project || '');
+    }));
+    this.formSubscription.add(this.workloadForm.controls.project.valueChanges.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
+    ).subscribe(project => this.loadProjectResources(project || '')));
 
     effect(() => {
       if (this.selectedProvider() !== 'runai') {
@@ -454,7 +511,7 @@ export class AutoscalerComponent implements OnDestroy {
   }
 
   submitWorkload() {
-    const workload = this.workloadForm.getRawValue() as WorkloadFormValue;
+    const workload = this.getWorkloadValue();
     this.rememberLocalWorkload(workload);
     this.store.dispatch(autoscalerActions.submitWorkload({
       workload
@@ -468,7 +525,209 @@ export class AutoscalerComponent implements OnDestroy {
 
   resetWorkload() {
     this.workloadForm.reset({workload_type: 'training'});
+    this.setEnvVars([]);
+    this.addEnvVar('', '', false);
     this.workloadForm.markAsPristine();
+  }
+
+  // --- Environment variables (one row per variable + .env upload) ---
+
+  protected get envVars(): FormArray<FormGroup<EnvVarGroup>> {
+    return this.workloadForm.controls.env_vars;
+  }
+
+  protected addEnvVar(key = '', value = '', markDirty = true) {
+    this.envVars.push(this.fb.group({
+      key: this.fb.nonNullable.control(key),
+      value: this.fb.nonNullable.control(value),
+    }));
+    if (markDirty) {
+      this.workloadForm.markAsDirty();
+    }
+  }
+
+  protected removeEnvVar(index: number) {
+    this.envVars.removeAt(index);
+    this.workloadForm.markAsDirty();
+  }
+
+  protected uploadEnvFile(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const pairs = this.parseEnvFile(String(reader.result ?? ''));
+      if (pairs.length) {
+        const existing = this.serializeEnvVars();
+        this.setEnvVars([...this.deserializeEnvVars(existing), ...pairs]);
+        this.workloadForm.markAsDirty();
+      }
+      input.value = '';
+    };
+    reader.onerror = () => this.importError.set('Could not read the selected .env file');
+    reader.readAsText(file);
+  }
+
+  private parseEnvFile(content: string): {key: string; value: string}[] {
+    const pairs: {key: string; value: string}[] = [];
+    for (const rawLine of content.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) {
+        continue;
+      }
+      const withoutExport = line.replace(/^export\s+/, '');
+      const separator = withoutExport.indexOf('=');
+      if (separator < 0) {
+        continue;
+      }
+      const key = withoutExport.slice(0, separator).trim();
+      if (!key) {
+        continue;
+      }
+      let value = withoutExport.slice(separator + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      pairs.push({key, value});
+    }
+    return pairs;
+  }
+
+  private setEnvVars(pairs: {key: string; value: string}[]) {
+    this.envVars.clear();
+    pairs.forEach(pair => this.addEnvVar(pair.key, pair.value, false));
+  }
+
+  private setEnvVarsFromString(value?: string | null) {
+    this.setEnvVars(this.deserializeEnvVars(value));
+  }
+
+  private deserializeEnvVars(value?: string | null): {key: string; value: string}[] {
+    if (!value) {
+      return [];
+    }
+    return value.split(',')
+      .map(pair => pair.trim())
+      .filter(Boolean)
+      .map(pair => {
+        const separator = pair.indexOf('=');
+        if (separator < 0) {
+          return {key: pair, value: ''};
+        }
+        return {key: pair.slice(0, separator).trim(), value: pair.slice(separator + 1).trim()};
+      });
+  }
+
+  private serializeEnvVars(): string {
+    return this.envVars.controls
+      .map(group => ({key: (group.controls.key.value || '').trim(), value: (group.controls.value.value || '').trim()}))
+      .filter(pair => pair.key)
+      .map(pair => `${pair.key}=${pair.value}`)
+      .join(',');
+  }
+
+  // --- Project resources (interactive compute / data source / environment) ---
+
+  protected loadProjectResources(project: string) {
+    if (this.selectedProvider() !== 'runai') {
+      return;
+    }
+    this.store.dispatch(autoscalerActions.setProjectResourcesLoading({loading: true}));
+    this.store.dispatch(autoscalerActions.getProjectResources({project}));
+  }
+
+  protected assetEmptyLabel(): string {
+    if (this.projectResourcesLoading()) {
+      return 'Loading assets…';
+    }
+    const resources = this.projectResources();
+    if (resources && resources.connected === false) {
+      return resources.error || 'Could not load Run:ai assets. Enter values manually below.';
+    }
+    if (!this.workloadForm.controls.project.value) {
+      return 'Select a project to load its Run:ai assets.';
+    }
+    return 'No assets found for this project. Enter values manually below.';
+  }
+
+  protected selectProject(project: string) {
+    this.workloadForm.controls.project.setValue(project);
+    this.workloadForm.markAsDirty();
+  }
+
+  protected selectCompute(resource: AutoscalerComputeResource) {
+    const isSelected = this.workloadForm.controls.compute.value === resource.name;
+    this.workloadForm.patchValue({
+      compute: isSelected ? '' : resource.name,
+      ...(isSelected ? {} : {
+        gpu_devices_request: resource.gpu_devices_request || this.workloadForm.controls.gpu_devices_request.value || '',
+        gpu_memory_request: resource.gpu_memory_request || this.workloadForm.controls.gpu_memory_request.value || '',
+        gpu_portion_request: resource.gpu_portion_request || this.workloadForm.controls.gpu_portion_request.value || '',
+        cpu_core_request: resource.cpu_core_request || this.workloadForm.controls.cpu_core_request.value || '',
+        cpu_memory_request: resource.cpu_memory_request || this.workloadForm.controls.cpu_memory_request.value || '',
+      }),
+    });
+    this.workloadForm.markAsDirty();
+  }
+
+  protected selectEnvironment(resource: AutoscalerEnvironmentResource) {
+    const isSelected = this.workloadForm.controls.environment.value === resource.name;
+    this.workloadForm.patchValue({
+      environment: isSelected ? '' : resource.name,
+      ...(isSelected ? {} : {
+        image: resource.image || this.workloadForm.controls.image.value || '',
+        command_override: resource.command ? true : this.workloadForm.controls.command_override.value,
+        command: resource.command || this.workloadForm.controls.command.value || '',
+        args: resource.args || this.workloadForm.controls.args.value || '',
+        working_dir: resource.working_dir || this.workloadForm.controls.working_dir.value || '',
+      }),
+    });
+    this.workloadForm.markAsDirty();
+  }
+
+  protected toggleDataSource(resource: AutoscalerDataSourceResource) {
+    const selected = this.selectedDataSources();
+    const adding = !selected.includes(resource.name);
+    const next = adding
+      ? [...selected, resource.name]
+      : selected.filter(name => name !== resource.name);
+    this.workloadForm.controls.data_sources.setValue(next.join(','));
+    const pvc = resource.existing_pvc || (resource.path ? `claimname=${resource.name},path=${resource.path}` : '');
+    if (adding && pvc && !this.workloadForm.controls.existing_pvc.value) {
+      this.workloadForm.controls.existing_pvc.setValue(pvc);
+    }
+    this.workloadForm.markAsDirty();
+  }
+
+  protected selectedDataSources(): string[] {
+    return (this.workloadForm.controls.data_sources.value || '')
+      .split(',')
+      .map(name => name.trim())
+      .filter(Boolean);
+  }
+
+  protected isComputeSelected(resource: AutoscalerComputeResource) {
+    return this.workloadForm.controls.compute.value === resource.name;
+  }
+
+  protected isEnvironmentSelected(resource: AutoscalerEnvironmentResource) {
+    return this.workloadForm.controls.environment.value === resource.name;
+  }
+
+  protected isDataSourceSelected(resource: AutoscalerDataSourceResource) {
+    return this.selectedDataSources().includes(resource.name);
+  }
+
+  private getWorkloadValue(): WorkloadFormValue {
+    const {env_vars, ...rest} = this.workloadForm.getRawValue();
+    return {
+      ...rest,
+      environment_variables: this.serializeEnvVars(),
+    } as WorkloadFormValue;
   }
 
   protected importReady() {
@@ -579,8 +838,10 @@ export class AutoscalerComponent implements OnDestroy {
       command_override: !!workload.command,
       command: workload.command || '',
       args: workload.args || '',
-      environment_variables: workload.environment_variables || '',
       template: workload.template || '',
+      compute: workload.compute || '',
+      environment: workload.environment || '',
+      data_sources: workload.data_sources || '',
       cpu_core_request: workload.cpu_core_request || '',
       cpu_core_limit: workload.cpu_core_limit || '',
       cpu_memory_request: workload.cpu_memory_request || '',
@@ -608,7 +869,8 @@ export class AutoscalerComponent implements OnDestroy {
       metric_threshold: workload.metric_threshold || '',
       scale_to_zero_retention: workload.scale_to_zero_retention || '',
     });
-    const normalized = this.workloadForm.getRawValue() as WorkloadFormValue;
+    this.setEnvVarsFromString(workload.environment_variables);
+    const normalized = this.getWorkloadValue();
     if (markDirty) {
       this.rememberLocalWorkload(normalized);
       this.workloadForm.markAsDirty();
@@ -861,6 +1123,9 @@ export class AutoscalerComponent implements OnDestroy {
       args: value('args', 'arguments'),
       environment_variables: Array.isArray(environmentValue) ? environmentValue.join(',') : String(environmentValue ?? ''),
       template: value('template'),
+      compute: value('compute', 'compute_resource', 'computeResource'),
+      environment: value('environment_asset', 'environmentAsset', 'environment_name'),
+      data_sources: value('data_sources', 'dataSources', 'data_source', 'dataSource'),
       cpu_core_request: value('cpu_core_request', 'cpuCoreRequest'),
       cpu_core_limit: value('cpu_core_limit', 'cpuCoreLimit'),
       cpu_memory_request: value('cpu_memory_request', 'cpuMemoryRequest'),

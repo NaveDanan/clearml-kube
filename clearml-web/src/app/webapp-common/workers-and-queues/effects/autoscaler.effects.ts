@@ -118,6 +118,18 @@ export class AutoscalerEffects {
     )),
   ));
 
+  getProjectResources = createEffect(() => this.actions$.pipe(
+    ofType(autoscalerActions.getProjectResources),
+    switchMap(action => this.autoscalerApi.autoscalerGetProjectResources({project: action.project}).pipe(
+      map((res: any) => autoscalerActions.setProjectResources({resources: res ?? {}})),
+      catchError(error => this.requestErrorActions(error, 'Failed to load Run:ai project resources', [
+        autoscalerActions.setProjectResources({
+          resources: {connected: false, error: this.errorMessage(error, 'Failed to load Run:ai project resources')},
+        }),
+      ])),
+    )),
+  ));
+
   private trackExecution(
     result: any,
     messages: {queued: string; success: string; error: string},

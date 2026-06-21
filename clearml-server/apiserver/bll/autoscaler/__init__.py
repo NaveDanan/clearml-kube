@@ -52,6 +52,9 @@ class AutoscalerBLL:
         "args",
         "environment_variables",
         "template",
+        "compute",
+        "environment",
+        "data_sources",
         "cpu_core_request",
         "cpu_core_limit",
         "cpu_memory_request",
@@ -342,6 +345,67 @@ class AutoscalerBLL:
                 "timestamp": datetime.utcnow().isoformat(),
                 **self._empty_dashboard_data(console_log),
                 "saved_instances": self.list_app_instances(company_id),
+            }
+        finally:
+            shutil.rmtree(config_dir, ignore_errors=True)
+
+    def get_project_resources(self, company_id: str, project: str = None) -> dict:
+        settings = AutoscalerSettings.objects(company=company_id).first()
+        project = (project or "").strip() or getattr(settings, "runai_project", None) or ""
+        if not settings:
+            return {
+                "connected": False,
+                "error": "No settings configured",
+                **self._empty_project_resources(project),
+            }
+
+        config_dir = tempfile.mkdtemp(prefix="runai_")
+        console_log = []
+        try:
+            env = self._build_env(settings, config_dir)
+            self._establish_connection(settings, env)
+            self._set_runai_context(settings, env, project)
+
+            projects = self._runai_records_with_fallback(
+                self._project_list_commands(settings), env, console_log
+            )
+            compute = self._runai_records_with_fallback(
+                self._compute_list_commands(settings, project), env, console_log
+            )
+            environments = self._runai_records_with_fallback(
+                self._environment_list_commands(settings, project), env, console_log
+            )
+            data_sources = self._runai_records_with_fallback(
+                self._datasource_list_commands(settings, project), env, console_log
+            )
+
+            return {
+                "connected": True,
+                "project": project,
+                "projects": self._unique_names(self._asset_name(item) for item in projects),
+                "compute": [self._summarize_compute(item) for item in compute],
+                "environments": [self._summarize_environment(item) for item in environments],
+                "data_sources": [self._summarize_data_source(item) for item in data_sources],
+                "console_log": console_log[-20:],
+            }
+        except subprocess.TimeoutExpired:
+            return {
+                "connected": False,
+                "error": "Run:ai resource lookup timed out",
+                **self._empty_project_resources(project, console_log),
+            }
+        except FileNotFoundError as e:
+            return {
+                "connected": False,
+                "error": f"CLI not found: {e}",
+                **self._empty_project_resources(project, console_log),
+            }
+        except Exception as e:
+            log.exception("get_project_resources failed")
+            return {
+                "connected": False,
+                "error": str(e),
+                **self._empty_project_resources(project, console_log),
             }
         finally:
             shutil.rmtree(config_dir, ignore_errors=True)
@@ -784,6 +848,56 @@ class AutoscalerBLL:
         ])
 
     @classmethod
+    def _compute_list_commands(cls, conn, project: Optional[str] = None) -> list:
+        return cls._cli_candidates(
+            conn,
+            cls._with_project([
+                ["runai", "compute", "list", "--json"],
+                ["runai", "compute-resource", "list", "--json"],
+                ["runai", "compute", "list"],
+            ], project),
+            cls._with_project([
+                ["runai", "list", "compute", "--json"],
+                ["runai", "list", "compute"],
+            ], project),
+        )
+
+    @classmethod
+    def _environment_list_commands(cls, conn, project: Optional[str] = None) -> list:
+        return cls._cli_candidates(
+            conn,
+            cls._with_project([
+                ["runai", "environment", "list", "--json"],
+                ["runai", "environment", "list"],
+            ], project),
+            cls._with_project([
+                ["runai", "list", "environment", "--json"],
+                ["runai", "list", "environment"],
+            ], project),
+        )
+
+    @classmethod
+    def _datasource_list_commands(cls, conn, project: Optional[str] = None) -> list:
+        return cls._cli_candidates(
+            conn,
+            cls._with_project([
+                ["runai", "datasource", "list", "--json"],
+                ["runai", "data-source", "list", "--json"],
+                ["runai", "datasource", "list"],
+            ], project),
+            cls._with_project([
+                ["runai", "list", "datasource", "--json"],
+                ["runai", "list", "datasource"],
+            ], project),
+        )
+
+    @staticmethod
+    def _with_project(commands: list, project: Optional[str]) -> list:
+        if not project:
+            return commands
+        return [[*cmd, "--project", project] for cmd in commands]
+
+    @classmethod
     def _workload_list_commands(cls, conn) -> list:
         v2_cmd = ["runai", "workload", "list", "--json", "--no-pagination"]
         v1_cmd = ["runai", "list", "jobs", "--json"]
@@ -1048,6 +1162,78 @@ class AutoscalerBLL:
             return float(str(value).strip().split()[0])
         except (TypeError, ValueError):
             return 0
+
+    @classmethod
+    def _asset_name(cls, item) -> str:
+        if isinstance(item, str):
+            return item.strip()
+        if isinstance(item, dict):
+            name = cls._pick(item, ("name", "displayName", "display_name", "meta_name", "id"))
+            if name:
+                return str(name)
+            raw = item.get("raw")
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip().split()[0]
+        return ""
+
+    @staticmethod
+    def _unique_names(names) -> list:
+        seen = []
+        for name in names:
+            cleaned = (name or "").strip()
+            if cleaned and cleaned not in seen:
+                seen.append(cleaned)
+        return seen
+
+    @classmethod
+    def _summarize_compute(cls, item: dict) -> dict:
+        return {
+            "name": cls._asset_name(item),
+            "gpu_devices_request": cls._asset_value(item, ("gpuDevicesRequest", "gpuDevices", "gpu", "gpus", "gpu_devices")),
+            "gpu_memory_request": cls._asset_value(item, ("gpuMemoryRequest", "gpuMemory", "gpu_memory")),
+            "gpu_portion_request": cls._asset_value(item, ("gpuPortionRequest", "gpuPortion", "gpu_portion")),
+            "cpu_core_request": cls._asset_value(item, ("cpuCoreRequest", "cpuCores", "cpu", "cpu_cores")),
+            "cpu_memory_request": cls._asset_value(item, ("cpuMemoryRequest", "cpuMemory", "memory", "cpu_memory")),
+        }
+
+    @classmethod
+    def _summarize_environment(cls, item: dict) -> dict:
+        return {
+            "name": cls._asset_name(item),
+            "image": cls._asset_value(item, ("image", "imageName", "image_name", "containerImage")),
+            "command": cls._asset_value(item, ("command", "cmd")),
+            "args": cls._asset_value(item, ("args", "arguments")),
+            "working_dir": cls._asset_value(item, ("workingDir", "working_dir", "workingDirectory")),
+        }
+
+    @classmethod
+    def _summarize_data_source(cls, item: dict) -> dict:
+        return {
+            "name": cls._asset_name(item),
+            "type": cls._asset_value(item, ("type", "kind", "dataSourceType", "data_source_type")),
+            "existing_pvc": cls._asset_value(item, ("claimName", "claim_name", "pvc", "existingPvc", "existing_pvc")),
+            "path": cls._asset_value(item, ("path", "mountPath", "mount_path", "containerPath")),
+        }
+
+    @classmethod
+    def _asset_value(cls, item, keys: tuple) -> str:
+        value = cls._pick(item, keys)
+        if value in (None, ""):
+            return ""
+        if isinstance(value, (list, dict)):
+            return ""
+        return str(value)
+
+    @staticmethod
+    def _empty_project_resources(project: str, console_log: Optional[list] = None) -> dict:
+        return {
+            "project": project or "",
+            "projects": [],
+            "compute": [],
+            "environments": [],
+            "data_sources": [],
+            "console_log": (console_log or [])[-20:],
+        }
 
     @classmethod
     def _build_workload_cmds(cls, conn, workload: WorkloadRequest) -> list:

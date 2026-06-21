@@ -3,6 +3,7 @@ from apiserver.apimodels.autoscaler import (
     SubmitWorkloadRequest,
     GetExecutionRequest,
     GetDashboardRequest,
+    GetProjectResourcesRequest,
     DeleteWorkloadRequest,
     SaveAppInstanceRequest,
 )
@@ -57,6 +58,11 @@ def get_execution(call: APICall, company: str, request: GetExecutionRequest):
 @endpoint("autoscaler.get_dashboard")
 def get_dashboard(call: APICall, company: str, _: GetDashboardRequest):
     call.result.data = autoscaler_bll.get_dashboard(company)
+
+
+@endpoint("autoscaler.get_project_resources")
+def get_project_resources(call: APICall, company: str, request: GetProjectResourcesRequest):
+    call.result.data = autoscaler_bll.get_project_resources(company, request.project)
 
 
 @endpoint("autoscaler.save_app_instance")

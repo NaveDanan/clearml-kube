@@ -4,6 +4,7 @@ import {
   AutoscalerConnectionResult,
   autoscalerActions,
   AutoscalerExecution,
+  AutoscalerProjectResources,
   AutoscalerSettingsData
 } from '../actions/autoscaler.actions';
 
@@ -15,6 +16,8 @@ export interface AutoscalerState {
   dashboard: AutoscalerDashboardData | null;
   dashboardLoading: boolean;
   dashboardError: string | null;
+  projectResources: AutoscalerProjectResources | null;
+  projectResourcesLoading: boolean;
 }
 
 export const initialState: AutoscalerState = {
@@ -25,6 +28,8 @@ export const initialState: AutoscalerState = {
   dashboard: null,
   dashboardLoading: false,
   dashboardError: null,
+  projectResources: null,
+  projectResourcesLoading: false,
 };
 
 export const autoscalerReducer = createReducer(
@@ -59,6 +64,15 @@ export const autoscalerReducer = createReducer(
     ...state,
     dashboardLoading: false,
     dashboardError: error,
+  })),
+  on(autoscalerActions.setProjectResourcesLoading, (state, {loading}) => ({
+    ...state,
+    projectResourcesLoading: loading,
+  })),
+  on(autoscalerActions.setProjectResources, (state, {resources}) => ({
+    ...state,
+    projectResources: resources,
+    projectResourcesLoading: false,
   })),
   on(autoscalerActions.resetSettings, () => ({...initialState})),
 );
