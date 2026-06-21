@@ -378,6 +378,9 @@ class AutoscalerBLL:
             data_sources = self._runai_records_with_fallback(
                 self._datasource_list_commands(settings, project), env, console_log
             )
+            node_pools = self._runai_records_with_fallback(
+                self._nodepool_list_commands(settings), env, console_log
+            )
 
             return {
                 "connected": True,
@@ -386,6 +389,7 @@ class AutoscalerBLL:
                 "compute": [self._summarize_compute(item) for item in compute],
                 "environments": [self._summarize_environment(item) for item in environments],
                 "data_sources": [self._summarize_data_source(item) for item in data_sources],
+                "node_pools": self._unique_names(self._asset_name(item) for item in node_pools),
                 "console_log": console_log[-20:],
             }
         except subprocess.TimeoutExpired:
@@ -891,6 +895,21 @@ class AutoscalerBLL:
             ], project),
         )
 
+    @classmethod
+    def _nodepool_list_commands(cls, conn) -> list:
+        return cls._cli_candidates(
+            conn,
+            [
+                ["runai", "node-pool", "list", "--json"],
+                ["runai", "nodepool", "list", "--json"],
+                ["runai", "node-pool", "list"],
+            ],
+            [
+                ["runai", "list", "node-pools", "--json"],
+                ["runai", "list", "node-pools"],
+            ],
+        )
+
     @staticmethod
     def _with_project(commands: list, project: Optional[str]) -> list:
         if not project:
@@ -1232,6 +1251,7 @@ class AutoscalerBLL:
             "compute": [],
             "environments": [],
             "data_sources": [],
+            "node_pools": [],
             "console_log": (console_log or [])[-20:],
         }
 

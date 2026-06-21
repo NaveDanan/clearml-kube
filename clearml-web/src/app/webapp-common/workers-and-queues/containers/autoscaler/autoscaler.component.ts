@@ -150,6 +150,7 @@ export class AutoscalerComponent implements OnDestroy {
   protected computeResources = computed<AutoscalerComputeResource[]>(() => this.projectResources()?.compute ?? []);
   protected environmentResources = computed<AutoscalerEnvironmentResource[]>(() => this.projectResources()?.environments ?? []);
   protected dataSourceResources = computed<AutoscalerDataSourceResource[]>(() => this.projectResources()?.data_sources ?? []);
+  protected nodePoolResources = computed<string[]>(() => this.projectResources()?.node_pools ?? []);
   protected availableProjects = computed<string[]>(() => {
     const names = new Set<string>();
     const add = (value?: string | null) => {

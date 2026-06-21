@@ -553,86 +553,165 @@ header {
   font-weight: 600;
 }
 
-.asset-picker {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin: 4px 0 8px;
-}
+/* ── Accordion layout ── */
 
-.asset-group {
+.workload-accordion {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 8px;
-  background: var(--color-surface-container-low);
+  margin-top: 8px;
 }
 
-.asset-group-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
+.workload-panel,
+.nested-panel {
+  border: 1px solid var(--color-outline-variant) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  background: var(--color-surface) !important;
 
-.asset-group-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-on-surface);
-}
-
-.asset-selected {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 60%;
-}
-
-.asset-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.asset-chip {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  min-width: 0;
-  padding: 6px 12px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 16px;
-  line-height: 1.2;
-  text-align: left;
-
-  &.selected {
-    border-color: var(--color-primary);
-    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  .mat-expansion-panel-body {
+    padding: 0 16px 16px;
   }
 
-  .asset-chip-name {
-    font-size: 13px;
+  mat-panel-title {
+    font-size: 14px;
     font-weight: 600;
+    color: var(--color-on-surface);
   }
 
-  .asset-chip-meta {
-    font-size: 11px;
-    color: var(--color-on-surface-variant);
-    max-width: 160px;
+  mat-panel-description {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 }
 
+.nested-accordion {
+  margin-top: 12px;
+}
+
+.nested-panel {
+  background: var(--color-surface-container-low) !important;
+
+  mat-panel-title {
+    font-size: 13px;
+  }
+}
+
+.manual-fields {
+  margin-top: 12px;
+}
+
+/* ── Asset cards ── */
+
+.asset-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.asset-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 8px;
+  background: var(--color-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+
+  &:hover {
+    border-color: var(--color-primary);
+  }
+
+  &.selected {
+    border-color: var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  }
+}
+
+.asset-card-check {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: 2px solid var(--color-outline-variant);
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--color-primary);
+  transition: border-color 0.15s;
+
+  .selected & {
+    border-color: var(--color-primary);
+  }
+
+  mat-icon {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.asset-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.asset-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+.asset-card-meta {
+  font-size: 11px;
+  color: var(--color-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .asset-empty {
   font-size: 12px;
   color: var(--color-on-surface-variant);
+  padding: 4px 0;
+}
+
+.asset-empty-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  grid-column: 1 / -1;
+  padding: 16px 20px;
+  border: 2px dashed var(--color-outline-variant);
+  border-radius: 8px;
+  background: var(--color-surface-container-low, #f8f9ff);
+  color: var(--color-on-surface-variant);
+  font-size: 13px;
+  line-height: 1.4;
+
+  mat-icon {
+    flex-shrink: 0;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+    color: var(--color-on-surface-variant);
+  }
+
+  mat-spinner {
+    flex-shrink: 0;
+  }
 }
 
 .env-vars-section {

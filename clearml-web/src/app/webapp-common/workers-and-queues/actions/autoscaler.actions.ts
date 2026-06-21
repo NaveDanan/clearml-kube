@@ -53,6 +53,7 @@ export interface AutoscalerProjectResources {
   compute?: AutoscalerComputeResource[];
   environments?: AutoscalerEnvironmentResource[];
   data_sources?: AutoscalerDataSourceResource[];
+  node_pools?: string[];
 }
 
 export interface AutoscalerWorkloadData {

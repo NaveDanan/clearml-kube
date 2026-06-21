@@ -234,313 +234,394 @@
         }
       </mat-form-field>
 
-      <div class="full-width asset-picker">
-        <div class="asset-group">
-          <div class="asset-group-header">
-            <span class="asset-group-title">Compute resource</span>
-            @if (workloadForm.controls.compute.value) {
-              <span class="asset-selected">{{ workloadForm.controls.compute.value }}</span>
-            }
-          </div>
-          @if (computeResources().length) {
-            <div class="asset-chips">
-              @for (resource of computeResources(); track resource.name) {
-                <button mat-button type="button" class="asset-chip"
-                        [class.selected]="isComputeSelected(resource)"
-                        (click)="selectCompute(resource)">
-                  <span class="asset-chip-name">{{ resource.name }}</span>
-                  @if (resource.gpu_devices_request) {
-                    <span class="asset-chip-meta">{{ resource.gpu_devices_request }} GPU</span>
-                  } @else if (resource.cpu_core_request) {
-                    <span class="asset-chip-meta">{{ resource.cpu_core_request }} CPU</span>
-                  }
-                </button>
-              }
-            </div>
-          } @else {
-            <div class="asset-empty">{{ assetEmptyLabel() }}</div>
-          }
-        </div>
+      <!-- ============================================================ -->
+      <!-- ACCORDION: Environment / Compute Resource / Data Sources     -->
+      <!-- ============================================================ -->
+      <mat-accordion class="full-width workload-accordion" multi>
 
-        <div class="asset-group">
-          <div class="asset-group-header">
-            <span class="asset-group-title">Environment</span>
+        <!-- ── 1. ENVIRONMENT ── -->
+        <mat-expansion-panel class="workload-panel">
+          <mat-expansion-panel-header>
+            <mat-panel-title>Environment</mat-panel-title>
             @if (workloadForm.controls.environment.value) {
-              <span class="asset-selected">{{ workloadForm.controls.environment.value }}</span>
+              <mat-panel-description>{{ workloadForm.controls.environment.value }}</mat-panel-description>
             }
-          </div>
-          @if (environmentResources().length) {
-            <div class="asset-chips">
-              @for (resource of environmentResources(); track resource.name) {
-                <button mat-button type="button" class="asset-chip"
-                        [class.selected]="isEnvironmentSelected(resource)"
-                        (click)="selectEnvironment(resource)">
-                  <span class="asset-chip-name">{{ resource.name }}</span>
+          </mat-expansion-panel-header>
+
+          <!-- environment asset cards -->
+          <div class="asset-cards">
+            @for (resource of environmentResources(); track resource.name) {
+              <button type="button" class="asset-card"
+                      [class.selected]="isEnvironmentSelected(resource)"
+                      (click)="selectEnvironment(resource)">
+                <span class="asset-card-check">
+                  @if (isEnvironmentSelected(resource)) {
+                    <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
+                  }
+                </span>
+                <span class="asset-card-body">
+                  <span class="asset-card-name">{{ resource.name }}</span>
                   @if (resource.image) {
-                    <span class="asset-chip-meta">{{ resource.image }}</span>
+                    <span class="asset-card-meta">{{ resource.image }}</span>
                   }
-                </button>
-              }
-            </div>
-          } @else {
-            <div class="asset-empty">{{ assetEmptyLabel() }}</div>
-          }
-        </div>
-
-        <div class="asset-group">
-          <div class="asset-group-header">
-            <span class="asset-group-title">Data sources</span>
-            @if (selectedDataSources().length) {
-              <span class="asset-selected">{{ selectedDataSources().length }} selected</span>
+                </span>
+              </button>
+            } @empty {
+              <div class="asset-empty-card">
+                @if (projectResourcesLoading()) {
+                  <mat-spinner diameter="20"></mat-spinner>
+                  <span>Loading environments…</span>
+                } @else {
+                  <mat-icon fontSet="al" fontIcon="al-ico-info-circle-outline"></mat-icon>
+                  <span>{{ assetEmptyLabel() }}</span>
+                }
+              </div>
             }
           </div>
-          @if (dataSourceResources().length) {
-            <div class="asset-chips">
-              @for (resource of dataSourceResources(); track resource.name) {
-                <button mat-button type="button" class="asset-chip"
-                        [class.selected]="isDataSourceSelected(resource)"
-                        (click)="toggleDataSource(resource)">
-                  <span class="asset-chip-name">{{ resource.name }}</span>
-                  @if (resource.type) {
-                    <span class="asset-chip-meta">{{ resource.type }}</span>
-                  }
-                </button>
-              }
-            </div>
-          } @else {
-            <div class="asset-empty">{{ assetEmptyLabel() }}</div>
-          }
-        </div>
-      </div>
 
-      <h3 class="section-label full-width">Workload</h3>
+          <!-- manual environment fields -->
+          <div class="manual-fields form-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>Workload Type</mat-label>
+              <mat-select formControlName="workload_type">
+                <mat-option value="training">Training</mat-option>
+                <mat-option value="workspace">Workspace</mat-option>
+                <mat-option value="inference">Inference</mat-option>
+              </mat-select>
+            </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Workload Type</mat-label>
-        <mat-select formControlName="workload_type">
-          <mat-option value="training">Training</mat-option>
-          <mat-option value="workspace">Workspace</mat-option>
-          <mat-option value="inference">Inference</mat-option>
-        </mat-select>
-      </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Workload Name</mat-label>
+              <input matInput formControlName="workload_name">
+            </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Workload Name</mat-label>
-        <input matInput formControlName="workload_name">
-      </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Container Image</mat-label>
+              <input matInput formControlName="image" placeholder="e.g. ubuntu:latest">
+            </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Container Image</mat-label>
-        <input matInput formControlName="image" placeholder="e.g. ubuntu:latest">
-      </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Template</mat-label>
+              <input matInput formControlName="template" placeholder="Optional template name">
+            </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Template</mat-label>
-        <input matInput formControlName="template" placeholder="Optional template name">
-      </mat-form-field>
+            @if (workloadForm.controls.workload_type.value === 'training') {
+              <mat-form-field appearance="outline">
+                <mat-label>Parallelism</mat-label>
+                <input matInput formControlName="parallelism" type="number">
+              </mat-form-field>
 
-      <div class="full-width">
-        <mat-checkbox formControlName="command_override">Override entrypoint</mat-checkbox>
-      </div>
+              <mat-form-field appearance="outline">
+                <mat-label>Runs</mat-label>
+                <input matInput formControlName="runs" type="number">
+              </mat-form-field>
 
-      @if (workloadForm.controls.command_override.value) {
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>Command</mat-label>
-          <input matInput formControlName="command">
-        </mat-form-field>
-      }
+              <mat-form-field appearance="outline">
+                <mat-label>Restart Policy</mat-label>
+                <mat-select formControlName="restart_policy">
+                  <mat-option value="">Default</mat-option>
+                  <mat-option value="Always">Always</mat-option>
+                  <mat-option value="OnFailure">OnFailure</mat-option>
+                  <mat-option value="Never">Never</mat-option>
+                </mat-select>
+              </mat-form-field>
 
-      <mat-form-field appearance="outline" class="full-width">
-        <mat-label>Arguments (after --)</mat-label>
-        <input matInput formControlName="args" placeholder="e.g. --epochs 10 --lr 0.001">
-      </mat-form-field>
+              <mat-form-field appearance="outline">
+                <mat-label>Backoff Limit</mat-label>
+                <input matInput formControlName="backoff_limit" type="number">
+              </mat-form-field>
+            }
 
-      <div class="full-width env-vars-section">
-        <div class="env-vars-header">
-          <span class="section-label">Environment Variables</span>
-          <div class="env-vars-actions">
-            <button mat-stroked-button type="button" (click)="envFileInput.click()">
-              <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
-              UPLOAD .ENV
-            </button>
-            <input #envFileInput type="file" accept=".env,text/plain" (change)="uploadEnvFile($event)" hidden>
+            @if (workloadForm.controls.workload_type.value === 'workspace') {
+              <mat-form-field appearance="outline" class="full-width">
+                <mat-label>External URL</mat-label>
+                <input matInput formControlName="external_url"
+                       placeholder="container=8888">
+              </mat-form-field>
+            }
+
+            @if (workloadForm.controls.workload_type.value === 'inference') {
+              <mat-form-field appearance="outline">
+                <mat-label>Serving Port</mat-label>
+                <input matInput formControlName="serving_port" placeholder="8080">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Min Replicas</mat-label>
+                <input matInput formControlName="min_replicas" type="number">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Max Replicas</mat-label>
+                <input matInput formControlName="max_replicas" type="number">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Initial Replicas</mat-label>
+                <input matInput formControlName="initial_replicas" type="number">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Autoscaling Metric</mat-label>
+                <mat-select formControlName="metric">
+                  <mat-option value="">None</mat-option>
+                  <mat-option value="throughput">Throughput</mat-option>
+                  <mat-option value="concurrency">Concurrency</mat-option>
+                  <mat-option value="latency">Latency</mat-option>
+                </mat-select>
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Metric Threshold</mat-label>
+                <input matInput formControlName="metric_threshold" type="number">
+              </mat-form-field>
+
+              <mat-form-field appearance="outline">
+                <mat-label>Scale-to-Zero Retention (s)</mat-label>
+                <input matInput formControlName="scale_to_zero_retention" type="number">
+              </mat-form-field>
+            }
           </div>
-        </div>
 
-        <div formArrayName="env_vars" class="env-vars-list">
-          @for (group of envVars.controls; track group; let i = $index) {
-            <div class="env-var-row" [formGroupName]="i">
-              <mat-form-field appearance="outline" class="env-var-key">
-                <mat-label>Key</mat-label>
-                <input matInput formControlName="key" placeholder="KEY">
-              </mat-form-field>
-              <span class="env-var-equals">=</span>
-              <mat-form-field appearance="outline" class="env-var-value">
-                <mat-label>Value</mat-label>
-                <input matInput formControlName="value" placeholder="value">
-              </mat-form-field>
-              <button mat-icon-button type="button" class="env-var-remove"
-                      (click)="removeEnvVar(i)" aria-label="Remove environment variable">
-                <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+          <!-- nested: Runtime settings -->
+          <mat-accordion class="nested-accordion">
+            <mat-expansion-panel class="nested-panel">
+              <mat-expansion-panel-header>
+                <mat-panel-title>Runtime settings</mat-panel-title>
+              </mat-expansion-panel-header>
+
+              <div class="form-grid">
+                <div class="full-width">
+                  <mat-checkbox formControlName="command_override">Override entrypoint</mat-checkbox>
+                </div>
+
+                @if (workloadForm.controls.command_override.value) {
+                  <mat-form-field appearance="outline" class="full-width">
+                    <mat-label>Command</mat-label>
+                    <input matInput formControlName="command">
+                  </mat-form-field>
+                }
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Arguments (after --)</mat-label>
+                  <input matInput formControlName="args" placeholder="e.g. --epochs 10 --lr 0.001">
+                </mat-form-field>
+              </div>
+
+              <div class="env-vars-section">
+                <div class="env-vars-header">
+                  <span class="section-label">Environment Variables</span>
+                  <div class="env-vars-actions">
+                    <button mat-stroked-button type="button" (click)="envFileInput.click()">
+                      <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
+                      UPLOAD .ENV
+                    </button>
+                    <input #envFileInput type="file" accept=".env,text/plain" (change)="uploadEnvFile($event)" hidden>
+                  </div>
+                </div>
+
+                <div formArrayName="env_vars" class="env-vars-list">
+                  @for (group of envVars.controls; track group; let i = $index) {
+                    <div class="env-var-row" [formGroupName]="i">
+                      <mat-form-field appearance="outline" class="env-var-key">
+                        <mat-label>Key</mat-label>
+                        <input matInput formControlName="key" placeholder="KEY">
+                      </mat-form-field>
+                      <span class="env-var-equals">=</span>
+                      <mat-form-field appearance="outline" class="env-var-value">
+                        <mat-label>Value</mat-label>
+                        <input matInput formControlName="value" placeholder="value">
+                      </mat-form-field>
+                      <button mat-icon-button type="button" class="env-var-remove"
+                              (click)="removeEnvVar(i)" aria-label="Remove environment variable">
+                        <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+                      </button>
+                    </div>
+                  } @empty {
+                    <div class="asset-empty">No environment variables yet. Add one below or upload a .env file.</div>
+                  }
+                </div>
+
+                <button mat-stroked-button type="button" class="env-var-add" (click)="addEnvVar()">
+                  <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon>
+                  ADD VARIABLE
+                </button>
+              </div>
+            </mat-expansion-panel>
+          </mat-accordion>
+
+        </mat-expansion-panel>
+
+        <!-- ── 2. COMPUTE RESOURCE ── -->
+        <mat-expansion-panel class="workload-panel">
+          <mat-expansion-panel-header>
+            <mat-panel-title>Compute Resource</mat-panel-title>
+            @if (workloadForm.controls.compute.value) {
+              <mat-panel-description>{{ workloadForm.controls.compute.value }}</mat-panel-description>
+            }
+          </mat-expansion-panel-header>
+
+          <!-- compute asset cards -->
+          <div class="asset-cards">
+            @for (resource of computeResources(); track resource.name) {
+              <button type="button" class="asset-card"
+                      [class.selected]="isComputeSelected(resource)"
+                      (click)="selectCompute(resource)">
+                <span class="asset-card-check">
+                  @if (isComputeSelected(resource)) {
+                    <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
+                  }
+                </span>
+                <span class="asset-card-body">
+                  <span class="asset-card-name">{{ resource.name }}</span>
+                  @if (resource.gpu_devices_request) {
+                    <span class="asset-card-meta">{{ resource.gpu_devices_request }} GPU</span>
+                  } @else if (resource.cpu_core_request) {
+                    <span class="asset-card-meta">{{ resource.cpu_core_request }} CPU</span>
+                  }
+                </span>
               </button>
-            </div>
-          } @empty {
-            <div class="asset-empty">No environment variables yet. Add one below or upload a .env file.</div>
-          }
-        </div>
+            } @empty {
+              <div class="asset-empty-card">
+                @if (projectResourcesLoading()) {
+                  <mat-spinner diameter="20"></mat-spinner>
+                  <span>Loading compute resources…</span>
+                } @else {
+                  <mat-icon fontSet="al" fontIcon="al-ico-info-circle-outline"></mat-icon>
+                  <span>{{ assetEmptyLabel() }}</span>
+                }
+              </div>
+            }
+          </div>
 
-        <button mat-stroked-button type="button" class="env-var-add" (click)="addEnvVar()">
-          <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon>
-          ADD VARIABLE
-        </button>
-      </div>
+          <!-- manual compute fields -->
+          <div class="manual-fields form-grid">
+            <mat-form-field appearance="outline">
+              <mat-label>CPU Request</mat-label>
+              <input matInput formControlName="cpu_core_request" placeholder="e.g. 0.5">
+            </mat-form-field>
 
-      <h3 class="section-label full-width">Resources</h3>
+            <mat-form-field appearance="outline">
+              <mat-label>CPU Limit</mat-label>
+              <input matInput formControlName="cpu_core_limit" placeholder="e.g. 2">
+            </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>CPU Request</mat-label>
-        <input matInput formControlName="cpu_core_request" placeholder="e.g. 0.5">
-      </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Memory Request</mat-label>
+              <input matInput formControlName="cpu_memory_request" placeholder="e.g. 1G">
+            </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>CPU Limit</mat-label>
-        <input matInput formControlName="cpu_core_limit" placeholder="e.g. 2">
-      </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>Memory Limit</mat-label>
+              <input matInput formControlName="cpu_memory_limit" placeholder="e.g. 4G">
+            </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Memory Request</mat-label>
-        <input matInput formControlName="cpu_memory_request" placeholder="e.g. 1G">
-      </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>GPU Devices</mat-label>
+              <input matInput formControlName="gpu_devices_request" placeholder="e.g. 1">
+            </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Memory Limit</mat-label>
-        <input matInput formControlName="cpu_memory_limit" placeholder="e.g. 4G">
-      </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>GPU Memory</mat-label>
+              <input matInput formControlName="gpu_memory_request" placeholder="e.g. 8G">
+            </mat-form-field>
+          </div>
 
-      <mat-form-field appearance="outline">
-        <mat-label>GPU Devices</mat-label>
-        <input matInput formControlName="gpu_devices_request" placeholder="e.g. 1">
-      </mat-form-field>
+          <!-- nested: Scheduling -->
+          <mat-accordion class="nested-accordion">
+            <mat-expansion-panel class="nested-panel">
+              <mat-expansion-panel-header>
+                <mat-panel-title>Scheduling</mat-panel-title>
+              </mat-expansion-panel-header>
 
-      <mat-form-field appearance="outline">
-        <mat-label>GPU Memory</mat-label>
-        <input matInput formControlName="gpu_memory_request" placeholder="e.g. 8G">
-      </mat-form-field>
+              <div class="form-grid">
+                <mat-form-field appearance="outline">
+                  <mat-label>Node Pools</mat-label>
+                  <input matInput formControlName="node_pools"
+                         [matAutocomplete]="nodePoolAuto"
+                         placeholder="pool-a,pool-b">
+                  <mat-autocomplete #nodePoolAuto="matAutocomplete">
+                    @for (pool of nodePoolResources(); track pool) {
+                      <mat-option [value]="pool">{{ pool }}</mat-option>
+                    }
+                  </mat-autocomplete>
+                </mat-form-field>
 
-      <h3 class="section-label full-width">Scheduling</h3>
+                <mat-form-field appearance="outline">
+                  <mat-label>Priority</mat-label>
+                  <mat-select formControlName="priority">
+                    <mat-option value="">Default</mat-option>
+                    <mat-option value="very-low">Very Low</mat-option>
+                    <mat-option value="low">Low</mat-option>
+                    <mat-option value="medium-low">Medium Low</mat-option>
+                    <mat-option value="medium">Medium</mat-option>
+                    <mat-option value="medium-high">Medium High</mat-option>
+                    <mat-option value="high">High</mat-option>
+                    <mat-option value="very-high">Very High</mat-option>
+                  </mat-select>
+                </mat-form-field>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Node Pools</mat-label>
-        <input matInput formControlName="node_pools" placeholder="pool-a,pool-b">
-      </mat-form-field>
+                <mat-form-field appearance="outline">
+                  <mat-label>Working Directory</mat-label>
+                  <input matInput formControlName="working_dir">
+                </mat-form-field>
+              </div>
+            </mat-expansion-panel>
+          </mat-accordion>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Priority</mat-label>
-        <mat-select formControlName="priority">
-          <mat-option value="">Default</mat-option>
-          <mat-option value="very-low">Very Low</mat-option>
-          <mat-option value="low">Low</mat-option>
-          <mat-option value="medium-low">Medium Low</mat-option>
-          <mat-option value="medium">Medium</mat-option>
-          <mat-option value="medium-high">Medium High</mat-option>
-          <mat-option value="high">High</mat-option>
-          <mat-option value="very-high">Very High</mat-option>
-        </mat-select>
-      </mat-form-field>
+        </mat-expansion-panel>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Working Directory</mat-label>
-        <input matInput formControlName="working_dir">
-      </mat-form-field>
+        <!-- ── 3. DATA SOURCES ── -->
+        <mat-expansion-panel class="workload-panel">
+          <mat-expansion-panel-header>
+            <mat-panel-title>Data Sources</mat-panel-title>
+            @if (selectedDataSources().length) {
+              <mat-panel-description>{{ selectedDataSources().length }} selected</mat-panel-description>
+            }
+          </mat-expansion-panel-header>
 
-      <mat-form-field appearance="outline">
-        <mat-label>Existing PVC</mat-label>
-        <input matInput formControlName="existing_pvc"
-               placeholder="claimname=NAME,path=/mnt">
-      </mat-form-field>
+          <!-- data source asset cards -->
+          <div class="asset-cards">
+            @for (resource of dataSourceResources(); track resource.name) {
+              <button type="button" class="asset-card"
+                      [class.selected]="isDataSourceSelected(resource)"
+                      (click)="toggleDataSource(resource)">
+                <span class="asset-card-check">
+                  @if (isDataSourceSelected(resource)) {
+                    <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
+                  }
+                </span>
+                <span class="asset-card-body">
+                  <span class="asset-card-name">{{ resource.name }}</span>
+                  @if (resource.type) {
+                    <span class="asset-card-meta">{{ resource.type }}</span>
+                  }
+                </span>
+              </button>
+            } @empty {
+              <div class="asset-empty-card">
+                @if (projectResourcesLoading()) {
+                  <mat-spinner diameter="20"></mat-spinner>
+                  <span>Loading data sources…</span>
+                } @else {
+                  <mat-icon fontSet="al" fontIcon="al-ico-info-circle-outline"></mat-icon>
+                  <span>{{ assetEmptyLabel() }}</span>
+                }
+              </div>
+            }
+          </div>
 
-      @if (workloadForm.controls.workload_type.value === 'training') {
-        <h3 class="section-label full-width">Training Options</h3>
+          <!-- manual data source fields -->
+          <div class="manual-fields form-grid">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Existing PVC</mat-label>
+              <input matInput formControlName="existing_pvc"
+                     placeholder="claimname=NAME,path=/mnt">
+            </mat-form-field>
+          </div>
+        </mat-expansion-panel>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Parallelism</mat-label>
-          <input matInput formControlName="parallelism" type="number">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Runs</mat-label>
-          <input matInput formControlName="runs" type="number">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Restart Policy</mat-label>
-          <mat-select formControlName="restart_policy">
-            <mat-option value="">Default</mat-option>
-            <mat-option value="Always">Always</mat-option>
-            <mat-option value="OnFailure">OnFailure</mat-option>
-            <mat-option value="Never">Never</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Backoff Limit</mat-label>
-          <input matInput formControlName="backoff_limit" type="number">
-        </mat-form-field>
-      }
-
-      @if (workloadForm.controls.workload_type.value === 'workspace') {
-        <h3 class="section-label full-width">Workspace Options</h3>
-
-        <mat-form-field appearance="outline" class="full-width">
-          <mat-label>External URL</mat-label>
-          <input matInput formControlName="external_url"
-                 placeholder="container=8888">
-        </mat-form-field>
-      }
-
-      @if (workloadForm.controls.workload_type.value === 'inference') {
-        <h3 class="section-label full-width">Inference & Autoscaling</h3>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Serving Port</mat-label>
-          <input matInput formControlName="serving_port" placeholder="8080">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Min Replicas</mat-label>
-          <input matInput formControlName="min_replicas" type="number">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Max Replicas</mat-label>
-          <input matInput formControlName="max_replicas" type="number">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Initial Replicas</mat-label>
-          <input matInput formControlName="initial_replicas" type="number">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Autoscaling Metric</mat-label>
-          <mat-select formControlName="metric">
-            <mat-option value="">None</mat-option>
-            <mat-option value="throughput">Throughput</mat-option>
-            <mat-option value="concurrency">Concurrency</mat-option>
-            <mat-option value="latency">Latency</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Metric Threshold</mat-label>
-          <input matInput formControlName="metric_threshold" type="number">
-        </mat-form-field>
-
-        <mat-form-field appearance="outline">
-          <mat-label>Scale-to-Zero Retention (s)</mat-label>
-          <input matInput formControlName="scale_to_zero_retention" type="number">
-        </mat-form-field>
-      }
+      </mat-accordion>
     </form>
 
     <div class="submit-actions dialog-actions">
