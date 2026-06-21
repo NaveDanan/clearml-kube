@@ -328,6 +328,7 @@ export class AutoscalerComponent implements OnDestroy {
 
   testConnection() {
     this.store.dispatch(autoscalerActions.testConnection({settings: this.connectionForm.value}));
+    this.connectionForm.markAsPristine();
   }
 
   openConnectionDialog(template: TemplateRef<unknown>) {

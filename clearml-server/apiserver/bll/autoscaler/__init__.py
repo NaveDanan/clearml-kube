@@ -132,36 +132,19 @@ class AutoscalerBLL:
     def reset_company_settings(self, company_id: str) -> int:
         return AutoscalerSettings.objects(company=company_id).delete()
 
-    def test_connection(self, company_id: str, request: Optional[SetSettingsRequest] = None) -> dict:
-        request_data = request.to_struct() if request else {}
-        settings = request if any(value not in (None, "") for value in request_data.values()) else AutoscalerSettings.objects(company=company_id).first()
+    def test_connection(self, company_id: str, user_id: str = None, worker_id: str = None) -> dict:
+        settings = AutoscalerSettings.objects(company=company_id).first()
         if not settings:
-            return {"connected": False, "error": "No settings configured"}
+            return {"status": "error", "stderr": "No stored Run:ai connection settings configured"}
 
-        config_dir = None
-        try:
-            config_dir = tempfile.mkdtemp(prefix="runai_")
-            env = self._build_env(settings, config_dir)
-
-            self._establish_connection(settings, env)
-            projects = self._runai_records_with_fallback(
-                self._project_list_commands(settings),
-                env,
-                [],
-            )
-
-            return {"connected": True, "projects_count": len(projects)}
-
-        except subprocess.TimeoutExpired:
-            return {"connected": False, "error": "Connection timed out"}
-        except FileNotFoundError as e:
-            return {"connected": False, "error": f"CLI not found: {e}"}
-        except Exception as e:
-            log.exception("test_connection failed")
-            return {"connected": False, "error": str(e)}
-        finally:
-            if config_dir:
-                shutil.rmtree(config_dir, ignore_errors=True)
+        execution_id = self._enqueue_execution(
+            company_id=company_id,
+            operation="test_connection",
+            payload={},
+            user_id=user_id,
+            worker_id=worker_id or getattr(settings, "worker", None),
+        )
+        return {"status": "queued", "execution_id": execution_id}
 
     def submit_workload(
         self, company_id: str, request: SubmitWorkloadRequest, user_id: str = None, worker_id: str = None
@@ -201,6 +184,7 @@ class AutoscalerBLL:
             "stdout": ex.stdout,
             "stderr": ex.stderr,
             "return_code": ex.return_code,
+            "projects_count": ex.projects_count,
             "timestamp": ex.created.isoformat() if ex.created else None,
             "execution_id": ex.id,
         }
@@ -425,6 +409,22 @@ class AutoscalerBLL:
         return execution_id
 
     def _run_execution_operation(self, execution: AutoscalerExecution, conn, env: dict, operation: str):
+        if operation == "test_connection":
+            console_log = []
+            for command in self._project_list_commands(conn):
+                projects, success = self._runai_records_from_command(command, env, console_log)
+                if success:
+                    return SimpleNamespace(
+                        returncode=0,
+                        stdout="",
+                        stderr="",
+                        projects_count=len(projects),
+                    )
+            error = next(
+                (entry.get("message") for entry in reversed(console_log) if entry.get("message")),
+                "Unable to list Run:ai projects",
+            )
+            raise RuntimeError(error)
         if operation == "submit":
             workload = self._workload_from_execution(execution)
             self._set_runai_context(conn, env, workload.project)
@@ -693,11 +693,13 @@ class AutoscalerBLL:
         status = "success" if result.returncode == 0 else "error"
         stdout = (result.stdout or "")[:cls._execution_log_limit]
         stderr = (result.stderr or "")[:cls._execution_log_limit]
+        projects_count = getattr(result, "projects_count", None)
         AutoscalerExecution.objects(id=execution.id).update_one(
             set__status=status,
             set__stdout=stdout,
             set__stderr=stderr,
             set__return_code=str(result.returncode),
+            set__projects_count=projects_count,
         )
         cls._sync_saved_instance_status(execution, status)
         return {
@@ -705,6 +707,7 @@ class AutoscalerBLL:
             "stdout": stdout,
             "stderr": stderr,
             "return_code": str(result.returncode),
+            "projects_count": projects_count,
             "execution_id": execution.id,
         }
 

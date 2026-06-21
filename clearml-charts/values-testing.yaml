@@ -49,7 +49,7 @@ apiserver:
     registry: ""
     repository: "clearml/clearml"
     tag: "2026-06-21"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: NodePort
     nodePort: 30008
@@ -74,7 +74,7 @@ fileserver:
     registry: ""
     repository: "clearml/clearml"
     tag: "2026-06-21"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: NodePort
     nodePort: 30081
@@ -105,7 +105,7 @@ webserver:
     registry: ""
     repository: "clearml/clearml"
     tag: "2026-06-21"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: NodePort
     nodePort: 30080
@@ -140,7 +140,7 @@ runaiWorker:
     registry: ""
     repository: "clearml/runai-worker"
     tag: "2026-06-21"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   replicaCount: 1
   pollInterval: 10
   batchSize: 5
@@ -177,7 +177,7 @@ elasticsearch:
   replicas: 1
   image: "docker.elastic.co/elasticsearch/elasticsearch"
   imageTag: "7.17.3"
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
   esJavaOpts: "-Xmx1g -Xms1g"
   resources:
     requests:

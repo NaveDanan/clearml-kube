@@ -55,20 +55,9 @@ export class AutoscalerEffects {
 
   testConnection = createEffect(() => this.actions$.pipe(
     ofType(autoscalerActions.testConnection),
-    switchMap(action => {
-      return this.autoscalerApi.autoscalerTestConnection(action.settings).pipe(
-        switchMap((res: any) => {
-          const actions: any[] = [
-            autoscalerActions.setConnectionResult({result: res}),
-            autoscalerActions.setConnectionStatus({status: res.connected ? 'success' : 'error'}),
-          ];
-
-          if (!res.connected) {
-            actions.push(this.errorDialogAction('Run:ai connection failed', res.error || 'Connection request failed'));
-          }
-
-          return actions;
-        }),
+    switchMap(action => this.autoscalerApi.autoscalerSetSettings(action.settings).pipe(
+        switchMap(() => this.autoscalerApi.autoscalerTestConnection({})),
+        switchMap(res => this.trackConnectionTest(res, action.settings)),
         catchError(error => this.requestErrorActions(error, 'Run:ai connection failed', [
           autoscalerActions.setConnectionResult({result: {connected: false, error: this.errorMessage(error, 'Connection request failed')}}),
           autoscalerActions.setConnectionStatus({status: 'error'}),
@@ -77,8 +66,7 @@ export class AutoscalerEffects {
           autoscalerActions.setConnectionResult({result: null}),
           autoscalerActions.setConnectionStatus({status: 'testing'}),
         ),
-      );
-    }),
+      )),
   ));
 
   submitWorkload = createEffect(() => this.actions$.pipe(
@@ -183,6 +171,48 @@ export class AutoscalerEffects {
     );
   }
 
+  private trackConnectionTest(result: any, settings: any) {
+    const savedSettings = autoscalerActions.setSettings({settings});
+
+    if (!result.execution_id || !this.isExecutionActive(result.status)) {
+      return of(savedSettings, ...this.connectionTestResultActions(result));
+    }
+
+    return concat(
+      of(savedSettings),
+      timer(EXECUTION_POLL_INTERVAL, EXECUTION_POLL_INTERVAL).pipe(
+        switchMap(() => this.autoscalerApi.autoscalerGetExecution({execution_id: result.execution_id})),
+        takeWhile((response: any) => this.isExecutionActive(response.status), true),
+        switchMap((response: any) => this.isExecutionActive(response.status)
+          ? []
+          : this.connectionTestResultActions(response)),
+        catchError(error => this.requestErrorActions(error, 'Run:ai connection failed', [
+          autoscalerActions.setConnectionResult({
+            result: {connected: false, error: this.errorMessage(error, 'Connection test polling failed')},
+          }),
+          autoscalerActions.setConnectionStatus({status: 'error'}),
+        ])),
+      ),
+    );
+  }
+
+  private connectionTestResultActions(result: any): any[] {
+    const connected = (result.status || '').toLowerCase() === 'success';
+    const error = connected ? undefined : (result.stderr || 'Connection request failed');
+    const actions: any[] = [
+      autoscalerActions.setConnectionResult({
+        result: {connected, projects_count: result.projects_count, error},
+      }),
+      autoscalerActions.setConnectionStatus({status: connected ? 'success' : 'error'}),
+    ];
+
+    if (!connected) {
+      actions.push(this.errorDialogAction('Run:ai connection failed', error));
+    }
+
+    return actions;
+  }
+
   private normalizeExecution(result: any): AutoscalerExecution {
     return {
       status: (result.status || 'success') as AutoscalerExecution['status'],
@@ -191,6 +221,7 @@ export class AutoscalerEffects {
       timestamp: result.timestamp || new Date().toISOString(),
       execution_id: result.execution_id,
       return_code: result.return_code,
+      projects_count: result.projects_count,
     };
   }
 

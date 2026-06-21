@@ -199,6 +199,25 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertEqual(execution.operation, "submit")
         self.assertEqual(json.loads(execution.workload_params)["image"], "repo/image:latest")
 
+    def test_test_connection_requires_saved_settings_and_enqueues_execution(self):
+        result = self.bll.test_connection("company-id")
+        self.assertEqual(result["status"], "error")
+        self.assertIn("No stored Run:ai connection settings configured", result["stderr"])
+
+        self._settings(worker="stored-worker")
+        result = self.bll.test_connection(
+            "company-id",
+            user_id="user-id",
+            worker_id=None,
+        )
+
+        self.assertEqual(result["status"], "queued")
+        execution = FakeExecution._store[0]
+        self.assertEqual(execution.operation, "test_connection")
+        self.assertEqual(json.loads(execution.workload_params), {})
+        self.assertEqual(execution.user, "user-id")
+        self.assertEqual(execution.worker, "stored-worker")
+
     def test_delete_workload_handles_saved_only_and_enqueues_with_settings(self):
         saved = FakeAppInstance(id="app-id", company="company-id", name="train-one").save()
         result = self.bll.delete_workload(
@@ -270,6 +289,38 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertEqual(execution.status, "error")
         self.assertEqual(execution.return_code, "7")
         self.assertEqual(len(execution.stderr), AutoscalerBLL._execution_log_limit)
+
+    def test_process_connection_test_persists_project_count(self):
+        self._settings()
+        execution = self._execution(operation="test_connection", workload_params="{}")
+
+        with patch.object(self.bll, "_establish_connection"), \
+             patch.object(self.bll, "_project_list_commands", return_value=[["runai", "project", "list"]]), \
+             patch.object(self.bll, "_runai_records_from_command", return_value=([{"name": "one"}, {"name": "two"}], True)), \
+             patch.object(autoscaler_mod.shutil, "rmtree"):
+            result = self.bll.process_execution(execution)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["projects_count"], 2)
+        self.assertEqual(execution.projects_count, 2)
+
+    def test_process_connection_test_persists_cli_error(self):
+        self._settings()
+        execution = self._execution(operation="test_connection", workload_params="{}")
+        console_error = [{"status": "error", "message": "authentication failed"}]
+
+        def fail_command(_, __, console_log):
+            console_log.extend(console_error)
+            return [], False
+
+        with patch.object(self.bll, "_establish_connection"), \
+             patch.object(self.bll, "_project_list_commands", return_value=[["runai", "project", "list"]]), \
+             patch.object(self.bll, "_runai_records_from_command", side_effect=fail_command), \
+             patch.object(autoscaler_mod.shutil, "rmtree"):
+            result = self.bll.process_execution(execution)
+
+        self.assertEqual(result["status"], "error")
+        self.assertIn("authentication failed", execution.stderr)
 
     def test_process_execution_missing_settings_persists_error(self):
         execution = self._execution()

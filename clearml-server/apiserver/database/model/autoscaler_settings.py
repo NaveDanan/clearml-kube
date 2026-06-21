@@ -2,6 +2,7 @@ from mongoengine import (
     Document,
     StringField,
     DateTimeField,
+    IntField,
 )
 
 from apiserver.database import Database, strict
@@ -55,6 +56,7 @@ class AutoscalerExecution(DbModelMixin, Document):
     stdout = StringField()
     stderr = StringField()
     return_code = StringField()
+    projects_count = IntField()
     user = StringField()
     worker = StringField()
 

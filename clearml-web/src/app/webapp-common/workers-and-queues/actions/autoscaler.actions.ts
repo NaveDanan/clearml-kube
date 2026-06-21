@@ -66,6 +66,7 @@ export interface AutoscalerExecution {
   timestamp?: string;
   execution_id?: string;
   return_code?: string;
+  projects_count?: number;
 }
 
 export interface AutoscalerDashboardData {

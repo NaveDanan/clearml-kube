@@ -32,8 +32,10 @@ def reset_settings(call: APICall, company: str, _):
 
 
 @endpoint("autoscaler.test_connection")
-def test_connection(call: APICall, company: str, request: SetSettingsRequest):
-    call.result.data = autoscaler_bll.test_connection(company, request)
+def test_connection(call: APICall, company: str, _):
+    call.result.data = autoscaler_bll.test_connection(
+        company, user_id=call.identity.user, worker_id=call.worker
+    )
 
 
 @endpoint("autoscaler.submit_workload")
