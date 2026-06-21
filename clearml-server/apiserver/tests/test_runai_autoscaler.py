@@ -50,8 +50,8 @@ class FakeQuery:
         item = self.first()
         if not item and upsert:
             values = dict(self.filters)
-            if "set__id" in updates:
-                values["id"] = updates["set__id"]
+            if "set_on_insert__id" in updates:
+                values["id"] = updates["set_on_insert__id"]
             item = self.model(**values).save()
         if not item:
             return 0
@@ -198,6 +198,18 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertEqual(execution.status, "pending")
         self.assertEqual(execution.operation, "submit")
         self.assertEqual(json.loads(execution.workload_params)["image"], "repo/image:latest")
+
+    def test_set_company_settings_keeps_existing_document_id(self):
+        settings = self._settings(id="existing-id", runai_project="old-project")
+
+        updated = self.bll.set_company_settings(
+            "company-id",
+            Struct(runai_project="new-project"),
+        )
+
+        self.assertEqual(updated, 1)
+        self.assertEqual(settings.id, "existing-id")
+        self.assertEqual(settings.runai_project, "new-project")
 
     def test_test_connection_requires_saved_settings_and_enqueues_execution(self):
         result = self.bll.test_connection("company-id")

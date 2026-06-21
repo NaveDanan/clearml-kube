@@ -124,7 +124,7 @@ class AutoscalerBLL:
 
         result = AutoscalerSettings.objects(company=company_id).update_one(
             upsert=True,
-            set__id=db_id(),
+            set_on_insert__id=db_id(),
             **update_dict,
         )
         return result

@@ -562,6 +562,12 @@ header {
   margin-top: 8px;
 }
 
+.test-connection-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .status-badge {
   display: flex;
   align-items: center;

@@ -111,10 +111,12 @@
       <button mat-stroked-button type="button"
               [disabled]="connectionForm.invalid"
               (click)="testConnection()">
-        @if (connectionStatus() === 'testing') {
-          <mat-spinner diameter="18"></mat-spinner>
-        }
-        TEST CONNECTION
+        <span class="test-connection-content">
+          <span>TEST CONNECTION</span>
+          @if (connectionStatus() === 'testing') {
+            <mat-spinner diameter="18"></mat-spinner>
+          }
+        </span>
       </button>
       <span class="dialog-spacer"></span>
       @if (connectionStatus() === 'success') {
