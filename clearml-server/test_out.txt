@@ -1,0 +1,5 @@
+Downloading clearml-agent (1.3MiB)
+ Downloaded clearml-agent
+Installed 92 packages in 5.07s
+error: Failed to update Windows PE resources: C:\Users\naved\AppData\Local\Temp\1\.tmppJmodj\uv-trampoline-27468.exe
+  Caused by: Access is denied. (os error -2147024891)

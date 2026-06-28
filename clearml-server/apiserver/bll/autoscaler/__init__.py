@@ -96,6 +96,64 @@ RUNAI_COMMAND_CATALOG = {
             "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
+            "key": "compute_list",
+            "label": "List compute resources",
+            "description": "List compute resources/templates used when building a new workload.",
+            "command": "runai compute list --json",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "compute_describe",
+            "label": "Describe compute resource",
+            "description": "Read the full definition of a single compute resource for the new-workload form.",
+            "command": "runai compute describe {name} --json",
+            "placeholders": [
+                {"name": "name", "description": "Compute resource name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "environment_list",
+            "label": "List environments",
+            "description": "List environments used when building a new workload.",
+            "command": "runai environment list --json",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "environment_describe",
+            "label": "Describe environment",
+            "description": "Read the full definition of a single environment for the new-workload form.",
+            "command": "runai environment describe {name} --json",
+            "placeholders": [
+                {"name": "name", "description": "Environment name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "datasource_list",
+            "label": "List data sources",
+            "description": "List data sources used when building a new workload.",
+            "command": "runai datasource list --json",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "datasource_describe",
+            "label": "Describe data source",
+            "description": "Read the full definition of a single data source for the new-workload form.",
+            "command": "runai datasource describe {name} --json",
+            "placeholders": [
+                {"name": "name", "description": "Data source name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "nodepool_list",
+            "label": "List node pools",
+            "description": "List node pools available for a new workload.",
+            "command": "runai node-pool list --json",
+            "placeholders": [],
+        },
+        {
             "key": "submit_training",
             "label": "Submit training",
             "description": "Base command to submit a training workload. Workload flags are appended automatically.",
@@ -194,6 +252,64 @@ RUNAI_COMMAND_CATALOG = {
             "description": "List jobs for the dashboard.",
             "command": "runai list jobs --json",
             "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "compute_list",
+            "label": "List compute resources",
+            "description": "List compute resources/templates used when building a new workload.",
+            "command": "runai list compute --json",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "compute_describe",
+            "label": "Describe compute resource",
+            "description": "Read the full definition of a single compute resource for the new-workload form.",
+            "command": "runai describe compute {name} --json",
+            "placeholders": [
+                {"name": "name", "description": "Compute resource name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "environment_list",
+            "label": "List environments",
+            "description": "List environments used when building a new workload.",
+            "command": "runai list environment --json",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "environment_describe",
+            "label": "Describe environment",
+            "description": "Read the full definition of a single environment for the new-workload form.",
+            "command": "runai describe environment {name} --json",
+            "placeholders": [
+                {"name": "name", "description": "Environment name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "datasource_list",
+            "label": "List data sources",
+            "description": "List data sources used when building a new workload.",
+            "command": "runai list datasource --json",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "datasource_describe",
+            "label": "Describe data source",
+            "description": "Read the full definition of a single data source for the new-workload form.",
+            "command": "runai describe datasource {name} --json",
+            "placeholders": [
+                {"name": "name", "description": "Data source name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "nodepool_list",
+            "label": "List node pools",
+            "description": "List node pools available for a new workload.",
+            "command": "runai list node-pools --json",
+            "placeholders": [],
         },
         {
             "key": "submit",
@@ -754,11 +870,20 @@ class AutoscalerBLL:
         compute = self._runai_records_with_fallback(
             self._compute_list_commands(conn, project), env, console_log
         )
+        compute = self._describe_assets(
+            conn, env, console_log, compute, self._compute_describe_commands, project
+        )
         environments = self._runai_records_with_fallback(
             self._environment_list_commands(conn, project), env, console_log
         )
+        environments = self._describe_assets(
+            conn, env, console_log, environments, self._environment_describe_commands, project
+        )
         data_sources = self._runai_records_with_fallback(
             self._datasource_list_commands(conn, project), env, console_log
+        )
+        data_sources = self._describe_assets(
+            conn, env, console_log, data_sources, self._datasource_describe_commands, project
         )
         node_pools = self._runai_records_with_fallback(
             self._nodepool_list_commands(conn), env, console_log
@@ -773,6 +898,30 @@ class AutoscalerBLL:
             "node_pools": self._unique_names(self._asset_name(item) for item in node_pools),
             "console_log": console_log[-20:],
         }
+
+    def _describe_assets(
+        self, conn, env: dict, console_log: list, items: list, describe_builder, project: str
+    ) -> list:
+        """Enrich each listed asset with the output of its ``describe`` command so
+        the new-workload form has full details. Falls back to the list record when
+        describe is unsupported or fails, and stops probing once it is clear the
+        describe command is not available to avoid spamming the console log."""
+        enriched = []
+        describe_supported = True
+        for item in items:
+            name = self._asset_name(item)
+            if not describe_supported or not name:
+                enriched.append(item)
+                continue
+            detail = self._runai_object_with_fallback(
+                describe_builder(conn, name, project), env, console_log
+            )
+            if not detail:
+                describe_supported = False
+                enriched.append(item)
+                continue
+            enriched.append(self._merge_asset_detail(item, detail))
+        return enriched
 
     def _collect_workload_logs(self, conn, env: dict, payload: dict) -> dict:
         console_log = []
@@ -1304,6 +1453,43 @@ class AutoscalerBLL:
 
     @classmethod
     def _runai_records_from_command(cls, cmd: list, env: dict, console_log: list) -> tuple:
+        data, raw, success = cls._run_cli_json(cmd, env, console_log)
+        if not success:
+            return [], False
+        if data is not None:
+            return cls._extract_records(data), True
+        records = cls._extract_table_records(raw)
+        if not records:
+            console_log.append({
+                "timestamp": datetime.utcnow().isoformat(),
+                "command": cls._redact_command(cmd),
+                "status": "error",
+                "message": "Run:ai returned non-JSON output",
+            })
+        return records, True
+
+    @classmethod
+    def _runai_object_with_fallback(cls, commands: list, env: dict, console_log: list) -> dict:
+        last_object = {}
+        for cmd in commands:
+            obj, success = cls._runai_object_from_command(cmd, env, console_log)
+            if success and obj:
+                return obj
+            if obj:
+                last_object = obj
+        return last_object
+
+    @classmethod
+    def _runai_object_from_command(cls, cmd: list, env: dict, console_log: list) -> tuple:
+        data, _, success = cls._run_cli_json(cmd, env, console_log)
+        if not success or data is None:
+            return {}, False
+        obj = cls._first_object(data)
+        return obj, bool(obj)
+
+    @classmethod
+    def _run_cli_json(cls, cmd: list, env: dict, console_log: list) -> tuple:
+        """Run a CLI command and return (parsed_json_or_None, raw_stdout, success)."""
         started = datetime.utcnow().isoformat()
         result = subprocess.run(
             cmd,
@@ -1328,20 +1514,49 @@ class AutoscalerBLL:
             "message": (result.stderr or result.stdout or "").strip()[:500],
         })
         if result.returncode != 0 or not result.stdout:
-            return [], False
-
+            return None, result.stdout or "", False
         try:
-            return cls._extract_records(json.loads(result.stdout)), True
+            return json.loads(result.stdout), result.stdout, True
         except ValueError:
-            records = cls._extract_table_records(result.stdout)
-            if not records:
-                console_log.append({
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "command": command,
-                    "status": "error",
-                    "message": "Run:ai returned non-JSON output",
-                })
-            return records, True
+            return None, result.stdout, True
+
+    @classmethod
+    def _first_object(cls, data) -> dict:
+        if isinstance(data, dict):
+            for key in ("item", "resource", "result", "data"):
+                value = data.get(key)
+                if isinstance(value, dict):
+                    return value
+                if isinstance(value, list):
+                    for entry in value:
+                        if isinstance(entry, dict):
+                            return entry
+            return data
+        if isinstance(data, list):
+            for entry in data:
+                if isinstance(entry, dict):
+                    return entry
+        return {}
+
+    @staticmethod
+    def _merge_asset_detail(base, detail) -> dict:
+        """Merge a describe result (detail) over a list item (base), pulling up
+        nested ``spec``/``meta`` so ``_pick`` based summaries find more fields."""
+        if not isinstance(detail, dict):
+            return base
+        merged = dict(base) if isinstance(base, dict) else {}
+        for nested_key in ("spec", "attributes"):
+            nested = detail.get(nested_key)
+            if isinstance(nested, dict):
+                merged.update({k: v for k, v in nested.items() if v not in (None, "")})
+        meta = detail.get("meta")
+        if isinstance(meta, dict) and meta.get("name"):
+            merged.setdefault("name", meta.get("name"))
+        merged.update({
+            k: v for k, v in detail.items()
+            if k not in ("spec", "attributes", "meta") and v not in (None, "")
+        })
+        return merged
 
     @classmethod
     def _run_with_fallback(cls, commands: list, env: dict, timeout: int):
@@ -1506,6 +1721,8 @@ class AutoscalerBLL:
                 ["runai", "list", "compute", "--json"],
                 ["runai", "list", "compute"],
             ], project),
+            key="compute_list",
+            subs={"project": project or ""},
         )
 
     @classmethod
@@ -1520,6 +1737,8 @@ class AutoscalerBLL:
                 ["runai", "list", "environment", "--json"],
                 ["runai", "list", "environment"],
             ], project),
+            key="environment_list",
+            subs={"project": project or ""},
         )
 
     @classmethod
@@ -1535,6 +1754,58 @@ class AutoscalerBLL:
                 ["runai", "list", "datasource", "--json"],
                 ["runai", "list", "datasource"],
             ], project),
+            key="datasource_list",
+            subs={"project": project or ""},
+        )
+
+    @classmethod
+    def _compute_describe_commands(cls, conn, name: str, project: Optional[str] = None) -> list:
+        return cls._cli_candidates(
+            conn,
+            cls._with_project([
+                ["runai", "compute", "describe", name, "--json"],
+                ["runai", "compute-resource", "describe", name, "--json"],
+                ["runai", "compute", "describe", name],
+            ], project),
+            cls._with_project([
+                ["runai", "describe", "compute", name, "--json"],
+                ["runai", "describe", "compute", name],
+            ], project),
+            key="compute_describe",
+            subs={"name": name, "project": project or ""},
+        )
+
+    @classmethod
+    def _environment_describe_commands(cls, conn, name: str, project: Optional[str] = None) -> list:
+        return cls._cli_candidates(
+            conn,
+            cls._with_project([
+                ["runai", "environment", "describe", name, "--json"],
+                ["runai", "environment", "describe", name],
+            ], project),
+            cls._with_project([
+                ["runai", "describe", "environment", name, "--json"],
+                ["runai", "describe", "environment", name],
+            ], project),
+            key="environment_describe",
+            subs={"name": name, "project": project or ""},
+        )
+
+    @classmethod
+    def _datasource_describe_commands(cls, conn, name: str, project: Optional[str] = None) -> list:
+        return cls._cli_candidates(
+            conn,
+            cls._with_project([
+                ["runai", "datasource", "describe", name, "--json"],
+                ["runai", "data-source", "describe", name, "--json"],
+                ["runai", "datasource", "describe", name],
+            ], project),
+            cls._with_project([
+                ["runai", "describe", "datasource", name, "--json"],
+                ["runai", "describe", "datasource", name],
+            ], project),
+            key="datasource_describe",
+            subs={"name": name, "project": project or ""},
         )
 
     @classmethod
@@ -1550,6 +1821,7 @@ class AutoscalerBLL:
                 ["runai", "list", "node-pools", "--json"],
                 ["runai", "list", "node-pools"],
             ],
+            key="nodepool_list",
         )
 
     @staticmethod

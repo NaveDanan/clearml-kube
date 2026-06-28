@@ -119,9 +119,9 @@ try {
         & $DockerPath build `
             -f $RunaiWorkerDockerfile `
             --build-arg "BASE_IMAGE=$serverImage" `
+            --build-arg "RUNAI_WORKER_VERSION=$Tag" `
             --build-arg "RUNAI_V1_SHA256=$runaiV1Sha256" `
-            --build-arg "RUNAI_V2_SHA256=$runaiV2N=$Tag" `
-            --build-arg "RUNAI_SHA256=$runaiSha256" `
+            --build-arg "RUNAI_V2_SHA256=$runaiV2Sha256" `
             --build-arg "OC_TAR_SHA256=$ocTarSha256" `
             -t $workerImage `
             -t "clearml/runai-worker:local" `
