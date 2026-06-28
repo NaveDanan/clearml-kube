@@ -8,6 +8,7 @@ class RunaiConnectionSettings(Base):
     openshift_api_url = StringField()
     openshift_token = StringField()
     openshift_login_command = StringField()
+    runai_cp_url = StringField()
     runai_access_key = StringField()
     runai_secret_key = StringField()
     runai_cluster = StringField()
@@ -93,3 +94,11 @@ class StopWorkloadRequest(Base):
     workload_name = StringField()
     workload_type = StringField()
     project = StringField()
+
+
+class GetWorkloadLogsRequest(Base):
+    instance_id = StringField()
+    workload_name = StringField()
+    workload_type = StringField()
+    project = StringField()
+    tail = StringField()

@@ -283,7 +283,7 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertEqual(execution.return_code, "0")
         self.assertEqual(FakeAppInstance._store[0].status, "success")
         commands = [call.args[0] for call in run.call_args_list]
-        self.assertIn(["runai", "login", "application", "--name", "access", "--secret", "secret", "--interactive", "disabled"], commands)
+        self.assertIn(["runai-v2", "login", "application", "--client-id", "access", "--client-secret", "secret"], commands)
         self.assertIn(["runai-v2", "cluster", "set", "cluster-a"], commands)
         self.assertIn(["runai-v2", "project", "set", "project-a"], commands)
         self.assertIn(["runai-v2", "training", "standard", "submit", "train-one", "-i", "repo/image:latest", "-c", "python train.py", "-g", "1", "--", "--epochs", "1"], commands)

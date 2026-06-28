@@ -11,9 +11,9 @@
 # The ClearML images are intentionally local tags. Before syncing in ArgoCD,
 # build and load them into minikube:
 #   docker compose --env-file .env.test -f docker-compose.airgap.yml build
-#   docker build -f .\clearml-server\docker\build\runai-worker.Dockerfile --build-arg BASE_IMAGE=clearml/clearml:2026-06-22 -t clearml/runai-worker:2026-06-22 .
-#   minikube image load clearml/clearml:2026-06-22
-#   minikube image load clearml/runai-worker:2026-06-22
+#   docker build -f .\clearml-server\docker\build\runai-worker.Dockerfile --build-arg BASE_IMAGE=clearml/clearml:2026-06-28 -t clearml/runai-worker:2026-06-28 .
+#   minikube image load clearml/clearml:2026-06-28
+#   minikube image load clearml/runai-worker:2026-06-28
 #
 # These values expose fixed Kubernetes NodePorts:
 #   web:  30080 -> service port 8080
@@ -48,7 +48,7 @@ apiserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-06-22"
+    tag: "2026-06-28"
     pullPolicy: IfNotPresent
   service:
     type: NodePort
@@ -73,7 +73,7 @@ fileserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-06-22"
+    tag: "2026-06-28"
     pullPolicy: IfNotPresent
   service:
     type: NodePort
@@ -104,7 +104,7 @@ webserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-06-22"
+    tag: "2026-06-28"
     pullPolicy: IfNotPresent
   service:
     type: NodePort
@@ -139,7 +139,7 @@ runaiWorker:
   image:
     registry: ""
     repository: "clearml/runai-worker"
-    tag: "2026-06-22"
+    tag: "2026-06-28"
     pullPolicy: IfNotPresent
   replicaCount: 1
   pollInterval: 10

@@ -53,6 +53,18 @@ const routes: Routes = [
             type: CrumbTypeEnum.SubFeature
           }]]
         }
+      },
+      {
+        path: 'autoscaler-commands',
+        loadComponent: () => import('@common/settings/autoscaler-commands/autoscaler-commands.component').then(m => m.AutoscalerCommandsComponent),
+        data: {
+          workspaceNeutral: true,
+          route: '/settings/autoscaler-commands',
+          staticBreadcrumb: [[settingsBreadcrumb, {
+            name: 'Autoscalar Commands',
+            type: CrumbTypeEnum.SubFeature
+          }]]
+        }
       }
     ]
   }

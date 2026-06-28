@@ -60,10 +60,22 @@ spec:
                 sleep 5 ;
               done ;
               {{- end }}
+              {{- if .Values.runaiWorker.caCert.enabled }}
+              echo "building combined CA trust bundle" ;
+              cat /etc/ssl/certs/ca-certificates.crt /runai-ca-src/* > /runai-ca/ca-bundle.crt ;
+              {{- end }}
           securityContext:
             {{ toYaml .Values.runaiWorker.containerSecurityContext | nindent 12 }}
           resources:
             {{- toYaml .Values.runaiWorker.initContainers.resources | nindent 12 }}
+          {{- if .Values.runaiWorker.caCert.enabled }}
+          volumeMounts:
+            - name: runai-ca-source
+              mountPath: /runai-ca-src
+              readOnly: true
+            - name: runai-ca-bundle
+              mountPath: /runai-ca
+          {{- end }}
       containers:
         - name: runai-worker
           image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.runaiWorker.image.registry) }}{{ .Values.runaiWorker.image.repository }}:{{ .Values.runaiWorker.image.tag }}"
@@ -100,6 +112,14 @@ spec:
             value: "{{ .Values.runaiWorker.pollInterval }}"
           - name: RUNAI_WORKER_BATCH_SIZE
             value: "{{ .Values.runaiWorker.batchSize }}"
+          {{- if .Values.runaiWorker.caCert.enabled }}
+          - name: SSL_CERT_FILE
+            value: /runai-ca/ca-bundle.crt
+          - name: REQUESTS_CA_BUNDLE
+            value: /runai-ca/ca-bundle.crt
+          - name: CURL_CA_BUNDLE
+            value: /runai-ca/ca-bundle.crt
+          {{- end }}
           {{- if .Values.runaiWorker.extraEnvs }}
           {{ toYaml .Values.runaiWorker.extraEnvs | nindent 10 }}
           {{- end }}
@@ -107,6 +127,20 @@ spec:
             {{- toYaml .Values.runaiWorker.resources | nindent 12 }}
           securityContext:
             {{ toYaml .Values.runaiWorker.containerSecurityContext | nindent 12 }}
+          {{- if .Values.runaiWorker.caCert.enabled }}
+          volumeMounts:
+            - name: runai-ca-bundle
+              mountPath: /runai-ca
+              readOnly: true
+          {{- end }}
+      {{- if .Values.runaiWorker.caCert.enabled }}
+      volumes:
+        - name: runai-ca-source
+          secret:
+            secretName: {{ .Values.runaiWorker.caCert.existingSecret | default (printf "%s-ca" (include "runaiWorker.referenceName" .)) }}
+        - name: runai-ca-bundle
+          emptyDir: {}
+      {{- end }}
       {{- with .Values.runaiWorker.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -97,6 +97,12 @@
       }
 
       <mat-form-field appearance="outline">
+        <mat-label>Run:ai Control Plane URL</mat-label>
+        <input matInput formControlName="runai_cp_url" placeholder="https://runai.example.com">
+        <mat-hint>Required for the Run:ai v2 CLI</mat-hint>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
         <mat-label>Project</mat-label>
         <input matInput formControlName="runai_project" placeholder="Optional Run:ai project name">
       </mat-form-field>
@@ -243,8 +249,8 @@
         <mat-expansion-panel class="workload-panel">
           <mat-expansion-panel-header>
             <mat-panel-title>Environment</mat-panel-title>
-            @if (workloadForm.controls.environment.value) {
-              <mat-panel-description>{{ workloadForm.controls.environment.value }}</mat-panel-description>
+            @if (selectedEnvironments().length) {
+              <mat-panel-description>{{ selectedEnvironments().length }} selected</mat-panel-description>
             }
           </mat-expansion-panel-header>
 
@@ -253,7 +259,7 @@
             @for (resource of environmentResources(); track resource.name) {
               <button type="button" class="asset-card"
                       [class.selected]="isEnvironmentSelected(resource)"
-                      (click)="selectEnvironment(resource)">
+                      (click)="toggleEnvironment(resource)">
                 <span class="asset-card-check">
                   @if (isEnvironmentSelected(resource)) {
                     <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
@@ -809,13 +815,69 @@
       </section>
 
       <section class="dashboard-card console-card">
-        <h2>Console Log</h2>
-        <div class="console-log">
-          @if (dashboardError()) {
-            <div class="console-line error">{{ dashboardError() }}</div>
+        <div class="console-panel" [class.expanded]="instanceLogExpanded()">
+          <button type="button" class="console-toggle" (click)="toggleInstanceLog()"
+                  [attr.aria-expanded]="instanceLogExpanded()">
+            <mat-icon fontSet="al" [fontIcon]="instanceLogExpanded() ? 'al-ico-arrow-down' : 'al-ico-arrow-right'"></mat-icon>
+            <span class="console-title">
+              App Instance Log
+              @if (selectedInstance()?.name) {
+                <span class="console-subtitle">· {{ selectedInstance()?.name }}</span>
+              }
+              @if (instanceLogSource()) {
+                <span class="console-source">{{ instanceLogSource() === 'openshift' ? 'OpenShift pod' : 'Run:ai' }}</span>
+              }
+            </span>
+            @if (instanceLogsLoading()) {
+              <mat-spinner diameter="14"></mat-spinner>
+            }
+          </button>
+          @if (instanceLogExpanded()) {
+            <div class="console-body">
+              @if (!selectedInstance()) {
+                <div class="console-log">
+                  <div class="console-line">Select an app instance to view its console log</div>
+                </div>
+              } @else {
+                <div #instanceLogBody class="console-log" (scroll)="onLogScroll($event, 'instance')">
+                  @for (line of instanceConsoleLines(); track $index) {
+                    <div class="console-line">{{ line }}</div>
+                  }
+                </div>
+                @if (!instanceLogFollow()) {
+                  <button type="button" class="resume-logs" (click)="resumeLogs('instance')">
+                    <mat-icon fontSet="al" fontIcon="al-ico-arrow-to-bottom"></mat-icon>
+                    Resume logs
+                  </button>
+                }
+              }
+            </div>
           }
-          @for (line of selectedConsoleLines(); track line) {
-            <div class="console-line">{{ line }}</div>
+        </div>
+
+        <div class="console-panel" [class.expanded]="mainLogExpanded()">
+          <button type="button" class="console-toggle" (click)="toggleMainLog()"
+                  [attr.aria-expanded]="mainLogExpanded()">
+            <mat-icon fontSet="al" [fontIcon]="mainLogExpanded() ? 'al-ico-arrow-down' : 'al-ico-arrow-right'"></mat-icon>
+            <span class="console-title">Console Log</span>
+          </button>
+          @if (mainLogExpanded()) {
+            <div class="console-body">
+              <div #mainLogBody class="console-log" (scroll)="onLogScroll($event, 'main')">
+                @if (dashboardError()) {
+                  <div class="console-line error">{{ dashboardError() }}</div>
+                }
+                @for (line of consoleLines(); track $index) {
+                  <div class="console-line">{{ line }}</div>
+                }
+              </div>
+              @if (!mainLogFollow()) {
+                <button type="button" class="resume-logs" (click)="resumeLogs('main')">
+                  <mat-icon fontSet="al" fontIcon="al-ico-arrow-to-bottom"></mat-icon>
+                  Resume logs
+                </button>
+              }
+            </div>
           }
         </div>
       </section>

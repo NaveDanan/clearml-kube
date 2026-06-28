@@ -9,7 +9,7 @@ from apiserver.database import db
 
 log = config.logger(f"JOB-{Path(__file__).name}")
 
-POLL_INTERVAL = int(os.environ.get("RUNAI_WORKER_POLL_INTERVAL", "10"))
+POLL_INTERVAL = int(os.environ.get("RUNAI_WORKER_POLL_INTERVAL", "3"))
 MAX_EXECUTIONS_PER_POLL = int(os.environ.get("RUNAI_WORKER_BATCH_SIZE", "5"))
 
 autoscaler_bll = AutoscalerBLL()

@@ -857,29 +857,120 @@ header {
 }
 
 .console-card {
-  min-height: 258px;
+  display: grid;
+  gap: 12px;
+  min-height: 96px;
+}
+
+.console-panel {
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 8px;
+  overflow: hidden;
+
+  &.expanded {
+    background: var(--color-surface);
+  }
+}
+
+.console-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--color-on-surface);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-surface-container-high);
+  }
+
+  mat-icon {
+    flex: 0 0 auto;
+  }
+
+  mat-spinner {
+    margin-left: auto;
+  }
+}
+
+.console-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.console-subtitle {
+  color: var(--color-on-surface-variant);
+  font-weight: 400;
+}
+
+.console-source {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface-variant);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.console-body {
+  position: relative;
+  padding: 12px 14px 16px;
+  border-top: 1px solid var(--color-outline-variant);
 }
 
 .console-log {
   display: grid;
-  gap: 10px;
-  width: min(920px, 76%);
-  margin: 40px auto 0;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
   color: var(--color-on-surface-variant);
   font-family: monospace;
   font-size: 12px;
+  scroll-behavior: smooth;
 }
 
 .console-line {
-  overflow: hidden;
-  padding-bottom: 7px;
-  border-bottom: 2px solid var(--dashboard-line);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--dashboard-line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 
   &.error {
     color: var(--color-error);
     border-color: var(--color-error);
+  }
+}
+
+.resume-logs {
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 25%);
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
   }
 }
 

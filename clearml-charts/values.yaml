@@ -418,6 +418,21 @@ runaiWorker:
         memory: 64Mi
   # -- Run:ai worker extra environment variables
   extraEnvs: []
+  # -- Private/company CA certificate(s) to trust for Run:ai control-plane and
+  #    OpenShift TLS. Needed when the cluster uses a certificate signed by an
+  #    internal CA (otherwise `runai login` fails with "x509: certificate signed
+  #    by unknown authority"). The CA is merged with the system trust bundle by
+  #    an init container and exposed to the Go-based runai/oc CLIs via
+  #    SSL_CERT_FILE, so the worker does not need to run as root.
+  caCert:
+    # -- Enable mounting and trusting a custom CA bundle
+    enabled: false
+    # -- Inline PEM bundle (one or more certificates). Ignored when existingSecret is set.
+    content: ""
+    # -- Use an existing secret that already contains the CA bundle instead of `content`
+    existingSecret: ""
+    # -- Key inside the secret (existing or generated) that holds the PEM bundle
+    secretKey: "company-ca.crt"
   # -- specific annotation for Run:ai worker pods
   podAnnotations: {}
   # -- Run:ai worker resources per pod

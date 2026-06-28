@@ -7,6 +7,7 @@ from apiserver.apimodels.autoscaler import (
     DeleteWorkloadRequest,
     StopWorkloadRequest,
     SaveAppInstanceRequest,
+    GetWorkloadLogsRequest,
 )
 from apiserver.bll.autoscaler import AutoscalerBLL
 from apiserver.service_repo import endpoint, APICall
@@ -31,6 +32,20 @@ def set_settings(call: APICall, company: str, request: SetSettingsRequest):
 @endpoint("autoscaler.reset_settings")
 def reset_settings(call: APICall, company: str, _):
     call.result.data = {"updated": autoscaler_bll.reset_company_settings(company)}
+
+
+@endpoint("autoscaler.get_command_templates")
+def get_command_templates(call: APICall, company: str, _):
+    call.result.data = autoscaler_bll.get_command_templates(company)
+
+
+@endpoint("autoscaler.set_command_templates")
+def set_command_templates(call: APICall, company: str, _):
+    call.result.data = {
+        "updated": autoscaler_bll.set_command_templates(
+            company, call.data.get("overrides")
+        )
+    }
 
 
 @endpoint("autoscaler.test_connection")
@@ -83,5 +98,12 @@ def delete_workload(call: APICall, company: str, request: DeleteWorkloadRequest)
 @endpoint("autoscaler.stop_workload")
 def stop_workload(call: APICall, company: str, request: StopWorkloadRequest):
     call.result.data = autoscaler_bll.stop_workload(
+        company, request, user_id=call.identity.user, worker_id=call.worker
+    )
+
+
+@endpoint("autoscaler.get_workload_logs")
+def get_workload_logs(call: APICall, company: str, request: GetWorkloadLogsRequest):
+    call.result.data = autoscaler_bll.get_workload_logs(
         company, request, user_id=call.identity.user, worker_id=call.worker
     )

@@ -8,8 +8,8 @@ This chart is prepared for the ESA cluster values in `esa-values.yaml`.
 or in the registry/mirror used by the cluster:
 
 ```text
-clearml/clearml:autoscalar-v2026-06-14
-clearml/runai-worker:2026-06-14
+clearml/clearml:2026-06-24
+clearml/runai-worker:2026-06-28
 clearml/redis:7.0.9-debian-11-r1
 clearml/mongodb:6.0.10-debian-11-r8
 clearml/elasticsearch:7.17.3
@@ -18,7 +18,7 @@ clearml/elasticsearch:7.17.3
 Load the exported slim tar on the connected staging host or registry host:
 
 ```bash
-docker load -i clearml-images-slim-2026-06-14.tar
+docker load -i clearml-images-slim-2026-06-28.tar
 ```
 
 The slim tar contains only the ClearML application images. The Redis, MongoDB,
@@ -28,10 +28,10 @@ registry hostname, retag these images for that registry and update
 `global.imageRegistry` in `esa-values.yaml` to match.
 
 ```bash
-docker tag clearml/clearml:autoscalar-v2026-06-14 <registry>/clearml/clearml:autoscalar-v2026-06-14
-docker tag clearml/runai-worker:2026-06-14 <registry>/clearml/runai-worker:2026-06-14
-docker push <registry>/clearml/clearml:autoscalar-v2026-06-14
-docker push <registry>/clearml/runai-worker:2026-06-14
+docker tag clearml/clearml:2026-06-24 <registry>/clearml/clearml:2026-06-24
+docker tag clearml/runai-worker:2026-06-28 <registry>/clearml/runai-worker:2026-06-28
+docker push <registry>/clearml/clearml:2026-06-24
+docker push <registry>/clearml/runai-worker:2026-06-28
 ```
 
 ## Required Existing Cluster Resources

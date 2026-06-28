@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy, Component, OnDestroy, TemplateRef, computed, effect, inject, signal} from '@angular/core';
+import {ChangeDetectionStrategy, Component, ElementRef, OnDestroy, TemplateRef, computed, effect, inject, signal, untracked, viewChild} from '@angular/core';
 import {Store} from '@ngrx/store';
 import {NgTemplateOutlet} from '@angular/common';
 import {AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
@@ -30,12 +30,17 @@ import {
   selectAutoscalerDashboardLoading,
   selectAutoscalerLastExecution,
   selectAutoscalerProjectResources,
-  selectAutoscalerProjectResourcesLoading
+  selectAutoscalerProjectResourcesLoading,
+  selectAutoscalerWorkloadLogs,
+  selectAutoscalerWorkloadLogsLoading
 } from '../../reducers/index.reducer';
 import {Subscription} from 'rxjs';
 import {debounceTime, distinctUntilChanged} from 'rxjs/operators';
 
 export type WorkloadType = 'training' | 'workspace' | 'inference';
+
+const INSTANCE_LOG_REFRESH_INTERVAL = 4000;
+
 type ConnectionMethod = 'openshift' | 'runai_application';
 type OpenshiftLoginMode = 'fields' | 'command';
 type RunaiCliVersion = 'auto' | 'v1' | 'v2';
@@ -290,15 +295,43 @@ export class AutoscalerComponent implements OnDestroy {
       log.message,
     ].filter(Boolean).join(' | '));
   });
-  protected selectedConsoleLines = computed(() => {
+  protected instanceLogs = this.store.selectSignal(selectAutoscalerWorkloadLogs);
+  protected instanceLogsLoading = this.store.selectSignal(selectAutoscalerWorkloadLogsLoading);
+  protected instanceConsoleLines = computed<string[]>(() => {
     const selected = this.selectedInstance();
-    const lines = this.consoleLines();
     if (!selected) {
-      return lines;
+      return [];
     }
-    const filtered = lines.filter(line => line.includes(selected.name));
-    return filtered.length ? filtered : lines;
+    const logs = this.instanceLogs();
+    if (logs?.error && !(logs?.lines?.length)) {
+      return [logs.error];
+    }
+    const lines = logs?.lines ?? [];
+    if (!lines.length) {
+      return [this.instanceLogsLoading() ? 'Loading workload logs…' : 'Waiting for workload logs from Run:ai / OpenShift'];
+    }
+    return lines;
   });
+  protected instanceLogSource = computed(() => this.instanceLogs()?.source || '');
+  // The selected app instance is identified by name + project; track that as a
+  // stable string so the log refresh effect does not restart on every dashboard
+  // poll (which recreates the instance objects).
+  protected selectedInstanceLogKey = computed<string | null>(() => {
+    const instance = this.selectedInstance();
+    return instance ? `${instance.name}||${instance.project || ''}` : null;
+  });
+
+  // Console log panels: the main connection log is collapsed by default and the
+  // app-instance-specific log opens when an instance is selected. Only one is
+  // expanded at a time so the two logs never appear together.
+  protected mainLogExpanded = signal(false);
+  protected instanceLogExpanded = signal(true);
+  protected mainLogFollow = signal(true);
+  protected instanceLogFollow = signal(true);
+  private mainLogBody = viewChild<ElementRef<HTMLElement>>('mainLogBody');
+  private instanceLogBody = viewChild<ElementRef<HTMLElement>>('instanceLogBody');
+  private instanceLogRefreshId?: ReturnType<typeof setInterval>;
+  private activeInstanceLogKey: string | null = null;
 
   connectionForm = this.fb.group({
     connection_method: ['openshift' as ConnectionMethod, Validators.required],
@@ -306,6 +339,7 @@ export class AutoscalerComponent implements OnDestroy {
     openshift_api_url: [''],
     openshift_token: [''],
     openshift_login_command: [''],
+    runai_cp_url: [''],
     runai_access_key: [''],
     runai_secret_key: [''],
     runai_cluster: [''],
@@ -388,6 +422,35 @@ export class AutoscalerComponent implements OnDestroy {
       this.patchConnectionFormFromSettings();
     });
 
+    // Drive the app-instance-specific console log: fetch + periodically refresh
+    // the logs for the selected instance while its panel is expanded.
+    effect(() => {
+      const key = this.selectedInstanceLogKey();
+      const expanded = this.instanceLogExpanded();
+      const active = this.selectedProvider() === 'runai' && !!key && expanded;
+      untracked(() => this.syncInstanceLogRefresh(key, active));
+    });
+
+    // Auto-scroll the instance log to the bottom while following live output.
+    effect(() => {
+      const lines = this.instanceConsoleLines();
+      const follow = this.instanceLogFollow();
+      const expanded = this.instanceLogExpanded();
+      if (expanded && follow && lines.length) {
+        this.scrollToBottomLater(this.instanceLogBody);
+      }
+    });
+
+    // Auto-scroll the main connection log to the bottom while following.
+    effect(() => {
+      const lines = this.consoleLines();
+      const follow = this.mainLogFollow();
+      const expanded = this.mainLogExpanded();
+      if (expanded && follow && lines.length) {
+        this.scrollToBottomLater(this.mainLogBody);
+      }
+    });
+
     if (this.isRunaiRoute()) {
       this.selectedProvider.set('runai');
       this.refreshDashboard();
@@ -397,6 +460,7 @@ export class AutoscalerComponent implements OnDestroy {
 
   ngOnDestroy() {
     this.stopDashboardRefresh();
+    this.stopInstanceLogRefresh();
     this.formSubscription.unsubscribe();
   }
 
@@ -477,6 +541,99 @@ export class AutoscalerComponent implements OnDestroy {
 
   selectInstance(instance: AppInstance) {
     this.selectedInstanceKey.set(instance.key);
+    // Reveal the instance-specific log (and collapse the main connection log).
+    this.instanceLogExpanded.set(true);
+    this.mainLogExpanded.set(false);
+    this.instanceLogFollow.set(true);
+  }
+
+  // --- Console log panels (collapse + follow/resume) ---
+
+  protected toggleMainLog() {
+    const next = !this.mainLogExpanded();
+    this.mainLogExpanded.set(next);
+    if (next) {
+      this.instanceLogExpanded.set(false);
+      this.mainLogFollow.set(true);
+      this.scrollToBottomLater(this.mainLogBody);
+    }
+  }
+
+  protected toggleInstanceLog() {
+    const next = !this.instanceLogExpanded();
+    this.instanceLogExpanded.set(next);
+    if (next) {
+      this.mainLogExpanded.set(false);
+      this.instanceLogFollow.set(true);
+      this.scrollToBottomLater(this.instanceLogBody);
+    }
+  }
+
+  protected onLogScroll(event: Event, which: 'main' | 'instance') {
+    const el = event.target as HTMLElement;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    if (which === 'instance') {
+      this.instanceLogFollow.set(atBottom);
+    } else {
+      this.mainLogFollow.set(atBottom);
+    }
+  }
+
+  protected resumeLogs(which: 'main' | 'instance') {
+    if (which === 'instance') {
+      this.instanceLogFollow.set(true);
+      this.scrollToBottomLater(this.instanceLogBody);
+    } else {
+      this.mainLogFollow.set(true);
+      this.scrollToBottomLater(this.mainLogBody);
+    }
+  }
+
+  private scrollToBottomLater(ref: () => ElementRef<HTMLElement> | undefined) {
+    setTimeout(() => {
+      const el = ref()?.nativeElement;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
+      }
+    });
+  }
+
+  private syncInstanceLogRefresh(key: string | null, active: boolean) {
+    if (!active || !key) {
+      this.stopInstanceLogRefresh();
+      return;
+    }
+    if (key === this.activeInstanceLogKey && this.instanceLogRefreshId) {
+      return;
+    }
+    this.stopInstanceLogRefresh();
+    this.activeInstanceLogKey = key;
+    this.store.dispatch(autoscalerActions.setWorkloadLogsLoading({loading: true}));
+    this.dispatchInstanceLogs();
+    this.instanceLogRefreshId = setInterval(() => this.dispatchInstanceLogs(), INSTANCE_LOG_REFRESH_INTERVAL);
+  }
+
+  private stopInstanceLogRefresh() {
+    if (this.instanceLogRefreshId) {
+      clearInterval(this.instanceLogRefreshId);
+      this.instanceLogRefreshId = undefined;
+    }
+    this.activeInstanceLogKey = null;
+  }
+
+  private dispatchInstanceLogs() {
+    const instance = this.selectedInstance();
+    if (!instance) {
+      return;
+    }
+    this.store.dispatch(autoscalerActions.getWorkloadLogs({
+      workload: {
+        instance_id: instance.id,
+        workload_name: instance.name,
+        workload_type: instance.type,
+        project: instance.project,
+      },
+    }));
   }
 
   protected canStopInstance(instance: AppInstance): boolean {
@@ -724,18 +881,22 @@ export class AutoscalerComponent implements OnDestroy {
     this.workloadForm.markAsDirty();
   }
 
-  protected selectEnvironment(resource: AutoscalerEnvironmentResource) {
-    const isSelected = this.workloadForm.controls.environment.value === resource.name;
-    this.workloadForm.patchValue({
-      environment: isSelected ? '' : resource.name,
-      ...(isSelected ? {} : {
+  protected toggleEnvironment(resource: AutoscalerEnvironmentResource) {
+    const selected = this.selectedEnvironments();
+    const adding = !selected.includes(resource.name);
+    const next = adding
+      ? [...selected, resource.name]
+      : selected.filter(name => name !== resource.name);
+    this.workloadForm.controls.environment.setValue(next.join(','));
+    if (adding) {
+      this.workloadForm.patchValue({
         image: resource.image || this.workloadForm.controls.image.value || '',
         command_override: resource.command ? true : this.workloadForm.controls.command_override.value,
         command: resource.command || this.workloadForm.controls.command.value || '',
         args: resource.args || this.workloadForm.controls.args.value || '',
         working_dir: resource.working_dir || this.workloadForm.controls.working_dir.value || '',
-      }),
-    });
+      });
+    }
     this.workloadForm.markAsDirty();
   }
 
@@ -764,8 +925,15 @@ export class AutoscalerComponent implements OnDestroy {
     return this.workloadForm.controls.compute.value === resource.name;
   }
 
+  protected selectedEnvironments(): string[] {
+    return (this.workloadForm.controls.environment.value || '')
+      .split(',')
+      .map(name => name.trim())
+      .filter(Boolean);
+  }
+
   protected isEnvironmentSelected(resource: AutoscalerEnvironmentResource) {
-    return this.workloadForm.controls.environment.value === resource.name;
+    return this.selectedEnvironments().includes(resource.name);
   }
 
   protected isDataSourceSelected(resource: AutoscalerDataSourceResource) {
@@ -832,6 +1000,7 @@ export class AutoscalerComponent implements OnDestroy {
       openshift_api_url: settings.openshift_api_url || '',
       openshift_token: settings.openshift_token || '',
       openshift_login_command: settings.openshift_login_command || '',
+      runai_cp_url: settings.runai_cp_url || '',
       runai_access_key: settings.runai_access_key || '',
       runai_secret_key: settings.runai_secret_key || '',
       runai_cluster: settings.runai_cluster || '',

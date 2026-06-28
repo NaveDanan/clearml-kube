@@ -26,6 +26,7 @@ class AutoscalerSettings(DbModelMixin, Document):
     openshift_api_url = StringField()
     openshift_token = StringField()
     openshift_login_command = StringField()
+    runai_cp_url = StringField()
     runai_access_key = StringField()
     runai_secret_key = StringField()
     runai_cluster = StringField()
@@ -33,6 +34,7 @@ class AutoscalerSettings(DbModelMixin, Document):
     runai_cli_version = StringField(default="auto")
     user = StringField()
     worker = StringField()
+    command_templates = StringField()
 
 
 class AutoscalerExecution(DbModelMixin, Document):
@@ -57,6 +59,7 @@ class AutoscalerExecution(DbModelMixin, Document):
     stderr = StringField()
     return_code = StringField()
     projects_count = IntField()
+    result_data = StringField()
     user = StringField()
     worker = StringField()
 

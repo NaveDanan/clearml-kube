@@ -33,9 +33,9 @@ export class AutoscalerEffects {
   getDashboard = createEffect(() => this.actions$.pipe(
     ofType(autoscalerActions.getDashboard),
     exhaustMap(() => this.autoscalerApi.autoscalerGetDashboard({}).pipe(
-      switchMap((res: any) => [
-        autoscalerActions.setDashboard({dashboard: res}),
-      ]),
+      switchMap((res: any) => res?.connected
+        ? concat(of(autoscalerActions.setDashboard({dashboard: res})), this.pollDashboard(res))
+        : this.pollDashboard(res)),
       catchError(error => this.requestErrorActions(error, 'Failed to refresh Run:ai dashboard', [
         autoscalerActions.setDashboardError({error: this.errorMessage(error, 'Failed to refresh Run:ai dashboard')}),
       ])),
@@ -133,7 +133,9 @@ export class AutoscalerEffects {
   getProjectResources = createEffect(() => this.actions$.pipe(
     ofType(autoscalerActions.getProjectResources),
     switchMap(action => this.autoscalerApi.autoscalerGetProjectResources({project: action.project}).pipe(
-      map((res: any) => autoscalerActions.setProjectResources({resources: res ?? {}})),
+      switchMap((res: any) => res?.connected
+        ? concat(of(autoscalerActions.setProjectResources({resources: res})), this.pollProjectResources(res))
+        : this.pollProjectResources(res)),
       catchError(error => this.requestErrorActions(error, 'Failed to load Run:ai project resources', [
         autoscalerActions.setProjectResources({
           resources: {connected: false, error: this.errorMessage(error, 'Failed to load Run:ai project resources')},
@@ -141,6 +143,111 @@ export class AutoscalerEffects {
       ])),
     )),
   ));
+
+  getWorkloadLogs = createEffect(() => this.actions$.pipe(
+    ofType(autoscalerActions.getWorkloadLogs),
+    switchMap(action => this.autoscalerApi.autoscalerGetWorkloadLogs(action.workload).pipe(
+      switchMap((res: any) => res?.connected
+        ? concat(of(autoscalerActions.setWorkloadLogs({logs: res})), this.pollWorkloadLogs(res))
+        : this.pollWorkloadLogs(res)),
+      catchError(error => [
+        autoscalerActions.setWorkloadLogs({
+          logs: {
+            connected: false,
+            workload_name: action.workload.workload_name,
+            project: action.workload.project,
+            error: this.errorMessage(error, 'Failed to load workload logs'),
+          },
+        }),
+      ]),
+    )),
+  ));
+
+  private pollWorkloadLogs(res: any) {
+    if (!res?.execution_id) {
+      return of(autoscalerActions.setWorkloadLogs({logs: res ?? {}}));
+    }
+    return timer(EXECUTION_POLL_INTERVAL, EXECUTION_POLL_INTERVAL).pipe(
+      switchMap(() => this.autoscalerApi.autoscalerGetExecution({execution_id: res.execution_id})),
+      takeWhile((response: any) => this.isExecutionActive(response.status), true),
+      switchMap((response: any) => {
+        if (this.isExecutionActive(response.status)) {
+          return [];
+        }
+        if (response.result_data) {
+          return [autoscalerActions.setWorkloadLogs({logs: response.result_data})];
+        }
+        return [autoscalerActions.setWorkloadLogs({
+          logs: {
+            connected: false,
+            workload_name: res.workload_name,
+            project: res.project,
+            error: response.stderr || 'Failed to load workload logs',
+          },
+        })];
+      }),
+      catchError(error => [
+        autoscalerActions.setWorkloadLogs({
+          logs: {connected: false, workload_name: res.workload_name, project: res.project, error: this.errorMessage(error, 'Failed to load workload logs')},
+        }),
+      ]),
+    );
+  }
+
+  private pollDashboard(res: any) {
+    if (!res?.execution_id) {
+      // No worker refresh queued (e.g. no settings) - surface whatever we got.
+      return of(autoscalerActions.setDashboard({dashboard: res}));
+    }
+    return timer(EXECUTION_POLL_INTERVAL, EXECUTION_POLL_INTERVAL).pipe(
+      switchMap(() => this.autoscalerApi.autoscalerGetExecution({execution_id: res.execution_id})),
+      takeWhile((response: any) => this.isExecutionActive(response.status), true),
+      switchMap((response: any) => {
+        if (this.isExecutionActive(response.status)) {
+          return [];
+        }
+        if (response.result_data) {
+          return [autoscalerActions.setDashboard({dashboard: response.result_data})];
+        }
+        return [autoscalerActions.setDashboardError({
+          error: response.stderr || 'Run:ai dashboard refresh failed',
+        })];
+      }),
+      catchError(error => [
+        autoscalerActions.setDashboardError({error: this.errorMessage(error, 'Run:ai dashboard refresh failed')}),
+      ]),
+    );
+  }
+
+  private pollProjectResources(res: any) {
+    if (!res?.execution_id) {
+      return of(autoscalerActions.setProjectResources({resources: res ?? {}}));
+    }
+    return timer(EXECUTION_POLL_INTERVAL, EXECUTION_POLL_INTERVAL).pipe(
+      switchMap(() => this.autoscalerApi.autoscalerGetExecution({execution_id: res.execution_id})),
+      takeWhile((response: any) => this.isExecutionActive(response.status), true),
+      switchMap((response: any) => {
+        if (this.isExecutionActive(response.status)) {
+          return [];
+        }
+        if (response.result_data) {
+          return [autoscalerActions.setProjectResources({resources: response.result_data})];
+        }
+        return [autoscalerActions.setProjectResources({
+          resources: {
+            connected: false,
+            project: res.project,
+            error: response.stderr || 'Failed to load Run:ai project resources',
+          },
+        })];
+      }),
+      catchError(error => [
+        autoscalerActions.setProjectResources({
+          resources: {connected: false, project: res.project, error: this.errorMessage(error, 'Failed to load Run:ai project resources')},
+        }),
+      ]),
+    );
+  }
 
   private trackExecution(
     result: any,

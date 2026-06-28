@@ -41,6 +41,14 @@ export class ApiAutoscalerService {
     return this.apiRequest.post<any>(`${this.basePath}/autoscaler.reset_settings`, request);
   }
 
+  public autoscalerGetCommandTemplates(request: object): Observable<any> {
+    return this.apiRequest.post<any>(`${this.basePath}/autoscaler.get_command_templates`, request);
+  }
+
+  public autoscalerSetCommandTemplates(request: object): Observable<any> {
+    return this.apiRequest.post<any>(`${this.basePath}/autoscaler.set_command_templates`, request);
+  }
+
   public autoscalerTestConnection(request: object): Observable<any> {
     return this.apiRequest.post<any>(`${this.basePath}/autoscaler.test_connection`, request);
   }
@@ -71,5 +79,9 @@ export class ApiAutoscalerService {
 
   public autoscalerStopWorkload(request: object): Observable<any> {
     return this.apiRequest.post<any>(`${this.basePath}/autoscaler.stop_workload`, request);
+  }
+
+  public autoscalerGetWorkloadLogs(request: object): Observable<any> {
+    return this.apiRequest.post<any>(`${this.basePath}/autoscaler.get_workload_logs`, request);
   }
 }

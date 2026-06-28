@@ -4,12 +4,13 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Optional
 
 from apiserver.apimodels.autoscaler import (
     DeleteWorkloadRequest,
+    GetWorkloadLogsRequest,
     SaveAppInstanceRequest,
     SetSettingsRequest,
     StopWorkloadRequest,
@@ -27,9 +28,219 @@ from apiserver.database.utils import id as db_id
 log = config.logger(__file__)
 
 
+class _SafeFormatDict(dict):
+    """dict that returns an empty string for missing template placeholders."""
+
+    def __missing__(self, key):
+        return ""
+
+
+# Catalog of the Run:ai CLI commands the autoscaler can run, grouped by CLI
+# version. The ``command`` values are the editable defaults shown in the
+# "Autoscalar Commands" settings tab. Placeholders in ``{}`` are substituted at
+# run time. For the ``submit_*`` / ``submit`` entries only the base command is
+# editable; the concrete workload flags (image, GPU, command, args, ...) are
+# appended automatically.
+RUNAI_COMMAND_CATALOG = {
+    "v2": [
+        {
+            "key": "login",
+            "label": "Application login",
+            "description": "Authenticate to Run:ai using application credentials.",
+            "command": "runai login application --client-id {access_key} --client-secret {secret_key}",
+            "placeholders": [
+                {"name": "access_key", "description": "Run:ai application client id / access key"},
+                {"name": "secret_key", "description": "Run:ai application client secret"},
+            ],
+        },
+        {
+            "key": "cp_url",
+            "label": "Set control plane URL",
+            "description": "Configure the Run:ai control plane URL (v2 only).",
+            "command": "runai config set --cp-url {cp_url}",
+            "placeholders": [{"name": "cp_url", "description": "Run:ai control plane URL"}],
+        },
+        {
+            "key": "cluster_set",
+            "label": "Select cluster",
+            "description": "Set the active Run:ai cluster.",
+            "command": "runai cluster set {cluster}",
+            "placeholders": [{"name": "cluster", "description": "Run:ai cluster name"}],
+        },
+        {
+            "key": "project_set",
+            "label": "Select project",
+            "description": "Set the active Run:ai project.",
+            "command": "runai project set {project}",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "project_list",
+            "label": "List projects",
+            "description": "List Run:ai projects (used by the connection test and dashboard).",
+            "command": "runai project list --json",
+            "placeholders": [],
+        },
+        {
+            "key": "node_list",
+            "label": "List nodes",
+            "description": "List cluster nodes for the resources dashboard.",
+            "command": "runai node list --json",
+            "placeholders": [],
+        },
+        {
+            "key": "workload_list",
+            "label": "List workloads",
+            "description": "List workloads for the dashboard. Add --project {project} to scope it.",
+            "command": "runai workload list --json --no-pagination",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "submit_training",
+            "label": "Submit training",
+            "description": "Base command to submit a training workload. Workload flags are appended automatically.",
+            "command": "runai training standard submit",
+            "placeholders": [],
+        },
+        {
+            "key": "submit_workspace",
+            "label": "Submit workspace",
+            "description": "Base command to submit a workspace workload. Workload flags are appended automatically.",
+            "command": "runai workspace submit",
+            "placeholders": [],
+        },
+        {
+            "key": "submit_inference",
+            "label": "Submit inference",
+            "description": "Base command to submit an inference workload. Workload flags are appended automatically.",
+            "command": "runai inference submit",
+            "placeholders": [],
+        },
+        {
+            "key": "delete_workload",
+            "label": "Delete workload",
+            "description": "Delete a workload. The active project is selected beforehand.",
+            "command": "runai workload delete {name} --force",
+            "placeholders": [
+                {"name": "name", "description": "Workload name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "stop_workload",
+            "label": "Stop workload",
+            "description": "Suspend (stop) a running workload.",
+            "command": "runai workload suspend {name}",
+            "placeholders": [
+                {"name": "name", "description": "Workload name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "workload_logs",
+            "label": "Workload logs",
+            "description": "Read console logs for a single workload.",
+            "command": "runai {workload_type} logs {name} --tail {tail}",
+            "placeholders": [
+                {"name": "workload_type", "description": "training, workspace, or inference"},
+                {"name": "name", "description": "Workload name"},
+                {"name": "tail", "description": "Number of trailing log lines"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+    ],
+    "v1": [
+        {
+            "key": "login",
+            "label": "Application login",
+            "description": "Authenticate to Run:ai using application credentials.",
+            "command": "runai login application --name {access_key} --secret {secret_key} --interactive disabled",
+            "placeholders": [
+                {"name": "access_key", "description": "Run:ai application name / access key"},
+                {"name": "secret_key", "description": "Run:ai application secret"},
+            ],
+        },
+        {
+            "key": "cluster_set",
+            "label": "Select cluster",
+            "description": "Set the active Run:ai cluster.",
+            "command": "runai config cluster {cluster}",
+            "placeholders": [{"name": "cluster", "description": "Run:ai cluster name"}],
+        },
+        {
+            "key": "project_set",
+            "label": "Select project",
+            "description": "Set the active Run:ai project.",
+            "command": "runai config project {project}",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "project_list",
+            "label": "List projects",
+            "description": "List Run:ai projects (used by the connection test and dashboard).",
+            "command": "runai list projects --json",
+            "placeholders": [],
+        },
+        {
+            "key": "node_list",
+            "label": "List nodes",
+            "description": "List cluster nodes for the resources dashboard.",
+            "command": "runai list nodes --json",
+            "placeholders": [],
+        },
+        {
+            "key": "workload_list",
+            "label": "List workloads",
+            "description": "List jobs for the dashboard.",
+            "command": "runai list jobs --json",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "submit",
+            "label": "Submit workload",
+            "description": "Base command to submit a workload. Workload flags are appended automatically.",
+            "command": "runai submit",
+            "placeholders": [],
+        },
+        {
+            "key": "delete_workload",
+            "label": "Delete workload",
+            "description": "Delete a workload. The active project is selected beforehand.",
+            "command": "runai delete {name}",
+            "placeholders": [
+                {"name": "name", "description": "Workload name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "stop_workload",
+            "label": "Stop workload",
+            "description": "Suspend (stop) a running workload.",
+            "command": "runai suspend {name}",
+            "placeholders": [
+                {"name": "name", "description": "Workload name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
+            "key": "workload_logs",
+            "label": "Workload logs",
+            "description": "Read console logs for a single workload.",
+            "command": "runai logs {name} --tail {tail}",
+            "placeholders": [
+                {"name": "name", "description": "Workload name"},
+                {"name": "tail", "description": "Number of trailing log lines"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+    ],
+}
+
+
 class AutoscalerBLL:
 
     _execution_log_limit = 10000
+    _log_line_limit = 2000
     _default_cli_paths = (
         "/usr/local/sbin",
         "/usr/local/bin",
@@ -90,6 +301,7 @@ class AutoscalerBLL:
         "openshift_api_url",
         "openshift_token",
         "openshift_login_command",
+        "runai_cp_url",
         "runai_access_key",
         "runai_secret_key",
         "runai_cluster",
@@ -135,6 +347,85 @@ class AutoscalerBLL:
 
     def reset_company_settings(self, company_id: str) -> int:
         return AutoscalerSettings.objects(company=company_id).delete()
+
+    # ------------------------------------------------------------------ #
+    # Editable Run:ai CLI command templates ("Autoscalar Commands" tab)  #
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _catalog_keys() -> dict:
+        return {
+            version: {entry["key"] for entry in entries}
+            for version, entries in RUNAI_COMMAND_CATALOG.items()
+        }
+
+    def get_command_templates(self, company_id: str) -> dict:
+        settings = AutoscalerSettings.objects(company=company_id).first()
+        overrides = self._command_overrides(settings) if settings else {}
+        return {
+            "catalog": RUNAI_COMMAND_CATALOG,
+            "overrides": overrides,
+        }
+
+    def set_command_templates(self, company_id: str, overrides: dict) -> int:
+        catalog_keys = self._catalog_keys()
+        cleaned = {}
+        if isinstance(overrides, dict):
+            for version, commands in overrides.items():
+                if version not in catalog_keys or not isinstance(commands, dict):
+                    continue
+                version_overrides = {}
+                for key, command in commands.items():
+                    if key not in catalog_keys[version]:
+                        continue
+                    text = (command or "").strip()
+                    if text:
+                        version_overrides[key] = text
+                if version_overrides:
+                    cleaned[version] = version_overrides
+
+        result = AutoscalerSettings.objects(company=company_id).update_one(
+            upsert=True,
+            set_on_insert__id=db_id(),
+            set__command_templates=json.dumps(cleaned),
+            set__last_update=datetime.utcnow(),
+        )
+        return result
+
+    @classmethod
+    def _command_overrides(cls, conn) -> dict:
+        raw = getattr(conn, "command_templates", None)
+        data = cls._load_json(raw) if isinstance(raw, str) else raw
+        if not isinstance(data, dict):
+            return {}
+        return data
+
+    @classmethod
+    def _command_override_argv(cls, conn, version: str, key: Optional[str], subs: Optional[dict]):
+        if not key:
+            return None
+        overrides = cls._command_overrides(conn)
+        template = (overrides.get(version) or {}).get(key)
+        if not template or not str(template).strip():
+            return None
+        try:
+            formatted = str(template).format_map(_SafeFormatDict(subs or {}))
+            argv = shlex.split(formatted)
+        except Exception:
+            return None
+        return argv or None
+
+    @classmethod
+    def _submit_prefix(cls, conn, version: str, wtype: str) -> list:
+        if version == "v2":
+            defaults = {
+                "training": ["runai", "training", "standard", "submit"],
+                "workspace": ["runai", "workspace", "submit"],
+                "inference": ["runai", "inference", "submit"],
+            }
+            override = cls._command_override_argv(conn, "v2", f"submit_{wtype}", {})
+            return override or defaults.get(wtype, ["runai", wtype, "submit"])
+        override = cls._command_override_argv(conn, "v1", "submit", {})
+        return override or ["runai", "submit"]
 
     def test_connection(self, company_id: str, user_id: str = None, worker_id: str = None) -> dict:
         settings = AutoscalerSettings.objects(company=company_id).first()
@@ -189,6 +480,7 @@ class AutoscalerBLL:
             "stderr": ex.stderr,
             "return_code": ex.return_code,
             "projects_count": ex.projects_count,
+            "result_data": self._load_json(ex.result_data),
             "timestamp": ex.created.isoformat() if ex.created else None,
             "execution_id": ex.id,
         }
@@ -304,77 +596,105 @@ class AutoscalerBLL:
             "execution_id": execution_id,
         }
 
-    def get_dashboard(self, company_id: str) -> dict:
+    def get_workload_logs(
+        self, company_id: str, request: GetWorkloadLogsRequest, user_id: str = None, worker_id: str = None
+    ) -> dict:
+        """Return cached console logs for a single workload and queue a refresh.
+
+        Logs are collected on ``runai_worker`` (which has the ``runai``/``oc``
+        CLIs) by enqueuing a ``logs`` execution; the apiserver only serves the
+        most recent cached result so it never shells out to a CLI it lacks.
+        """
         settings = AutoscalerSettings.objects(company=company_id).first()
+        name = (request.workload_name or "").strip()
+        project = (request.project or "").strip()
+        if not settings:
+            return {
+                "connected": False,
+                "error": "No settings configured",
+                **self._empty_workload_logs(name, project),
+            }
+        if not name:
+            return {
+                "connected": False,
+                "error": "Missing workload name",
+                **self._empty_workload_logs(name, project),
+            }
+
+        payload = {
+            "workload_name": name,
+            "workload_type": request.workload_type or "",
+            "project": project,
+            "tail": request.tail or "",
+        }
+        execution_id = self._enqueue_or_reuse_execution(
+            company_id=company_id,
+            operation="logs",
+            payload=payload,
+            match_payload={"workload_name": name, "project": project},
+            user_id=getattr(settings, "user", None),
+            worker_id=getattr(settings, "worker", None),
+        )
+
+        cached = self._latest_operation_result(
+            company_id, "logs", match_payload={"workload_name": name, "project": project}
+        )
+        base = cached or {
+            "connected": False,
+            **self._empty_workload_logs(name, project),
+        }
+        return {
+            **base,
+            "refreshing": True,
+            "execution_id": execution_id,
+        }
+
+    def get_dashboard(self, company_id: str) -> dict:
+        """Return the latest dashboard snapshot and queue a refresh on the worker.
+
+        The live Run:ai data is collected by ``runai_worker`` (which has the
+        ``oc``/``runai`` CLIs installed); the apiserver only enqueues the
+        refresh and serves the most recent cached result so it never shells out
+        to a CLI it does not contain.
+        """
+        settings = AutoscalerSettings.objects(company=company_id).first()
+        saved_instances = self.list_app_instances(company_id)
         if not settings:
             return {
                 "connected": False,
                 "error": "No settings configured",
                 "timestamp": datetime.utcnow().isoformat(),
                 **self._empty_dashboard_data(),
-                "saved_instances": self.list_app_instances(company_id),
+                "saved_instances": saved_instances,
             }
 
-        config_dir = tempfile.mkdtemp(prefix="runai_")
-        console_log = []
+        execution_id = self._enqueue_or_reuse_execution(
+            company_id=company_id,
+            operation="dashboard",
+            payload={},
+            user_id=getattr(settings, "user", None),
+            worker_id=getattr(settings, "worker", None),
+        )
 
-        try:
-            env = self._build_env(settings, config_dir)
-            self._establish_connection(settings, env)
-            self._set_runai_context(settings, env)
-
-            workloads = self._runai_records_with_fallback(
-                self._workload_list_commands(settings),
-                env,
-                console_log,
-            )
-            nodes = self._runai_records_with_fallback(
-                self._node_list_commands(settings),
-                env,
-                console_log,
-            )
-            projects = self._runai_records_with_fallback(
-                self._project_list_commands(settings),
-                env,
-                console_log,
-            )
-
-            return {
-                "connected": True,
-                "timestamp": datetime.utcnow().isoformat(),
-                **self._build_dashboard_data(workloads, nodes, projects, console_log),
-                "saved_instances": self.list_app_instances(company_id),
-            }
-
-        except subprocess.TimeoutExpired:
-            return {
-                "connected": False,
-                "error": "Run:ai dashboard refresh timed out",
-                "timestamp": datetime.utcnow().isoformat(),
-                **self._empty_dashboard_data(console_log),
-                "saved_instances": self.list_app_instances(company_id),
-            }
-        except FileNotFoundError as e:
-            return {
-                "connected": False,
-                "error": f"CLI not found: {e}",
-                "timestamp": datetime.utcnow().isoformat(),
-                **self._empty_dashboard_data(console_log),
-                "saved_instances": self.list_app_instances(company_id),
-            }
-        except Exception as e:
-            log.exception("get_dashboard failed")
-            return {
-                "connected": False,
-                "error": str(e),
-                "timestamp": datetime.utcnow().isoformat(),
-                **self._empty_dashboard_data(console_log),
-                "saved_instances": self.list_app_instances(company_id),
-            }
-        finally:
-            shutil.rmtree(config_dir, ignore_errors=True)
+        cached = self._latest_operation_result(company_id, "dashboard")
+        base = cached or {
+            "connected": False,
+            "timestamp": datetime.utcnow().isoformat(),
+            **self._empty_dashboard_data(),
+        }
+        return {
+            **base,
+            "refreshing": True,
+            "execution_id": execution_id,
+            "saved_instances": saved_instances,
+        }
 
     def get_project_resources(self, company_id: str, project: str = None) -> dict:
+        """Return cached Run:ai project assets and queue a refresh on the worker.
+
+        The actual ``runai ... list`` commands run on ``runai_worker``; the
+        apiserver enqueues the lookup and returns the latest cached result.
+        """
         settings = AutoscalerSettings.objects(company=company_id).first()
         project = (project or "").strip() or getattr(settings, "runai_project", None) or ""
         if not settings:
@@ -384,60 +704,214 @@ class AutoscalerBLL:
                 **self._empty_project_resources(project),
             }
 
-        config_dir = tempfile.mkdtemp(prefix="runai_")
+        execution_id = self._enqueue_or_reuse_execution(
+            company_id=company_id,
+            operation="project_resources",
+            payload={"project": project},
+            match_payload={"project": project},
+            user_id=getattr(settings, "user", None),
+            worker_id=getattr(settings, "worker", None),
+        )
+
+        cached = self._latest_operation_result(
+            company_id, "project_resources", match_project=project
+        )
+        base = cached or {
+            "connected": False,
+            **self._empty_project_resources(project),
+        }
+        return {
+            **base,
+            "refreshing": True,
+            "execution_id": execution_id,
+        }
+
+    def _collect_dashboard_data(self, conn, env: dict, company_id: str) -> dict:
         console_log = []
+        self._set_runai_context(conn, env)
+        workloads = self._runai_records_with_fallback(
+            self._workload_list_commands(conn), env, console_log
+        )
+        nodes = self._runai_records_with_fallback(
+            self._node_list_commands(conn), env, console_log
+        )
+        projects = self._runai_records_with_fallback(
+            self._project_list_commands(conn), env, console_log
+        )
+        return {
+            "connected": True,
+            "timestamp": datetime.utcnow().isoformat(),
+            **self._build_dashboard_data(workloads, nodes, projects, console_log),
+            "saved_instances": self.list_app_instances(company_id),
+        }
+
+    def _collect_project_resources(self, conn, env: dict, project: str) -> dict:
+        console_log = []
+        self._set_runai_context(conn, env, project)
+        projects = self._runai_records_with_fallback(
+            self._project_list_commands(conn), env, console_log
+        )
+        compute = self._runai_records_with_fallback(
+            self._compute_list_commands(conn, project), env, console_log
+        )
+        environments = self._runai_records_with_fallback(
+            self._environment_list_commands(conn, project), env, console_log
+        )
+        data_sources = self._runai_records_with_fallback(
+            self._datasource_list_commands(conn, project), env, console_log
+        )
+        node_pools = self._runai_records_with_fallback(
+            self._nodepool_list_commands(conn), env, console_log
+        )
+        return {
+            "connected": True,
+            "project": project,
+            "projects": self._unique_names(self._asset_name(item) for item in projects),
+            "compute": [self._summarize_compute(item) for item in compute],
+            "environments": [self._summarize_environment(item) for item in environments],
+            "data_sources": [self._summarize_data_source(item) for item in data_sources],
+            "node_pools": self._unique_names(self._asset_name(item) for item in node_pools),
+            "console_log": console_log[-20:],
+        }
+
+    def _collect_workload_logs(self, conn, env: dict, payload: dict) -> dict:
+        console_log = []
+        name = (payload.get("workload_name") or "").strip()
+        project = (payload.get("project") or "").strip()
+        workload_type = (payload.get("workload_type") or "").strip()
+        tail = (payload.get("tail") or "").strip()
+        self._set_runai_context(conn, env, project)
+        lines, source, success = self._fetch_workload_log_lines(
+            conn, env, console_log, name, project, workload_type, tail
+        )
+        result = {
+            "connected": success,
+            "workload_name": name,
+            "project": project,
+            "source": source,
+            "lines": lines[-self._log_line_limit:],
+            "console_log": console_log[-20:],
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        if not success:
+            result["error"] = next(
+                (entry.get("message") for entry in reversed(console_log) if entry.get("message")),
+                "Could not read workload logs from Run:ai or OpenShift",
+            )
+        return result
+
+    def _fetch_workload_log_lines(
+        self, conn, env: dict, console_log: list, name: str, project: str,
+        workload_type: str, tail: str
+    ) -> tuple:
+        for cmd in self._workload_logs_commands(conn, name, project, workload_type, tail):
+            lines, success = self._log_lines_from_command(cmd, env, console_log)
+            if success:
+                return lines, "runai", True
+        for cmd in self._oc_logs_commands(env, name, project, tail):
+            lines, success = self._log_lines_from_command(cmd, env, console_log)
+            if success:
+                return lines, "openshift", True
+        return [], "", False
+
+    @classmethod
+    def _log_lines_from_command(cls, cmd: list, env: dict, console_log: list) -> tuple:
+        started = datetime.utcnow().isoformat()
+        command = cls._redact_command(cmd)
         try:
-            env = self._build_env(settings, config_dir)
-            self._establish_connection(settings, env)
-            self._set_runai_context(settings, env, project)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=45,
+                env=env,
+            )
+        except FileNotFoundError as ex:
+            console_log.append({
+                "timestamp": started,
+                "command": command,
+                "status": "error",
+                "message": f"CLI not found: {ex}",
+            })
+            return [], False
 
-            projects = self._runai_records_with_fallback(
-                self._project_list_commands(settings), env, console_log
-            )
-            compute = self._runai_records_with_fallback(
-                self._compute_list_commands(settings, project), env, console_log
-            )
-            environments = self._runai_records_with_fallback(
-                self._environment_list_commands(settings, project), env, console_log
-            )
-            data_sources = self._runai_records_with_fallback(
-                self._datasource_list_commands(settings, project), env, console_log
-            )
-            node_pools = self._runai_records_with_fallback(
-                self._nodepool_list_commands(settings), env, console_log
-            )
+        console_log.append({
+            "timestamp": started,
+            "command": command,
+            "status": "success" if result.returncode == 0 else "error",
+            "message": (result.stderr or "").strip()[:500],
+        })
+        if result.returncode != 0:
+            return [], False
+        lines = [line.rstrip() for line in (result.stdout or "").splitlines()]
+        return lines, True
 
-            return {
-                "connected": True,
-                "project": project,
-                "projects": self._unique_names(self._asset_name(item) for item in projects),
-                "compute": [self._summarize_compute(item) for item in compute],
-                "environments": [self._summarize_environment(item) for item in environments],
-                "data_sources": [self._summarize_data_source(item) for item in data_sources],
-                "node_pools": self._unique_names(self._asset_name(item) for item in node_pools),
-                "console_log": console_log[-20:],
-            }
-        except subprocess.TimeoutExpired:
-            return {
-                "connected": False,
-                "error": "Run:ai resource lookup timed out",
-                **self._empty_project_resources(project, console_log),
-            }
-        except FileNotFoundError as e:
-            return {
-                "connected": False,
-                "error": f"CLI not found: {e}",
-                **self._empty_project_resources(project, console_log),
-            }
-        except Exception as e:
-            log.exception("get_project_resources failed")
-            return {
-                "connected": False,
-                "error": str(e),
-                **self._empty_project_resources(project, console_log),
-            }
-        finally:
-            shutil.rmtree(config_dir, ignore_errors=True)
+    @classmethod
+    def _workload_logs_commands(
+        cls, conn, name: str, project: str, workload_type: str, tail: str
+    ) -> list:
+        tail = tail or "200"
+        v2_commands = []
+        if workload_type in {"training", "workspace", "inference"}:
+            v2_commands.append(["runai", workload_type, "logs", name])
+        v2_commands.extend([
+            ["runai", "workload", "logs", name],
+            ["runai", "training", "logs", name],
+            ["runai", "logs", name],
+        ])
+        v2_commands = [[*cmd, "--tail", tail] for cmd in v2_commands]
+        if project:
+            v2_commands = [[*cmd, "--project", project] for cmd in v2_commands]
+
+        v1_commands = [["runai", "logs", name, "--tail", tail]]
+        if project:
+            v1_commands = [[*cmd, "--project", project] for cmd in v1_commands]
+        return cls._cli_candidates(
+            conn, v2_commands, v1_commands,
+            key="workload_logs",
+            subs={"name": name, "project": project or "", "workload_type": workload_type or "", "tail": tail},
+        )
+
+    @classmethod
+    def _oc_logs_commands(cls, env: dict, name: str, project: str, tail: str) -> list:
+        oc_binary = cls._resolve_cli_binary(
+            "oc", env, env_vars=cls._openshift_cli_env_vars
+        )
+        tail = tail or "200"
+        selectors = [
+            f"workloadName={name}",
+            f"release={name}",
+            f"app={name}",
+            f"job-name={name}",
+        ]
+        namespaces = []
+        if project:
+            namespaces.extend([project, f"runai-{project}"])
+        commands = []
+        for namespace in namespaces or [None]:
+            for selector in selectors:
+                cmd = [
+                    oc_binary, "logs",
+                    "-l", selector,
+                    "--all-containers=true",
+                    "--tail", tail,
+                    "--prefix=true",
+                ]
+                if namespace:
+                    cmd.extend(["-n", namespace])
+                commands.append(cmd)
+        return commands
+
+    @staticmethod
+    def _empty_workload_logs(name: str, project: str) -> dict:
+        return {
+            "workload_name": name or "",
+            "project": project or "",
+            "source": "",
+            "lines": [],
+            "console_log": [],
+            "timestamp": datetime.utcnow().isoformat(),
+        }
 
     @staticmethod
     def _build_env(conn, config_dir: str) -> dict:
@@ -501,9 +975,89 @@ class AutoscalerBLL:
         ).save()
         return execution_id
 
+    def _enqueue_or_reuse_execution(
+        self,
+        company_id: str,
+        operation: str,
+        payload: dict,
+        match_payload: dict = None,
+        user_id: str = None,
+        worker_id: str = None,
+    ) -> str:
+        """Reuse an in-flight read execution if one matches, else enqueue a new one.
+
+        Prevents flooding the worker queue when the dashboard auto-refreshes or
+        the user reloads project assets repeatedly.
+        """
+        self._prune_operation_history(company_id, operation)
+        active = AutoscalerExecution.objects(
+            company=company_id,
+            operation=operation,
+            status__in=["pending", "running"],
+        ).order_by("-created")
+        for candidate in active:
+            if match_payload is None or self._payload_matches(candidate, match_payload):
+                return candidate.id
+        return self._enqueue_execution(
+            company_id=company_id,
+            operation=operation,
+            payload=payload,
+            user_id=user_id,
+            worker_id=worker_id,
+        )
+
+    def _latest_operation_result(
+        self, company_id: str, operation: str, match_project: str = None, match_payload: dict = None
+    ) -> Optional[dict]:
+        query = AutoscalerExecution.objects(
+            company=company_id,
+            operation=operation,
+            status="success",
+            result_data__ne=None,
+        ).order_by("-created").limit(10)
+        for candidate in query:
+            payload = self._load_json(candidate.workload_params) or {}
+            if match_project is not None and (payload.get("project") or "") != match_project:
+                continue
+            if match_payload is not None and not all(
+                (payload.get(key) or "") == (value or "") for key, value in match_payload.items()
+            ):
+                continue
+            data = self._load_json(candidate.result_data)
+            if data is not None:
+                return data
+        return None
+
+    @classmethod
+    def _prune_operation_history(cls, company_id: str, operation: str):
+        AutoscalerExecution.objects(
+            company=company_id,
+            operation=operation,
+            status__in=["success", "error"],
+            created__lt=datetime.utcnow() - timedelta(hours=1),
+        ).delete()
+
+    @staticmethod
+    def _payload_matches(execution: AutoscalerExecution, match_payload: dict) -> bool:
+        payload = AutoscalerBLL._load_json(execution.workload_params) or {}
+        return all(payload.get(key) == value for key, value in match_payload.items())
+
+    @staticmethod
+    def _load_json(value: Optional[str]):
+        if not value:
+            return None
+        try:
+            return json.loads(value)
+        except (ValueError, TypeError):
+            return None
+
     def _run_execution_operation(self, execution: AutoscalerExecution, conn, env: dict, operation: str):
         if operation == "test_connection":
             console_log = []
+            # Apply the cluster/project context from the connection dialog first
+            # (runai cluster set <name> / runai project set <name>) so that
+            # `runai project list` has a cluster URL to talk to.
+            self._set_runai_context(conn, env)
             for command in self._project_list_commands(conn):
                 projects, success = self._runai_records_from_command(command, env, console_log)
                 if success:
@@ -518,6 +1072,24 @@ class AutoscalerBLL:
                 "Unable to list Run:ai projects",
             )
             raise RuntimeError(error)
+        if operation == "dashboard":
+            data = self._collect_dashboard_data(conn, env, execution.company)
+            return SimpleNamespace(
+                returncode=0, stdout="", stderr="", result_data=json.dumps(data)
+            )
+        if operation == "project_resources":
+            payload = self._load_json(execution.workload_params) or {}
+            project = (payload.get("project") or "").strip()
+            data = self._collect_project_resources(conn, env, project)
+            return SimpleNamespace(
+                returncode=0, stdout="", stderr="", result_data=json.dumps(data)
+            )
+        if operation == "logs":
+            payload = self._load_json(execution.workload_params) or {}
+            data = self._collect_workload_logs(conn, env, payload)
+            return SimpleNamespace(
+                returncode=0, stdout="", stderr="", result_data=json.dumps(data)
+            )
         if operation == "submit":
             workload = self._workload_from_execution(execution)
             self._set_runai_context(conn, env, workload.project)
@@ -546,10 +1118,29 @@ class AutoscalerBLL:
 
     @classmethod
     def _establish_connection(cls, conn, env: dict):
+        cls._configure_runai_cp_url(conn, env)
         if cls._connection_method(conn) == "runai_application":
             cls._do_runai_login(conn, env)
         else:
             cls._do_oc_login(conn, env)
+
+    @classmethod
+    def _configure_runai_cp_url(cls, conn, env: dict):
+        cp_url = getattr(conn, "runai_cp_url", None)
+        if not cp_url:
+            return
+        version = (getattr(conn, "runai_cli_version", None) or "auto").lower()
+        if version == "v1":
+            # The Run:ai v1 CLI has no control-plane URL concept.
+            return
+        override = cls._command_override_argv(conn, "v2", "cp_url", {"cp_url": cp_url})
+        default_cmd = ["runai", "config", "set", "--cp-url", cp_url]
+        commands = cls._apply_cli_binary([override or default_cmd], "runai-v2")
+        result = cls._run_with_fallback(commands, env, timeout=15)
+        if result is not None and result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to set Run:ai control plane URL: {result.stderr}"
+            )
 
     @staticmethod
     def _connection_method(conn) -> str:
@@ -611,19 +1202,26 @@ class AutoscalerBLL:
 
         return binary
 
-    @staticmethod
-    def _do_runai_login(conn, env: dict):
+    @classmethod
+    def _do_runai_login(cls, conn, env: dict):
         access_key = getattr(conn, "runai_access_key", None)
         secret_key = getattr(conn, "runai_secret_key", None)
         if not access_key or not secret_key:
             raise RuntimeError("Run:ai application access key and secret key are required")
 
-        commands = [
-            ["runai", "login", "application", "--name", access_key, "--secret", secret_key, "--interactive", "disabled"],
-            ["runai", "login", "app", "--name", access_key, "--secret", secret_key, "--interactive", "disabled"],
-            ["runai", "login", "--access-key", access_key, "--secret-key", secret_key],
-        ]
-        result = AutoscalerBLL._run_with_fallback(commands, env, timeout=30)
+        commands = cls._cli_candidates(
+            conn,
+            [
+                ["runai", "login", "application", "--client-id", access_key, "--client-secret", secret_key],
+            ],
+            [
+                ["runai", "login", "application", "--name", access_key, "--secret", secret_key, "--interactive", "disabled"],
+                ["runai", "login", "app", "--name", access_key, "--secret", secret_key, "--interactive", "disabled"],
+            ],
+            key="login",
+            subs={"access_key": access_key, "secret_key": secret_key},
+        )
+        result = cls._run_with_fallback(commands, env, timeout=30)
         if result.returncode != 0:
             raise RuntimeError(f"runai login failed: {result.stderr}")
 
@@ -635,7 +1233,7 @@ class AutoscalerBLL:
                     ["runai", "cluster", "set", conn.runai_cluster],
                 ], [
                     ["runai", "config", "cluster", conn.runai_cluster],
-                ]),
+                ], key="cluster_set", subs={"cluster": conn.runai_cluster}),
                 env,
                 timeout=15,
             )
@@ -646,7 +1244,7 @@ class AutoscalerBLL:
                     ["runai", "project", "set", project],
                 ], [
                     ["runai", "config", "project", project],
-                ]),
+                ], key="project_set", subs={"project": project}),
                 env,
                 timeout=15,
             )
@@ -795,12 +1393,14 @@ class AutoscalerBLL:
         stdout = (result.stdout or "")[:cls._execution_log_limit]
         stderr = (result.stderr or "")[:cls._execution_log_limit]
         projects_count = getattr(result, "projects_count", None)
+        result_data = getattr(result, "result_data", None)
         AutoscalerExecution.objects(id=execution.id).update_one(
             set__status=status,
             set__stdout=stdout,
             set__stderr=stderr,
             set__return_code=str(result.returncode),
             set__projects_count=projects_count,
+            set__result_data=result_data,
         )
         cls._sync_saved_instance_status(execution, status)
         return {
@@ -851,15 +1451,19 @@ class AutoscalerBLL:
         )
 
     @classmethod
-    def _cli_candidates(cls, conn, v2_commands: list, v1_commands: list) -> list:
+    def _cli_candidates(cls, conn, v2_commands: list, v1_commands: list, key: str = None, subs: dict = None) -> list:
         version = (getattr(conn, "runai_cli_version", None) or "auto").lower()
+        v2_override = cls._command_override_argv(conn, "v2", key, subs)
+        v1_override = cls._command_override_argv(conn, "v1", key, subs)
+        v2_cmds = [v2_override] if v2_override else v2_commands
+        v1_cmds = [v1_override] if v1_override else v1_commands
         if version == "v1":
-            return cls._apply_cli_binary(v1_commands, "runai-v1")
+            return cls._apply_cli_binary(v1_cmds, "runai-v1")
         if version == "v2":
-            return cls._apply_cli_binary(v2_commands, "runai-v2")
+            return cls._apply_cli_binary(v2_cmds, "runai-v2")
         return [
-            *cls._apply_cli_binary(v2_commands, "runai-v2"),
-            *cls._apply_cli_binary(v1_commands, "runai-v1"),
+            *cls._apply_cli_binary(v2_cmds, "runai-v2"),
+            *cls._apply_cli_binary(v1_cmds, "runai-v1"),
         ]
 
     @staticmethod
@@ -878,7 +1482,7 @@ class AutoscalerBLL:
         ], [
             ["runai", "list", "projects", "--json"],
             ["runai", "list", "projects"],
-        ])
+        ], key="project_list")
 
     @classmethod
     def _node_list_commands(cls, conn) -> list:
@@ -887,7 +1491,7 @@ class AutoscalerBLL:
         ], [
             ["runai", "list", "nodes", "--json"],
             ["runai", "list", "nodes"],
-        ])
+        ], key="node_list")
 
     @classmethod
     def _compute_list_commands(cls, conn, project: Optional[str] = None) -> list:
@@ -964,7 +1568,7 @@ class AutoscalerBLL:
             v1_cmd = [*v1_cmd, "--project", project]
         else:
             v1_cmd.append("--all-projects")
-        return cls._cli_candidates(conn, [v2_cmd], [v1_cmd, ["runai", "list", "jobs"]])
+        return cls._cli_candidates(conn, [v2_cmd], [v1_cmd, ["runai", "list", "jobs"]], key="workload_list", subs={"project": project or ""})
 
     @classmethod
     def _delete_workload_commands(cls, conn, request: DeleteWorkloadRequest) -> list:
@@ -986,7 +1590,7 @@ class AutoscalerBLL:
         ]
         if project:
             v1_commands = [[*cmd, "--project", project] for cmd in v1_commands]
-        return cls._cli_candidates(conn, v2_commands, v1_commands)
+        return cls._cli_candidates(conn, v2_commands, v1_commands, key="delete_workload", subs={"name": name, "project": project or ""})
 
     @classmethod
     def _stop_workload_commands(cls, conn, request: StopWorkloadRequest) -> list:
@@ -1008,7 +1612,7 @@ class AutoscalerBLL:
         ]
         if project:
             v1_commands = [[*cmd, "--project", project] for cmd in v1_commands]
-        return cls._cli_candidates(conn, v2_commands, v1_commands)
+        return cls._cli_candidates(conn, v2_commands, v1_commands, key="stop_workload", subs={"name": name, "project": project or ""})
 
     @staticmethod
     def _redact_command(cmd: list) -> str:
@@ -1020,7 +1624,7 @@ class AutoscalerBLL:
                 redact_next = False
                 continue
             redacted.append(part)
-            if part in {"--access-key", "--secret-key", "--token", "--secret", "--password"}:
+            if part in {"--access-key", "--secret-key", "--token", "--secret", "--client-secret", "--password"}:
                 redact_next = True
         return " ".join(redacted)
 
@@ -1319,14 +1923,13 @@ class AutoscalerBLL:
     def _build_workload_cmds(cls, conn, workload: WorkloadRequest) -> list:
         wtype = workload.workload_type or "training"
 
-        if wtype == "training":
-            cmd = ["runai", "training", "standard", "submit"]
-        elif wtype == "workspace":
-            cmd = ["runai", "workspace", "submit"]
-        elif wtype == "inference":
-            cmd = ["runai", "inference", "submit"]
-        else:
+        if wtype not in ("training", "workspace", "inference"):
             raise ValueError(f"Unknown workload type: {wtype}")
+
+        # ``cmd`` accumulates the workload arguments that follow the editable
+        # submit base command (the prefix). The concrete prefix per CLI version
+        # is resolved from the command-template catalog/overrides below.
+        cmd = []
 
         if workload.workload_name:
             cmd.append(workload.workload_name)
@@ -1424,10 +2027,9 @@ class AutoscalerBLL:
             cmd.append("--")
             cmd.extend(workload.args.split())
 
-        if wtype == "training":
-            v1_tail = cmd[4:]
-        else:
-            v1_tail = cmd[3:]
-        v1_cmd = ["runai", "submit", *v1_tail]
+        prefix_v2 = cls._submit_prefix(conn, "v2", wtype)
+        prefix_v1 = cls._submit_prefix(conn, "v1", wtype)
+        v2_cmd = [*prefix_v2, *cmd]
+        v1_cmd = [*prefix_v1, *cmd]
 
-        return cls._cli_candidates(conn, [cmd], [v1_cmd])
+        return cls._cli_candidates(conn, [v2_cmd], [v1_cmd])

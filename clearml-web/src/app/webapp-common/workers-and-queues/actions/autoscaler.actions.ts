@@ -6,6 +6,7 @@ export interface AutoscalerSettingsData {
   openshift_api_url?: string;
   openshift_token?: string;
   openshift_login_command?: string;
+  runai_cp_url?: string;
   runai_access_key?: string;
   runai_secret_key?: string;
   runai_cluster?: string;
@@ -48,6 +49,8 @@ export interface AutoscalerDataSourceResource {
 export interface AutoscalerProjectResources {
   connected?: boolean;
   error?: string;
+  refreshing?: boolean;
+  execution_id?: string;
   project?: string;
   projects?: string[];
   compute?: AutoscalerComputeResource[];
@@ -105,11 +108,26 @@ export interface AutoscalerExecution {
   execution_id?: string;
   return_code?: string;
   projects_count?: number;
+  result_data?: any;
+}
+
+export interface AutoscalerWorkloadLogs {
+  connected?: boolean;
+  error?: string;
+  refreshing?: boolean;
+  execution_id?: string;
+  workload_name?: string;
+  project?: string;
+  source?: string;
+  timestamp?: string;
+  lines?: string[];
 }
 
 export interface AutoscalerDashboardData {
   connected?: boolean;
   error?: string;
+  refreshing?: boolean;
+  execution_id?: string;
   timestamp?: string;
   idle_instances?: number;
   running_instances?: number;
@@ -183,6 +201,10 @@ export const autoscalerActions = createActionGroup({
     'Set Project Resources': props<{resources: AutoscalerProjectResources}>(),
     'Delete Workload': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),
     'Stop Workload': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),
+    'Get Workload Logs': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),
+    'Set Workload Logs Loading': props<{loading: boolean}>(),
+    'Set Workload Logs': props<{logs: AutoscalerWorkloadLogs}>(),
+    'Clear Workload Logs': emptyProps(),
     'Reset Settings': emptyProps(),
   }
 });
