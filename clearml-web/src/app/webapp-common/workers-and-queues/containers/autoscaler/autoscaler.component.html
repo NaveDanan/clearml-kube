@@ -249,21 +249,24 @@
         <mat-expansion-panel class="workload-panel">
           <mat-expansion-panel-header>
             <mat-panel-title>Environment</mat-panel-title>
-            @if (selectedEnvironments().length) {
-              <mat-panel-description>{{ selectedEnvironments().length }} selected</mat-panel-description>
+            @if (workloadForm.controls.environment.value) {
+              <mat-panel-description>{{ workloadForm.controls.environment.value }}</mat-panel-description>
             }
           </mat-expansion-panel-header>
 
           <!-- environment asset cards -->
           <div class="asset-cards">
-            @for (resource of environmentResources(); track resource.name) {
+            @for (resource of pagedEnvironmentResources(); track resource.name) {
               <button type="button" class="asset-card"
                       [class.selected]="isEnvironmentSelected(resource)"
-                      (click)="toggleEnvironment(resource)">
-                <span class="asset-card-check">
-                  @if (isEnvironmentSelected(resource)) {
+                      (click)="selectEnvironment(resource)">
+                @if (isEnvironmentSelected(resource)) {
+                  <span class="asset-card-badge">
                     <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
-                  }
+                  </span>
+                }
+                <span class="asset-card-icon">
+                  <mat-icon fontSet="al" fontIcon="al-ico-experiment-view"></mat-icon>
                 </span>
                 <span class="asset-card-body">
                   <span class="asset-card-name">{{ resource.name }}</span>
@@ -284,6 +287,15 @@
               </div>
             }
           </div>
+
+          @if (environmentPages().length > 1) {
+            <div class="asset-pagination">
+              @for (page of environmentPages(); track page) {
+                <span class="asset-page-num" [class.active]="environmentPage() === page"
+                      (click)="environmentPage.set(page)">{{ page }}</span>
+              }
+            </div>
+          }
 
           <!-- manual environment fields -->
           <div class="manual-fields form-grid">
@@ -469,14 +481,17 @@
 
           <!-- compute asset cards -->
           <div class="asset-cards">
-            @for (resource of computeResources(); track resource.name) {
+            @for (resource of pagedComputeResources(); track resource.name) {
               <button type="button" class="asset-card"
                       [class.selected]="isComputeSelected(resource)"
                       (click)="selectCompute(resource)">
-                <span class="asset-card-check">
-                  @if (isComputeSelected(resource)) {
+                @if (isComputeSelected(resource)) {
+                  <span class="asset-card-badge">
                     <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
-                  }
+                  </span>
+                }
+                <span class="asset-card-icon">
+                  <mat-icon fontSet="al" fontIcon="al-ico-queues"></mat-icon>
                 </span>
                 <span class="asset-card-body">
                   <span class="asset-card-name">{{ resource.name }}</span>
@@ -499,6 +514,15 @@
               </div>
             }
           </div>
+
+          @if (computePages().length > 1) {
+            <div class="asset-pagination">
+              @for (page of computePages(); track page) {
+                <span class="asset-page-num" [class.active]="computePage() === page"
+                      (click)="computePage.set(page)">{{ page }}</span>
+              }
+            </div>
+          }
 
           <!-- manual compute fields -->
           <div class="manual-fields form-grid">
@@ -581,21 +605,24 @@
         <mat-expansion-panel class="workload-panel">
           <mat-expansion-panel-header>
             <mat-panel-title>Data Sources</mat-panel-title>
-            @if (selectedDataSources().length) {
-              <mat-panel-description>{{ selectedDataSources().length }} selected</mat-panel-description>
+            @if (workloadForm.controls.data_sources.value) {
+              <mat-panel-description>{{ workloadForm.controls.data_sources.value }}</mat-panel-description>
             }
           </mat-expansion-panel-header>
 
           <!-- data source asset cards -->
           <div class="asset-cards">
-            @for (resource of dataSourceResources(); track resource.name) {
+            @for (resource of pagedDataSourceResources(); track resource.name) {
               <button type="button" class="asset-card"
                       [class.selected]="isDataSourceSelected(resource)"
-                      (click)="toggleDataSource(resource)">
-                <span class="asset-card-check">
-                  @if (isDataSourceSelected(resource)) {
+                      (click)="selectDataSource(resource)">
+                @if (isDataSourceSelected(resource)) {
+                  <span class="asset-card-badge">
                     <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
-                  }
+                  </span>
+                }
+                <span class="asset-card-icon">
+                  <mat-icon fontSet="al" fontIcon="al-ico-datasets"></mat-icon>
                 </span>
                 <span class="asset-card-body">
                   <span class="asset-card-name">{{ resource.name }}</span>
@@ -616,6 +643,15 @@
               </div>
             }
           </div>
+
+          @if (dataSourcePages().length > 1) {
+            <div class="asset-pagination">
+              @for (page of dataSourcePages(); track page) {
+                <span class="asset-page-num" [class.active]="dataSourcePage() === page"
+                      (click)="dataSourcePage.set(page)">{{ page }}</span>
+              }
+            </div>
+          }
 
           <!-- manual data source fields -->
           <div class="manual-fields form-grid">

@@ -2148,7 +2148,9 @@ class AutoscalerBLL:
             "gpu_memory_request": cls._asset_value(item, ("gpuMemoryRequest", "gpuMemory", "gpu_memory")),
             "gpu_portion_request": cls._asset_value(item, ("gpuPortionRequest", "gpuPortion", "gpu_portion")),
             "cpu_core_request": cls._asset_value(item, ("cpuCoreRequest", "cpuCores", "cpu", "cpu_cores")),
+            "cpu_core_limit": cls._asset_value(item, ("cpuCoreLimit", "cpuCoresLimit", "cpuLimit", "cpu_core_limit")),
             "cpu_memory_request": cls._asset_value(item, ("cpuMemoryRequest", "cpuMemory", "memory", "cpu_memory")),
+            "cpu_memory_limit": cls._asset_value(item, ("cpuMemoryLimit", "memoryLimit", "cpu_memory_limit")),
         }
 
     @classmethod
@@ -2156,9 +2158,10 @@ class AutoscalerBLL:
         return {
             "name": cls._asset_name(item),
             "image": cls._asset_value(item, ("image", "imageName", "image_name", "containerImage")),
-            "command": cls._asset_value(item, ("command", "cmd")),
-            "args": cls._asset_value(item, ("args", "arguments")),
+            "command": cls._asset_text(item, ("command", "cmd")),
+            "args": cls._asset_text(item, ("args", "arguments")),
             "working_dir": cls._asset_value(item, ("workingDir", "working_dir", "workingDirectory")),
+            "environment_variables": cls._asset_env_vars(item),
         }
 
     @classmethod
@@ -2178,6 +2181,42 @@ class AutoscalerBLL:
         if isinstance(value, (list, dict)):
             return ""
         return str(value)
+
+    @classmethod
+    def _asset_text(cls, item, keys: tuple) -> str:
+        """Like ``_asset_value`` but joins list values (e.g. a command/args
+        array from a describe result) into a single space-separated string."""
+        value = cls._pick(item, keys)
+        if value in (None, ""):
+            return ""
+        if isinstance(value, (list, tuple)):
+            return " ".join(str(part) for part in value if part not in (None, ""))
+        if isinstance(value, dict):
+            return ""
+        return str(value)
+
+    @classmethod
+    def _asset_env_vars(cls, item) -> str:
+        """Extract environment variables from a describe result and return them
+        as a comma-joined ``KEY=VALUE`` string (the form's storage format)."""
+        value = cls._pick(item, ("environmentVariables", "envVariables", "environment_variables", "env"))
+        pairs = []
+        if isinstance(value, dict):
+            for key, val in value.items():
+                if key:
+                    pairs.append(f"{key}={'' if val is None else val}")
+        elif isinstance(value, (list, tuple)):
+            for entry in value:
+                if isinstance(entry, dict):
+                    name = entry.get("name") or entry.get("key") or entry.get("Name") or entry.get("Key")
+                    val = entry.get("value")
+                    if val is None:
+                        val = entry.get("Value")
+                    if name:
+                        pairs.append(f"{name}={'' if val is None else val}")
+                elif isinstance(entry, str) and "=" in entry:
+                    pairs.append(entry.strip())
+        return ",".join(pairs)
 
     @staticmethod
     def _empty_project_resources(project: str, console_log: Optional[list] = None) -> dict:

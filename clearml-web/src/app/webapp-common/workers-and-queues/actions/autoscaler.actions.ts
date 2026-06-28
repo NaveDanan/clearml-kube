@@ -28,7 +28,9 @@ export interface AutoscalerComputeResource {
   gpu_memory_request?: string;
   gpu_portion_request?: string;
   cpu_core_request?: string;
+  cpu_core_limit?: string;
   cpu_memory_request?: string;
+  cpu_memory_limit?: string;
 }
 
 export interface AutoscalerEnvironmentResource {
@@ -37,6 +39,7 @@ export interface AutoscalerEnvironmentResource {
   command?: string;
   args?: string;
   working_dir?: string;
+  environment_variables?: string;
 }
 
 export interface AutoscalerDataSourceResource {

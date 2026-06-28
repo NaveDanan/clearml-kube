@@ -156,6 +156,21 @@ export class AutoscalerComponent implements OnDestroy {
   protected environmentResources = computed<AutoscalerEnvironmentResource[]>(() => this.projectResources()?.environments ?? []);
   protected dataSourceResources = computed<AutoscalerDataSourceResource[]>(() => this.projectResources()?.data_sources ?? []);
   protected nodePoolResources = computed<string[]>(() => this.projectResources()?.node_pools ?? []);
+
+  // ── Asset card pagination (4 cards per page) ──
+  protected readonly assetPageSize = 4;
+  protected environmentPage = signal(1);
+  protected computePage = signal(1);
+  protected dataSourcePage = signal(1);
+  protected environmentPages = computed<number[]>(() => this.buildPages(this.environmentResources().length));
+  protected computePages = computed<number[]>(() => this.buildPages(this.computeResources().length));
+  protected dataSourcePages = computed<number[]>(() => this.buildPages(this.dataSourceResources().length));
+  protected pagedEnvironmentResources = computed<AutoscalerEnvironmentResource[]>(
+    () => this.pageSlice(this.environmentResources(), this.environmentPage()));
+  protected pagedComputeResources = computed<AutoscalerComputeResource[]>(
+    () => this.pageSlice(this.computeResources(), this.computePage()));
+  protected pagedDataSourceResources = computed<AutoscalerDataSourceResource[]>(
+    () => this.pageSlice(this.dataSourceResources(), this.dataSourcePage()));
   protected availableProjects = computed<string[]>(() => {
     const names = new Set<string>();
     const add = (value?: string | null) => {
@@ -875,20 +890,18 @@ export class AutoscalerComponent implements OnDestroy {
         gpu_memory_request: resource.gpu_memory_request || this.workloadForm.controls.gpu_memory_request.value || '',
         gpu_portion_request: resource.gpu_portion_request || this.workloadForm.controls.gpu_portion_request.value || '',
         cpu_core_request: resource.cpu_core_request || this.workloadForm.controls.cpu_core_request.value || '',
+        cpu_core_limit: resource.cpu_core_limit || this.workloadForm.controls.cpu_core_limit.value || '',
         cpu_memory_request: resource.cpu_memory_request || this.workloadForm.controls.cpu_memory_request.value || '',
+        cpu_memory_limit: resource.cpu_memory_limit || this.workloadForm.controls.cpu_memory_limit.value || '',
       }),
     });
     this.workloadForm.markAsDirty();
   }
 
-  protected toggleEnvironment(resource: AutoscalerEnvironmentResource) {
-    const selected = this.selectedEnvironments();
-    const adding = !selected.includes(resource.name);
-    const next = adding
-      ? [...selected, resource.name]
-      : selected.filter(name => name !== resource.name);
-    this.workloadForm.controls.environment.setValue(next.join(','));
-    if (adding) {
+  protected selectEnvironment(resource: AutoscalerEnvironmentResource) {
+    const isSelected = this.workloadForm.controls.environment.value === resource.name;
+    this.workloadForm.controls.environment.setValue(isSelected ? '' : resource.name);
+    if (!isSelected) {
       this.workloadForm.patchValue({
         image: resource.image || this.workloadForm.controls.image.value || '',
         command_override: resource.command ? true : this.workloadForm.controls.command_override.value,
@@ -896,48 +909,45 @@ export class AutoscalerComponent implements OnDestroy {
         args: resource.args || this.workloadForm.controls.args.value || '',
         working_dir: resource.working_dir || this.workloadForm.controls.working_dir.value || '',
       });
+      if (resource.environment_variables) {
+        this.setEnvVars(this.deserializeEnvVars(resource.environment_variables));
+      }
     }
     this.workloadForm.markAsDirty();
   }
 
-  protected toggleDataSource(resource: AutoscalerDataSourceResource) {
-    const selected = this.selectedDataSources();
-    const adding = !selected.includes(resource.name);
-    const next = adding
-      ? [...selected, resource.name]
-      : selected.filter(name => name !== resource.name);
-    this.workloadForm.controls.data_sources.setValue(next.join(','));
+  protected selectDataSource(resource: AutoscalerDataSourceResource) {
+    const isSelected = this.workloadForm.controls.data_sources.value === resource.name;
+    this.workloadForm.controls.data_sources.setValue(isSelected ? '' : resource.name);
     const pvc = resource.existing_pvc || (resource.path ? `claimname=${resource.name},path=${resource.path}` : '');
-    if (adding && pvc && !this.workloadForm.controls.existing_pvc.value) {
+    if (!isSelected && pvc && !this.workloadForm.controls.existing_pvc.value) {
       this.workloadForm.controls.existing_pvc.setValue(pvc);
     }
     this.workloadForm.markAsDirty();
-  }
-
-  protected selectedDataSources(): string[] {
-    return (this.workloadForm.controls.data_sources.value || '')
-      .split(',')
-      .map(name => name.trim())
-      .filter(Boolean);
   }
 
   protected isComputeSelected(resource: AutoscalerComputeResource) {
     return this.workloadForm.controls.compute.value === resource.name;
   }
 
-  protected selectedEnvironments(): string[] {
-    return (this.workloadForm.controls.environment.value || '')
-      .split(',')
-      .map(name => name.trim())
-      .filter(Boolean);
-  }
-
   protected isEnvironmentSelected(resource: AutoscalerEnvironmentResource) {
-    return this.selectedEnvironments().includes(resource.name);
+    return this.workloadForm.controls.environment.value === resource.name;
   }
 
   protected isDataSourceSelected(resource: AutoscalerDataSourceResource) {
-    return this.selectedDataSources().includes(resource.name);
+    return this.workloadForm.controls.data_sources.value === resource.name;
+  }
+
+  private buildPages(total: number): number[] {
+    const count = Math.max(1, Math.ceil(total / this.assetPageSize));
+    return Array.from({length: count}, (_, i) => i + 1);
+  }
+
+  private pageSlice<T>(items: T[], page: number): T[] {
+    const count = Math.max(1, Math.ceil(items.length / this.assetPageSize));
+    const safePage = Math.min(Math.max(page, 1), count);
+    const start = (safePage - 1) * this.assetPageSize;
+    return items.slice(start, start + this.assetPageSize);
   }
 
   private getWorkloadValue(): WorkloadFormValue {
