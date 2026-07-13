@@ -299,6 +299,24 @@ header {
   font-weight: 700;
 }
 
+.instance-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 3px;
+  color: var(--color-on-surface);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 12px;
+
+  &:focus {
+    outline: 1px solid var(--color-primary);
+    border-color: var(--color-primary);
+  }
+}
+
 .filter-button {
   display: inline-flex;
   align-items: center;
@@ -323,6 +341,37 @@ header {
 
 .toolbar-spacer {
   flex: 1 1 auto;
+}
+
+::ng-deep .instance-filter-menu {
+  min-width: 230px;
+
+  .mat-mdc-menu-content {
+    padding: 0;
+  }
+}
+
+.instance-filter-panel {
+  min-width: 230px;
+
+  .mat-expansion-panel {
+    box-shadow: none;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .mat-expansion-panel-header {
+    padding: 0 14px;
+  }
+
+  .mat-expansion-panel-body {
+    padding: 0 14px 12px;
+  }
+
+  .mat-mdc-checkbox {
+    display: block;
+    margin: 4px 0;
+  }
 }
 
 .sidebar-state {

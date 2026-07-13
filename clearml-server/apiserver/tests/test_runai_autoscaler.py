@@ -323,14 +323,14 @@ class TestAutoscalerBLL(unittest.TestCase):
         commands = [call.args[0] for call in run.call_args_list]
         self.assertIn(
             [
-                "runai-v2", "login", "application", "--client-id", "access",
+                "runai-v2", "login", "access-key", "--client-id", "access",
                 "--secret", "secret", "--interactive", "disabled",
             ],
             commands,
         )
         self.assertIn(["runai-v2", "cluster", "set", "cluster-a"], commands)
         self.assertIn(["runai-v2", "project", "set", "project-a"], commands)
-        self.assertIn(["runai-v2", "training", "standard", "submit", "train-one", "-i", "repo/image:latest", "-c", "python train.py", "-g", "1", "--", "--epochs", "1"], commands)
+        self.assertIn(["runai-v2", "training", "standard", "submit", "-p", "project-a", "train-one", "-i", "repo/image:latest", "-c", "python train.py", "-g", "1", "--", "--epochs", "1"], commands)
 
     def test_process_command_playground_executes_selected_version_and_persists_metadata(self):
         self._settings(runai_cli_version="auto")
@@ -371,9 +371,9 @@ class TestAutoscalerBLL(unittest.TestCase):
 
         with patch.object(self.bll, "_set_runai_context"), \
              patch.object(self.bll, "_project_list_commands", return_value=[["runai", "project", "list", "--json"]]), \
-             patch.object(self.bll, "_compute_list_commands", return_value=[["runai", "compute", "list", "--json", "--project", "project-a"]]), \
-             patch.object(self.bll, "_environment_list_commands", return_value=[["runai", "environment", "list", "--json", "--project", "project-a"]]), \
-             patch.object(self.bll, "_datasource_list_commands", return_value=[["runai", "datasource", "list", "--json", "--project", "project-a"]]), \
+             patch.object(self.bll, "_compute_list_commands", return_value=[["runai", "compute", "list", "--json", "-p", "project-a"]]), \
+             patch.object(self.bll, "_environment_list_commands", return_value=[["runai", "environment", "list", "--json", "-p", "project-a"]]), \
+             patch.object(self.bll, "_datasource_list_commands", return_value=[["runai", "datasource", "list", "--json", "-p", "project-a"]]), \
                patch.object(self.bll, "_nodepool_list_commands", return_value=[["runai", "nodepool", "list", "--json"]]), \
              patch.object(self.bll, "_describe_assets", side_effect=lambda *args: args[3]), \
              patch.object(
@@ -409,9 +409,10 @@ class TestAutoscalerBLL(unittest.TestCase):
         self._settings()
         execution = self._execution(operation="test_connection", workload_params="{}")
 
-        with patch.object(self.bll, "_establish_connection"), \
-             patch.object(self.bll, "_project_list_commands", return_value=[["runai", "project", "list"]]), \
-             patch.object(self.bll, "_runai_records_from_command", return_value=([{"name": "one"}, {"name": "two"}], True)), \
+        with patch.object(AutoscalerBLL, "_establish_connection"), \
+             patch.object(AutoscalerBLL, "_set_runai_context"), \
+             patch.object(AutoscalerBLL, "_project_list_commands", return_value=[["runai", "project", "list"]]), \
+             patch.object(AutoscalerBLL, "_runai_records_from_command", return_value=([{"name": "one"}, {"name": "two"}], True)), \
              patch.object(autoscaler_mod.shutil, "rmtree"):
             result = self.bll.process_execution(execution)
 
@@ -428,9 +429,10 @@ class TestAutoscalerBLL(unittest.TestCase):
             console_log.extend(console_error)
             return [], False
 
-        with patch.object(self.bll, "_establish_connection"), \
-             patch.object(self.bll, "_project_list_commands", return_value=[["runai", "project", "list"]]), \
-             patch.object(self.bll, "_runai_records_from_command", side_effect=fail_command), \
+        with patch.object(AutoscalerBLL, "_establish_connection"), \
+             patch.object(AutoscalerBLL, "_set_runai_context"), \
+             patch.object(AutoscalerBLL, "_project_list_commands", return_value=[["runai", "project", "list"]]), \
+             patch.object(AutoscalerBLL, "_runai_records_from_command", side_effect=fail_command), \
              patch.object(autoscaler_mod.shutil, "rmtree"):
             result = self.bll.process_execution(execution)
 
@@ -485,14 +487,14 @@ class TestAutoscalerBLL(unittest.TestCase):
         # fallback command returns the real assets. The submit-workload dialog
         # must surface the non-empty result instead of the empty success.
         def fake_command(cmd, _env, _console_log):
-            if "--project" in cmd:
+            if "-p" in cmd:
                 return [], True
             return [{"name": "compute-a"}], True
 
-        with patch.object(self.bll, "_runai_records_from_command", side_effect=fake_command):
+        with patch.object(AutoscalerBLL, "_runai_records_from_command", side_effect=fake_command):
             records = self.bll._runai_records_with_fallback(
                 [
-                    ["runai-v2", "compute", "list", "--json", "--project", "project-a"],
+                    ["runai-v2", "compute", "list", "--json", "-p", "project-a"],
                     ["runai-v2", "compute", "list", "--json"],
                 ],
                 {},
@@ -560,6 +562,34 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertEqual(auto[0][0], "runai-v2")
         self.assertEqual(auto[-1][0], "runai-v1")
 
+    def test_command_catalog_declares_only_placeholders_used_by_commands(self):
+        for version, entries in autoscaler_mod.RUNAI_COMMAND_CATALOG.items():
+            for entry in entries:
+                with self.subTest(version=version, key=entry["key"]):
+                    for placeholder in entry.get("placeholders", []):
+                        self.assertIn(
+                            "{" + placeholder["name"] + "}",
+                            entry["command"],
+                        )
+                    if any(
+                        placeholder["name"] == "project"
+                        for placeholder in entry.get("placeholders", [])
+                    ) and entry["key"] != "project_set":
+                        self.assertIn("-p {project}", entry["command"])
+
+    def test_v1_catalog_does_not_advertise_v2_only_asset_commands(self):
+        v1_keys = {entry["key"] for entry in autoscaler_mod.RUNAI_COMMAND_CATALOG["v1"]}
+        self.assertTrue({
+            "login",
+            "compute_list",
+            "compute_describe",
+            "environment_list",
+            "environment_describe",
+            "datasource_list",
+            "datasource_describe",
+            "nodepool_list",
+        }.isdisjoint(v1_keys))
+
     def test_v2_project_asset_describe_commands_use_supported_json_flags(self):
         conn = SimpleNamespace(runai_cli_version="v2")
 
@@ -574,15 +604,15 @@ class TestAutoscalerBLL(unittest.TestCase):
             )
 
         self.assertIn(
-            ["runai-v2", "compute", "describe", "compute-a", "-o", "json", "--project", "project-a"],
+            ["runai-v2", "compute", "describe", "compute-a", "-o", "json", "-p", "project-a"],
             compute,
         )
         self.assertIn(
-            ["runai-v2", "environment", "describe", "env-a", "-o", "json", "--project", "project-a"],
+            ["runai-v2", "environment", "describe", "env-a", "-o", "json", "-p", "project-a"],
             environment,
         )
         self.assertIn(
-            ["runai-v2", "datasource", "describe", "data-a", "--type", "pvc", "-o", "json", "--project", "project-a"],
+            ["runai-v2", "datasource", "describe", "data-a", "--type", "pvc", "-o", "json", "-p", "project-a"],
             datasource,
         )
 
@@ -594,10 +624,10 @@ class TestAutoscalerBLL(unittest.TestCase):
             datasource = self.bll._datasource_list_commands(conn, "project-a")
             nodepool = self.bll._nodepool_list_commands(conn)
 
-        self.assertIn(["runai-v2", "compute", "list", "--json", "--project", "project-a"], compute)
-        self.assertNotIn(["runai-v2", "compute-resource", "list", "--json", "--project", "project-a"], compute)
-        self.assertIn(["runai-v2", "datasource", "list", "--json", "--project", "project-a"], datasource)
-        self.assertNotIn(["runai-v2", "data-source", "list", "--json", "--project", "project-a"], datasource)
+        self.assertIn(["runai-v2", "compute", "list", "--json", "-p", "project-a"], compute)
+        self.assertNotIn(["runai-v2", "compute-resource", "list", "--json", "-p", "project-a"], compute)
+        self.assertIn(["runai-v2", "datasource", "list", "--json", "-p", "project-a"], datasource)
+        self.assertNotIn(["runai-v2", "data-source", "list", "--json", "-p", "project-a"], datasource)
         self.assertIn(["runai-v2", "nodepool", "list", "--json"], nodepool)
         self.assertNotIn(["runai-v2", "node-pool", "list", "--json"], nodepool)
 
@@ -606,8 +636,8 @@ class TestAutoscalerBLL(unittest.TestCase):
             runai_cli_version="v2",
             command_templates=json.dumps({
                 "v2": {
-                    "compute_list": "runai compute list --json --project {selected_project}",
-                    "environment_describe": "runai environment describe {name} -o json --project {selected_project}",
+                    "compute_list": "runai compute list --json -p {selected_project}",
+                    "environment_describe": "runai environment describe {name} -o json -p {selected_project}",
                 }
             }),
         )
@@ -616,14 +646,88 @@ class TestAutoscalerBLL(unittest.TestCase):
             compute = self.bll._compute_list_commands(conn, "project-a")
             environment = self.bll._environment_describe_commands(conn, "env-a", "project-a")
 
-        self.assertEqual(compute[0], ["runai-v2", "compute", "list", "--json", "--project", "project-a"])
-        self.assertEqual(environment[0], ["runai-v2", "environment", "describe", "env-a", "-o", "json", "--project", "project-a"])
+        self.assertEqual(compute[0], ["runai-v2", "compute", "list", "--json", "-p", "project-a"])
+        self.assertEqual(environment[0], ["runai-v2", "environment", "describe", "env-a", "-o", "json", "-p", "project-a"])
+
+    def test_legacy_asset_override_without_project_is_repaired(self):
+        conn = SimpleNamespace(
+            runai_cli_version="v2",
+            command_templates=json.dumps({
+                "v2": {"compute_list": "runai compute list --json"},
+            }),
+        )
+
+        with patch.object(autoscaler_mod.shutil, "which", return_value="/bin/runai-v2"):
+            commands = self.bll._compute_list_commands(conn, "project-a")
+
+        self.assertEqual(
+            commands[0],
+            ["runai-v2", "compute", "list", "--json", "-p", "project-a"],
+        )
 
     def test_project_scoped_asset_commands_fall_back_to_context_project(self):
         commands = self.bll._with_project([["runai", "compute", "list", "--json"]], "project-a")
 
-        self.assertEqual(commands[0], ["runai", "compute", "list", "--json", "--project", "project-a"])
+        self.assertEqual(commands[0], ["runai", "compute", "list", "--json", "-p", "project-a"])
         self.assertEqual(commands[1], ["runai", "compute", "list", "--json"])
+
+    def test_saved_asset_commands_feed_submit_workload_card_resources(self):
+        conn = SimpleNamespace(
+            runai_cli_version="v2",
+            command_templates=json.dumps({
+                "v2": {
+                    "compute_list": "runai compute list --json -p {project}",
+                    "environment_list": "runai environment list --json -p {project}",
+                    "datasource_list": "runai datasource list --json -p {project}",
+                }
+            }),
+        )
+        seen = []
+
+        def fake_command(command, _env, _console_log):
+            seen.append(command)
+            if command[1:3] == ["project", "list"]:
+                return [{"name": "project-a"}], True
+            if command[1:3] == ["compute", "list"]:
+                return [{"name": "compute-a", "gpuDevicesRequest": 1}], True
+            if command[1:3] == ["environment", "list"]:
+                return [{"name": "environment-a", "image": "image:a"}], True
+            if command[1:3] == ["datasource", "list"]:
+                return [{"name": "data-a", "type": "pvc"}], True
+            return [], True
+
+        with patch.object(self.bll, "_set_runai_context"), \
+             patch.object(self.bll, "_describe_assets", side_effect=lambda *args: args[3]), \
+             patch.object(autoscaler_mod.shutil, "which", side_effect=lambda binary: f"/bin/{binary}"), \
+             patch.object(AutoscalerBLL, "_runai_records_from_command", side_effect=fake_command):
+            result = self.bll._collect_project_resources(conn, {}, "project-a")
+
+        self.assertEqual(result["compute"][0]["name"], "compute-a")
+        self.assertEqual(result["environments"][0]["name"], "environment-a")
+        self.assertEqual(result["data_sources"][0]["name"], "data-a")
+        self.assertIn(["runai-v2", "compute", "list", "--json", "-p", "project-a"], seen)
+        self.assertIn(["runai-v2", "environment", "list", "--json", "-p", "project-a"], seen)
+        self.assertIn(["runai-v2", "datasource", "list", "--json", "-p", "project-a"], seen)
+
+    def test_submit_command_includes_selected_asset_cards(self):
+        workload = self.bll._workload_from_execution(SimpleNamespace(
+            workload_params=json.dumps(self._workload(
+                compute="compute-a",
+                environment="environment-a,environment-b",
+                data_sources=json.dumps([{"name": "data-a", "type": "pvc"}]),
+            ).to_struct()),
+        ))
+
+        with patch.object(autoscaler_mod.shutil, "which", return_value="/bin/runai-v2"):
+            command = self.bll._build_workload_cmds(
+                SimpleNamespace(runai_cli_version="v2"), workload
+            )[0]
+
+        self.assertIn(["-p", "project-a"], [command[index:index + 2] for index in range(len(command) - 1)])
+        self.assertIn(["--compute", "compute-a"], [command[index:index + 2] for index in range(len(command) - 1)])
+        self.assertIn(["--environment", "environment-a"], [command[index:index + 2] for index in range(len(command) - 1)])
+        self.assertIn(["--environment", "environment-b"], [command[index:index + 2] for index in range(len(command) - 1)])
+        self.assertIn(["--datasource", "type=pvc,name=data-a"], [command[index:index + 2] for index in range(len(command) - 1)])
 
     def test_build_env_adds_default_cli_paths(self):
         with patch.dict(autoscaler_mod.os.environ, {"PATH": "/custom/bin"}, clear=True):

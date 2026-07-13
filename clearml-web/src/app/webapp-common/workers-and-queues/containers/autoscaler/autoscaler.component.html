@@ -708,20 +708,33 @@
         The Autoscaler submits workloads to a configured Run:ai cluster and lets the external orchestrator manage GPU
         capacity for training, workspace, and inference jobs.
       </p>
-      <div class="version">v1.16.0-1905</div>
+      <div class="version">{{ autoscalerVersion }}</div>
 
       <div class="sidebar-divider"></div>
 
       <div class="sidebar-block">
         <div class="instances-toolbar">
-          <div class="instances-title">APP INSTANCES</div>
-          <button class="filter-button" type="button">
-            All
+          @if (instanceSearchOpen()) {
+            <input class="instance-search-input"
+                   type="search"
+                   [value]="instanceSearchQuery()"
+                   placeholder="Search instances"
+                   aria-label="Search app instances"
+                   (input)="setInstanceSearchQuery($any($event.target).value)">
+          } @else {
+            <div class="instances-title">APP INSTANCES</div>
+          }
+          <button class="filter-button" type="button" [matMenuTriggerFor]="instanceFilters">
+            {{ instanceFilterLabel() }}
             <mat-icon fontSet="al" fontIcon="al-ico-dropdown-arrow"></mat-icon>
           </button>
-          <span class="toolbar-spacer"></span>
-          <button mat-icon-button type="button" aria-label="Search app instances">
-            <mat-icon fontSet="al" fontIcon="al-ico-search"></mat-icon>
+          @if (!instanceSearchOpen()) {
+            <span class="toolbar-spacer"></span>
+          }
+          <button mat-icon-button type="button"
+                  [attr.aria-label]="instanceSearchOpen() ? 'Close app instance search' : 'Search app instances'"
+                  (click)="toggleInstanceSearch()">
+            <mat-icon fontSet="al" [fontIcon]="instanceSearchOpen() ? 'al-ico-dialog-x' : 'al-ico-search'"></mat-icon>
           </button>
           <button mat-icon-button type="button"
                   [matMenuTriggerFor]="instancesMenu"
@@ -748,10 +761,61 @@
             <mat-icon fontSet="al" fontIcon="al-ico-add"></mat-icon>
           </button>
         </div>
+        <mat-menu #instanceFilters="matMenu" class="instance-filter-menu">
+          <div class="instance-filter-panel" (click)="$event.stopPropagation()">
+            <mat-accordion multi>
+              <mat-expansion-panel>
+                <mat-expansion-panel-header>
+                  <mat-panel-title>Type</mat-panel-title>
+                  @if (selectedInstanceTypes().length) {
+                    <mat-panel-description>{{ selectedInstanceTypes().length }} selected</mat-panel-description>
+                  }
+                </mat-expansion-panel-header>
+                @for (type of instanceTypeOptions(); track type) {
+                  <mat-checkbox [checked]="isInstanceFilterSelected('type', type)"
+                                (click)="$event.stopPropagation()"
+                                (change)="toggleInstanceFilter('type', type)">
+                    {{ type | titlecase }}
+                  </mat-checkbox>
+                }
+              </mat-expansion-panel>
+              <mat-expansion-panel>
+                <mat-expansion-panel-header>
+                  <mat-panel-title>Status</mat-panel-title>
+                  @if (selectedInstanceStatuses().length) {
+                    <mat-panel-description>{{ selectedInstanceStatuses().length }} selected</mat-panel-description>
+                  }
+                </mat-expansion-panel-header>
+                @for (status of instanceStatusOptions(); track status) {
+                  <mat-checkbox [checked]="isInstanceFilterSelected('status', status)"
+                                (click)="$event.stopPropagation()"
+                                (change)="toggleInstanceFilter('status', status)">
+                    {{ status | titlecase }}
+                  </mat-checkbox>
+                }
+              </mat-expansion-panel>
+              <mat-expansion-panel>
+                <mat-expansion-panel-header>
+                  <mat-panel-title>Project</mat-panel-title>
+                  @if (selectedInstanceProjects().length) {
+                    <mat-panel-description>{{ selectedInstanceProjects().length }} selected</mat-panel-description>
+                  }
+                </mat-expansion-panel-header>
+                @for (project of instanceProjectOptions(); track project) {
+                  <mat-checkbox [checked]="isInstanceFilterSelected('project', project)"
+                                (click)="$event.stopPropagation()"
+                                (change)="toggleInstanceFilter('project', project)">
+                    {{ project }}
+                  </mat-checkbox>
+                }
+              </mat-expansion-panel>
+            </mat-accordion>
+          </div>
+        </mat-menu>
         <div class="sidebar-state">
-          @if (appInstances().length) {
+          @if (filteredAppInstances().length) {
             <div class="app-instance-list">
-              @for (instance of appInstances(); track instance.key) {
+              @for (instance of filteredAppInstances(); track instance.key) {
                 <div class="app-instance-row"
                      role="button"
                      tabindex="0"
@@ -802,7 +866,7 @@
               }
             </div>
           } @else {
-            <span>{{ dashboard()?.total_instances ? dashboard()?.total_instances + ' app instances' : 'No instances launched yet' }}</span>
+            <span>{{ appInstances().length ? 'No app instances match the current filters' : 'No instances launched yet' }}</span>
           }
           <button mat-button type="button" (click)="openWorkloadDialog(workloadDialog)">
             Launch new

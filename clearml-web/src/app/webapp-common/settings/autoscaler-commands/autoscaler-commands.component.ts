@@ -221,6 +221,14 @@ export class AutoscalerCommandsComponent {
       this.connectionMessage.set({type: 'error', text: 'Run a successful connection test before using the playground.'});
       return;
     }
+    const missing = this.missingPlaceholders(version, entry);
+    if (missing.length) {
+      this.connectionMessage.set({
+        type: 'error',
+        text: `Command is missing required placeholder${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`,
+      });
+      return;
+    }
     const executionKey = this.executionKey(version, entry.key);
     this.playgroundRunning.update((state) => ({...state, [executionKey]: true}));
     this.playgroundResults.update((state) => ({
@@ -302,6 +310,13 @@ export class AutoscalerCommandsComponent {
     return (this.getValue(version, entry.key) ?? '').trim() !== (entry.command ?? '').trim();
   }
 
+  missingPlaceholders(version: string, entry: CommandEntry): string[] {
+    const command = this.getValue(version, entry.key);
+    return (entry.placeholders ?? [])
+      .map(placeholder => placeholder.name)
+      .filter(name => !command.includes(`{${name}}`));
+  }
+
   private collectOverrides(): CommandOverrides {
     const overrides: CommandOverrides = {};
     const catalog = this.catalog();
@@ -318,6 +333,18 @@ export class AutoscalerCommandsComponent {
   }
 
   save(): void {
+    const invalid = Object.entries(this.catalog()).flatMap(([version, entries]) =>
+      entries
+        .filter(entry => this.missingPlaceholders(version, entry).length)
+        .map(entry => entry.label)
+    );
+    if (invalid.length) {
+      this.statusMessage.set({
+        type: 'error',
+        text: `Restore the required placeholders before saving: ${invalid.join(', ')}.`,
+      });
+      return;
+    }
     this.saving.set(true);
     this.statusMessage.set(null);
     this.autoscalerApi.autoscalerSetCommandTemplates({overrides: this.collectOverrides()}).subscribe({

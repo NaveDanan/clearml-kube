@@ -15,6 +15,7 @@ import {MatProgressSpinnerModule} from '@angular/material/progress-spinner';
 import {MatMenuModule} from '@angular/material/menu';
 import {MatDialog, MatDialogModule} from '@angular/material/dialog';
 import {ActivatedRoute, Router} from '@angular/router';
+import versionConf from '../../../../../version.json';
 import {
   autoscalerActions,
   AutoscalerComputeResource,
@@ -50,6 +51,7 @@ type OpenshiftLoginMode = 'fields' | 'command';
 type RunaiCliVersion = 'auto' | 'v1' | 'v2';
 type ImportMode = 'command' | 'json';
 type AppInstanceSource = 'runai' | 'local';
+type AppInstanceFilter = 'type' | 'status' | 'project';
 
 type WorkloadFormValue = Partial<{
   workload_type: WorkloadType;
@@ -144,10 +146,16 @@ export class AutoscalerComponent implements OnDestroy {
   private route = inject(ActivatedRoute);
   private dashboardRefreshId?: ReturnType<typeof setInterval>;
   private formSubscription = new Subscription();
+  protected autoscalerVersion = this.formatAutoscalerVersion(versionConf);
 
   protected selectedProvider = signal<'runai' | null>(null);
   protected importedWorkloads = signal<WorkloadFormValue[]>([]);
   protected selectedInstanceKey = signal<string | null>(null);
+  protected instanceSearchOpen = signal(false);
+  protected instanceSearchQuery = signal('');
+  protected selectedInstanceTypes = signal<string[]>([]);
+  protected selectedInstanceStatuses = signal<string[]>([]);
+  protected selectedInstanceProjects = signal<string[]>([]);
   protected importError = signal<string | null>(null);
   protected settings = this.store.selectSignal(selectAutoscalerSettings);
   protected connectionStatus = this.store.selectSignal(selectAutoscalerConnectionStatus);
@@ -312,6 +320,94 @@ export class AutoscalerComponent implements OnDestroy {
 
     return [...merged.values()];
   });
+  protected instanceTypeOptions = computed(() => this.instanceFilterOptions('type'));
+  protected instanceStatusOptions = computed(() => this.instanceFilterOptions('status'));
+  protected instanceProjectOptions = computed(() => this.instanceFilterOptions('project'));
+  protected filteredAppInstances = computed(() => {
+    const query = this.instanceSearchQuery().trim().toLowerCase();
+    const types = new Set(this.selectedInstanceTypes());
+    const statuses = new Set(this.selectedInstanceStatuses());
+    const projects = new Set(this.selectedInstanceProjects());
+
+    return this.appInstances().filter(instance => {
+      const type = this.instanceFilterValue(instance.type, 'Unknown');
+      const status = this.instanceFilterValue(instance.status, 'Unknown');
+      const project = this.instanceFilterValue(instance.project, 'No project');
+      const matchesFilters =
+        (!types.size || types.has(type)) &&
+        (!statuses.size || statuses.has(status)) &&
+        (!projects.size || projects.has(project));
+      const matchesSearch = !query || [instance.name, type, status, project]
+        .some(value => value.toLowerCase().includes(query));
+      return matchesFilters && matchesSearch;
+    });
+  });
+  protected instanceFilterLabel = computed(() => {
+    const selectedCount = this.selectedInstanceTypes().length +
+      this.selectedInstanceStatuses().length + this.selectedInstanceProjects().length;
+    return selectedCount ? `${selectedCount} selected` : 'All';
+  });
+
+  private formatAutoscalerVersion(version: typeof versionConf): string {
+    const tagVersion = (version['webapp-treeish'] || version.version || '').trim();
+    const commit = (version['webapp-commit'] || '').trim();
+    if (tagVersion && commit) {
+      return `${tagVersion} · ${commit.slice(0, 7)}`;
+    }
+    return tagVersion || commit || version.version;
+  }
+
+  protected toggleInstanceSearch() {
+    if (this.instanceSearchOpen()) {
+      this.instanceSearchQuery.set('');
+    }
+    this.instanceSearchOpen.update(open => !open);
+  }
+
+  protected setInstanceSearchQuery(query: string) {
+    this.instanceSearchQuery.set(query);
+  }
+
+  protected toggleInstanceFilter(filter: AppInstanceFilter, value: string) {
+    const selected = this.instanceFilterSelection(filter);
+    selected.update(values => values.includes(value)
+      ? values.filter(item => item !== value)
+      : [...values, value]);
+  }
+
+  protected isInstanceFilterSelected(filter: AppInstanceFilter, value: string): boolean {
+    return this.instanceFilterSelection(filter)().includes(value);
+  }
+
+  private instanceFilterOptions(filter: AppInstanceFilter): string[] {
+    const values = this.appInstances().map(instance => {
+      switch (filter) {
+        case 'type':
+          return this.instanceFilterValue(instance.type, 'Unknown');
+        case 'status':
+          return this.instanceFilterValue(instance.status, 'Unknown');
+        case 'project':
+          return this.instanceFilterValue(instance.project, 'No project');
+      }
+    });
+    return [...new Set(values)].sort((a, b) => a.localeCompare(b));
+  }
+
+  private instanceFilterSelection(filter: AppInstanceFilter) {
+    switch (filter) {
+      case 'type':
+        return this.selectedInstanceTypes;
+      case 'status':
+        return this.selectedInstanceStatuses;
+      case 'project':
+        return this.selectedInstanceProjects;
+    }
+  }
+
+  private instanceFilterValue(value: string | undefined, fallback: string): string {
+    return value?.trim() || fallback;
+  }
+
   protected selectedInstance = computed(() => {
     const instances = this.appInstances();
     return instances.find(instance => instance.key === this.selectedInstanceKey()) ?? instances[0] ?? null;
@@ -595,6 +691,7 @@ export class AutoscalerComponent implements OnDestroy {
     if (reset) {
       this.resetWorkload();
     }
+    this.loadProjectResources(this.workloadForm.controls.project.value || '');
     this.dialog.open(template, {
       width: '960px',
       maxWidth: 'calc(100vw - 32px)',
@@ -877,7 +974,9 @@ export class AutoscalerComponent implements OnDestroy {
   }
 
   resetWorkload() {
-    this.workloadForm.reset({workload_type: 'training'});
+    const project = this.settings()?.runai_project || '';
+    this.workloadForm.reset({workload_type: 'training', project}, {emitEvent: false});
+    this.projectFilter.set(project);
     this.setEnvVars([]);
     this.addEnvVar('', '', false);
     this.workloadForm.markAsPristine();
@@ -989,6 +1088,23 @@ export class AutoscalerComponent implements OnDestroy {
     if (this.selectedProvider() !== 'runai') {
       return;
     }
+    project = project.trim();
+    this.environmentPage.set(0);
+    this.computePage.set(0);
+    this.dataSourcePage.set(0);
+    if (!project) {
+      this.store.dispatch(autoscalerActions.setProjectResources({
+        resources: {
+          project: '',
+          projects: [],
+          compute: [],
+          environments: [],
+          data_sources: [],
+          node_pools: [],
+        },
+      }));
+      return;
+    }
     this.store.dispatch(autoscalerActions.setProjectResourcesLoading({loading: true}));
     this.store.dispatch(autoscalerActions.getProjectResources({project}));
   }
@@ -1047,12 +1163,12 @@ export class AutoscalerComponent implements OnDestroy {
   }
 
   protected toggleDataSource(resource: AutoscalerDataSourceResource) {
-    const selected = this.selectedDataSources();
-    const adding = !selected.includes(resource.name);
+    const selected = this.dataSourceSelections();
+    const adding = !selected.some(item => item.name === resource.name);
     const next = adding
-      ? [...selected, resource.name]
-      : selected.filter(name => name !== resource.name);
-    this.workloadForm.controls.data_sources.setValue(next.join(','));
+      ? [...selected, {name: resource.name, type: resource.type || ''}]
+      : selected.filter(item => item.name !== resource.name);
+    this.workloadForm.controls.data_sources.setValue(JSON.stringify(next));
     const pvc = resource.existing_pvc || (resource.path ? `claimname=${resource.name},path=${resource.path}` : '');
     if (adding && pvc && !this.workloadForm.controls.existing_pvc.value) {
       this.workloadForm.controls.existing_pvc.setValue(pvc);
@@ -1061,10 +1177,27 @@ export class AutoscalerComponent implements OnDestroy {
   }
 
   protected selectedDataSources(): string[] {
-    return (this.workloadForm.controls.data_sources.value || '')
+    return this.dataSourceSelections().map(item => item.name);
+  }
+
+  private dataSourceSelections(): Array<{name: string; type?: string}> {
+    const value = this.workloadForm.controls.data_sources.value || '';
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map(item => typeof item === 'string' ? {name: item} : item)
+          .filter(item => item && typeof item.name === 'string' && item.name.trim())
+          .map(item => ({name: item.name.trim(), type: typeof item.type === 'string' ? item.type.trim() : ''}));
+      }
+    } catch {
+      // Older saved/imported workloads store a comma-separated list of names.
+    }
+    return value
       .split(',')
       .map(name => name.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .map(name => ({name}));
   }
 
   protected isComputeSelected(resource: AutoscalerComputeResource) {

@@ -48,9 +48,9 @@ RUNAI_COMMAND_CATALOG = {
     "v2": [
         {
             "key": "login",
-            "label": "Application login",
-            "description": "Authenticate to Run:ai using application credentials.",
-            "command": "runai login application --client-id {access_key} --secret {secret_key} --interactive disabled",
+            "label": "Access-key login",
+            "description": "Authenticate to Run:ai using service-account or user access-key credentials.",
+            "command": "runai login access-key --client-id {access_key} --secret {secret_key} --interactive disabled",
             "placeholders": [
                 {"name": "access_key", "description": "Run:ai application client id / access key"},
                 {"name": "secret_key", "description": "Run:ai application client secret"},
@@ -94,22 +94,22 @@ RUNAI_COMMAND_CATALOG = {
         {
             "key": "workload_list",
             "label": "List workloads",
-            "description": "List workloads for the dashboard. Add --project {project} to scope it.",
-            "command": "runai workload list --json --no-pagination",
+            "description": "List workloads for the dashboard in the selected project.",
+            "command": "runai workload list --json --no-pagination -p {project}",
             "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
             "key": "compute_list",
             "label": "List compute resources",
             "description": "List compute resources/templates used when building a new workload.",
-            "command": "runai compute list --json",
+            "command": "runai compute list --json -p {project}",
             "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
             "key": "compute_describe",
             "label": "Describe compute resource",
             "description": "Read the full definition of a single compute resource for the new-workload form.",
-            "command": "runai compute describe {name} -o json",
+            "command": "runai compute describe {name} -o json -p {project}",
             "placeholders": [
                 {"name": "name", "description": "Compute resource name"},
                 {"name": "project", "description": "Run:ai project name"},
@@ -119,14 +119,14 @@ RUNAI_COMMAND_CATALOG = {
             "key": "environment_list",
             "label": "List environments",
             "description": "List environments used when building a new workload.",
-            "command": "runai environment list --json",
+            "command": "runai environment list --json -p {project}",
             "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
             "key": "environment_describe",
             "label": "Describe environment",
             "description": "Read the full definition of a single environment for the new-workload form.",
-            "command": "runai environment describe {name} -o json",
+            "command": "runai environment describe {name} -o json -p {project}",
             "placeholders": [
                 {"name": "name", "description": "Environment name"},
                 {"name": "project", "description": "Run:ai project name"},
@@ -136,14 +136,14 @@ RUNAI_COMMAND_CATALOG = {
             "key": "datasource_list",
             "label": "List data sources",
             "description": "List data sources used when building a new workload.",
-            "command": "runai datasource list --json",
+            "command": "runai datasource list --json -p {project}",
             "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
             "key": "datasource_describe",
             "label": "Describe data source",
             "description": "Read the full definition of a single data source for the new-workload form.",
-            "command": "runai datasource describe {name} --type {type} -o json",
+            "command": "runai datasource describe {name} --type {type} -o json -p {project}",
             "placeholders": [
                 {"name": "name", "description": "Data source name"},
                 {"name": "type", "description": "Data source type"},
@@ -161,28 +161,28 @@ RUNAI_COMMAND_CATALOG = {
             "key": "submit_training",
             "label": "Submit training",
             "description": "Base command to submit a training workload. Workload flags are appended automatically.",
-            "command": "runai training standard submit",
-            "placeholders": [],
+            "command": "runai training standard submit -p {project}",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
             "key": "submit_workspace",
             "label": "Submit workspace",
             "description": "Base command to submit a workspace workload. Workload flags are appended automatically.",
-            "command": "runai workspace submit",
-            "placeholders": [],
+            "command": "runai workspace submit -p {project}",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
             "key": "submit_inference",
             "label": "Submit inference",
             "description": "Base command to submit an inference workload. Workload flags are appended automatically.",
-            "command": "runai inference submit",
-            "placeholders": [],
+            "command": "runai inference submit -p {project}",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
             "key": "delete_workload",
             "label": "Delete workload",
-            "description": "Delete a workload. The active project is selected beforehand.",
-            "command": "runai workload delete {name} --force",
+            "description": "Delete a workload in the selected project without an interactive confirmation.",
+            "command": "runai workload delete -p {project} -y {name}",
             "placeholders": [
                 {"name": "name", "description": "Workload name"},
                 {"name": "project", "description": "Run:ai project name"},
@@ -191,9 +191,10 @@ RUNAI_COMMAND_CATALOG = {
         {
             "key": "stop_workload",
             "label": "Stop workload",
-            "description": "Suspend (stop) a running workload.",
-            "command": "runai workload suspend {name}",
+            "description": "Suspend (stop) a training or workspace workload in the selected project.",
+            "command": "runai {workload_type} suspend {name} -p {project}",
             "placeholders": [
+                {"name": "workload_type", "description": "training or workspace"},
                 {"name": "name", "description": "Workload name"},
                 {"name": "project", "description": "Run:ai project name"},
             ],
@@ -202,7 +203,7 @@ RUNAI_COMMAND_CATALOG = {
             "key": "workload_logs",
             "label": "Workload logs",
             "description": "Read console logs for a single workload.",
-            "command": "runai {workload_type} logs {name} --tail {tail}",
+            "command": "runai {workload_type} logs {name} --tail {tail} -p {project}",
             "placeholders": [
                 {"name": "workload_type", "description": "training, workspace, or inference"},
                 {"name": "name", "description": "Workload name"},
@@ -248,16 +249,6 @@ RUNAI_COMMAND_CATALOG = {
     ],
     "v1": [
         {
-            "key": "login",
-            "label": "Application login",
-            "description": "Authenticate to Run:ai using application credentials.",
-            "command": "runai login application --name {access_key} --secret {secret_key} --interactive disabled",
-            "placeholders": [
-                {"name": "access_key", "description": "Run:ai application name / access key"},
-                {"name": "secret_key", "description": "Run:ai application secret"},
-            ],
-        },
-        {
             "key": "cluster_set",
             "label": "Select cluster",
             "description": "Set the active Run:ai cluster.",
@@ -275,93 +266,35 @@ RUNAI_COMMAND_CATALOG = {
             "key": "project_list",
             "label": "List projects",
             "description": "List Run:ai projects (used by the connection test and dashboard).",
-            "command": "runai list projects --json",
+            "command": "runai list projects",
             "placeholders": [],
         },
         {
             "key": "node_list",
             "label": "List nodes",
             "description": "List cluster nodes for the resources dashboard.",
-            "command": "runai list nodes --json",
+            "command": "runai list nodes",
             "placeholders": [],
         },
         {
             "key": "workload_list",
             "label": "List workloads",
-            "description": "List jobs for the dashboard.",
-            "command": "runai list jobs --json",
+            "description": "List jobs for the dashboard in the selected project.",
+            "command": "runai list jobs -p {project}",
             "placeholders": [{"name": "project", "description": "Run:ai project name"}],
-        },
-        {
-            "key": "compute_list",
-            "label": "List compute resources",
-            "description": "List compute resources/templates used when building a new workload.",
-            "command": "runai list compute --json",
-            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
-        },
-        {
-            "key": "compute_describe",
-            "label": "Describe compute resource",
-            "description": "Read the full definition of a single compute resource for the new-workload form.",
-            "command": "runai describe compute {name} --json",
-            "placeholders": [
-                {"name": "name", "description": "Compute resource name"},
-                {"name": "project", "description": "Run:ai project name"},
-            ],
-        },
-        {
-            "key": "environment_list",
-            "label": "List environments",
-            "description": "List environments used when building a new workload.",
-            "command": "runai list environment --json",
-            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
-        },
-        {
-            "key": "environment_describe",
-            "label": "Describe environment",
-            "description": "Read the full definition of a single environment for the new-workload form.",
-            "command": "runai describe environment {name} --json",
-            "placeholders": [
-                {"name": "name", "description": "Environment name"},
-                {"name": "project", "description": "Run:ai project name"},
-            ],
-        },
-        {
-            "key": "datasource_list",
-            "label": "List data sources",
-            "description": "List data sources used when building a new workload.",
-            "command": "runai list datasource --json",
-            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
-        },
-        {
-            "key": "datasource_describe",
-            "label": "Describe data source",
-            "description": "Read the full definition of a single data source for the new-workload form.",
-            "command": "runai describe datasource {name} --json",
-            "placeholders": [
-                {"name": "name", "description": "Data source name"},
-                {"name": "project", "description": "Run:ai project name"},
-            ],
-        },
-        {
-            "key": "nodepool_list",
-            "label": "List node pools",
-            "description": "List node pools available for a new workload.",
-            "command": "runai list node-pools --json",
-            "placeholders": [],
         },
         {
             "key": "submit",
             "label": "Submit workload",
             "description": "Base command to submit a workload. Workload flags are appended automatically.",
-            "command": "runai submit",
-            "placeholders": [],
+            "command": "runai submit -p {project}",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
         },
         {
             "key": "delete_workload",
             "label": "Delete workload",
-            "description": "Delete a workload. The active project is selected beforehand.",
-            "command": "runai delete {name}",
+            "description": "Delete a workload in the selected project.",
+            "command": "runai delete job {name} -p {project}",
             "placeholders": [
                 {"name": "name", "description": "Workload name"},
                 {"name": "project", "description": "Run:ai project name"},
@@ -371,7 +304,7 @@ RUNAI_COMMAND_CATALOG = {
             "key": "stop_workload",
             "label": "Stop workload",
             "description": "Suspend (stop) a running workload.",
-            "command": "runai suspend {name}",
+            "command": "runai suspend {name} -p {project}",
             "placeholders": [
                 {"name": "name", "description": "Workload name"},
                 {"name": "project", "description": "Run:ai project name"},
@@ -381,7 +314,7 @@ RUNAI_COMMAND_CATALOG = {
             "key": "workload_logs",
             "label": "Workload logs",
             "description": "Read console logs for a single workload.",
-            "command": "runai logs {name} --tail {tail}",
+            "command": "runai logs {name} --tail {tail} -p {project}",
             "placeholders": [
                 {"name": "name", "description": "Workload name"},
                 {"name": "tail", "description": "Number of trailing log lines"},
@@ -410,6 +343,22 @@ class AutoscalerBLL:
         "OPENSHIFT_CLI",
         "OC_BINARY",
     )
+    _project_flag_command_keys = frozenset({
+        "workload_list",
+        "compute_list",
+        "compute_describe",
+        "environment_list",
+        "environment_describe",
+        "datasource_list",
+        "datasource_describe",
+        "submit_training",
+        "submit_workspace",
+        "submit_inference",
+        "submit",
+        "delete_workload",
+        "stop_workload",
+        "workload_logs",
+    })
     _workload_fields = (
         "workload_type",
         "workload_name",
@@ -824,7 +773,31 @@ class AutoscalerBLL:
         data = cls._load_json(raw) if isinstance(raw, str) else raw
         if not isinstance(data, dict):
             return {}
-        return data
+        normalized = {}
+        for version, commands in data.items():
+            if not isinstance(commands, dict):
+                continue
+            normalized[version] = {
+                key: cls._ensure_project_placeholder(key, template)
+                for key, template in commands.items()
+            }
+        return normalized
+
+    @classmethod
+    def _ensure_project_placeholder(cls, key: str, template):
+        text = str(template or "").strip()
+        if key not in cls._project_flag_command_keys or not text:
+            return text
+        if "{project}" in text or "{selected_project}" in text:
+            return text
+        try:
+            has_project_flag = any(
+                part == "-p" or part == "--project" or part.startswith("--project=")
+                for part in shlex.split(text)
+            )
+        except ValueError:
+            has_project_flag = True
+        return text if has_project_flag else f"{text} -p {{project}}"
 
     @classmethod
     def _command_override_argv(cls, conn, version: str, key: Optional[str], subs: Optional[dict]):
@@ -835,24 +808,33 @@ class AutoscalerBLL:
         if not template or not str(template).strip():
             return None
         try:
-            formatted = str(template).format_map(_SafeFormatDict(subs or {}))
+            values = dict(subs or {})
+            selected_project = values.get("project") or values.get("selected_project") or ""
+            values.setdefault("project", selected_project)
+            values.setdefault("selected_project", selected_project)
+            formatted = str(template).format_map(_SafeFormatDict(values))
             argv = shlex.split(formatted)
         except Exception:
             return None
         return argv or None
 
     @classmethod
-    def _submit_prefix(cls, conn, version: str, wtype: str) -> list:
+    def _submit_prefix(cls, conn, version: str, wtype: str, project: str = "") -> list:
+        substitutions = {"project": project or ""}
         if version == "v2":
             defaults = {
                 "training": ["runai", "training", "standard", "submit"],
                 "workspace": ["runai", "workspace", "submit"],
                 "inference": ["runai", "inference", "submit"],
             }
-            override = cls._command_override_argv(conn, "v2", f"submit_{wtype}", {})
-            return override or defaults.get(wtype, ["runai", wtype, "submit"])
-        override = cls._command_override_argv(conn, "v1", "submit", {})
-        return override or ["runai", "submit"]
+            override = cls._command_override_argv(conn, "v2", f"submit_{wtype}", substitutions)
+            prefix = override or defaults.get(wtype, ["runai", wtype, "submit"])
+        else:
+            override = cls._command_override_argv(conn, "v1", "submit", substitutions)
+            prefix = override or ["runai", "submit"]
+        if project and not override:
+            prefix = [*prefix, "-p", project]
+        return prefix
 
     def test_connection(self, company_id: str, user_id: str = None, worker_id: str = None) -> dict:
         settings = AutoscalerSettings.objects(company=company_id).first()
@@ -1210,6 +1192,10 @@ class AutoscalerBLL:
         }
 
     def _collect_project_resources(self, conn, env: dict, project: str) -> dict:
+        if (getattr(conn, "runai_cli_version", None) or "auto").lower() == "v1":
+            raise RuntimeError(
+                "Run:ai compute resources, environments, and data sources require CLI v2"
+            )
         console_log = []
         self._set_runai_context(conn, env, project)
         projects = self._runai_records_with_fallback(
@@ -1376,11 +1362,11 @@ class AutoscalerBLL:
         ])
         v2_commands = [[*cmd, "--tail", tail] for cmd in v2_commands]
         if project:
-            v2_commands = [[*cmd, "--project", project] for cmd in v2_commands]
+            v2_commands = [[*cmd, "-p", project] for cmd in v2_commands]
 
         v1_commands = [["runai", "logs", name, "--tail", tail]]
         if project:
-            v1_commands = [[*cmd, "--project", project] for cmd in v1_commands]
+            v1_commands = [[*cmd, "-p", project] for cmd in v1_commands]
         return cls._cli_candidates(
             conn, v2_commands, v1_commands,
             key="workload_logs",
@@ -1753,19 +1739,20 @@ class AutoscalerBLL:
         secret_key = getattr(conn, "runai_secret_key", None)
         if not access_key or not secret_key:
             raise RuntimeError("Run:ai application access key and secret key are required")
+        if (getattr(conn, "runai_cli_version", None) or "auto").lower() == "v1":
+            raise RuntimeError(
+                "Run:ai CLI v1 does not support access-key login; use OpenShift credentials or CLI v2"
+            )
 
         commands = cls._cli_candidates(
             conn,
             [
                 [
-                    "runai", "login", "application", "--client-id", access_key,
+                    "runai", "login", "access-key", "--client-id", access_key,
                     "--secret", secret_key, "--interactive", "disabled",
                 ],
             ],
-            [
-                ["runai", "login", "application", "--name", access_key, "--secret", secret_key, "--interactive", "disabled"],
-                ["runai", "login", "app", "--name", access_key, "--secret", secret_key, "--interactive", "disabled"],
-            ],
+            [],
             key="login",
             subs={"access_key": access_key, "secret_key": secret_key},
         )
@@ -1845,9 +1832,13 @@ class AutoscalerBLL:
         last_records = []
         for cmd in commands:
             records, success = cls._runai_records_from_command(cmd, env, console_log)
-            last_records = records
-            if success:
+            if records:
                 return records
+            if success:
+                # A project-scoped query may legitimately return an empty list
+                # even though the CLI's active project contains the requested
+                # assets. Keep trying the context/unscoped fallback commands.
+                last_records = records
         return last_records
 
     @classmethod
@@ -2105,7 +2096,6 @@ class AutoscalerBLL:
             ["runai", "project", "list", "--json"],
             ["runai", "project", "list", "--json", "--no-pagination"],
         ], [
-            ["runai", "list", "projects", "--json"],
             ["runai", "list", "projects"],
         ], key="project_list")
 
@@ -2114,7 +2104,6 @@ class AutoscalerBLL:
         return cls._cli_candidates(conn, [
             ["runai", "node", "list", "--json"],
         ], [
-            ["runai", "list", "nodes", "--json"],
             ["runai", "list", "nodes"],
         ], key="node_list")
 
@@ -2126,10 +2115,7 @@ class AutoscalerBLL:
                 ["runai", "compute", "list", "--json"],
                 ["runai", "compute", "list"],
             ], project),
-            cls._with_project([
-                ["runai", "list", "compute", "--json"],
-                ["runai", "list", "compute"],
-            ], project),
+            [],
             key="compute_list",
             subs={"project": project or ""},
         )
@@ -2142,10 +2128,7 @@ class AutoscalerBLL:
                 ["runai", "environment", "list", "--json"],
                 ["runai", "environment", "list"],
             ], project),
-            cls._with_project([
-                ["runai", "list", "environment", "--json"],
-                ["runai", "list", "environment"],
-            ], project),
+            [],
             key="environment_list",
             subs={"project": project or ""},
         )
@@ -2158,10 +2141,7 @@ class AutoscalerBLL:
                 ["runai", "datasource", "list", "--json"],
                 ["runai", "datasource", "list"],
             ], project),
-            cls._with_project([
-                ["runai", "list", "datasource", "--json"],
-                ["runai", "list", "datasource"],
-            ], project),
+            [],
             key="datasource_list",
             subs={"project": project or ""},
         )
@@ -2176,10 +2156,7 @@ class AutoscalerBLL:
                 ["runai", "compute", "describe", name, "-o", "json"],
                 ["runai", "compute", "describe", name],
             ], project),
-            cls._with_project([
-                ["runai", "describe", "compute", name, "--json"],
-                ["runai", "describe", "compute", name],
-            ], project),
+            [],
             key="compute_describe",
             subs={"name": name, "project": project or ""},
         )
@@ -2194,10 +2171,7 @@ class AutoscalerBLL:
                 ["runai", "environment", "describe", name, "-o", "json"],
                 ["runai", "environment", "describe", name],
             ], project),
-            cls._with_project([
-                ["runai", "describe", "environment", name, "--json"],
-                ["runai", "describe", "environment", name],
-            ], project),
+            [],
             key="environment_describe",
             subs={"name": name, "project": project or ""},
         )
@@ -2218,10 +2192,7 @@ class AutoscalerBLL:
                 ] if source_type else []),
                 ["runai", "datasource", "describe", name],
             ], project),
-            cls._with_project([
-                ["runai", "describe", "datasource", name, "--json"],
-                ["runai", "describe", "datasource", name],
-            ], project),
+            [],
             key="datasource_describe",
             subs={"name": name, "project": project or "", "type": source_type},
         )
@@ -2234,10 +2205,7 @@ class AutoscalerBLL:
                 ["runai", "nodepool", "list", "--json"],
                 ["runai", "nodepool", "list"],
             ],
-            [
-                ["runai", "list", "node-pools", "--json"],
-                ["runai", "list", "node-pools"],
-            ],
+            [],
             key="nodepool_list",
         )
 
@@ -2245,7 +2213,7 @@ class AutoscalerBLL:
     def _with_project(commands: list, project: Optional[str]) -> list:
         if not project:
             return commands
-        return [[*cmd, "--project", project] for cmd in commands] + commands
+        return [[*cmd, "-p", project] for cmd in commands] + commands
 
     @classmethod
     def _workload_list_commands(cls, conn) -> list:
@@ -2253,10 +2221,10 @@ class AutoscalerBLL:
         v1_cmd = ["runai", "list", "jobs", "--json"]
         project = getattr(conn, "runai_project", None)
         if project:
-            v2_cmd = [*v2_cmd, "--project", project]
-            v1_cmd = [*v1_cmd, "--project", project]
+            v2_cmd = [*v2_cmd, "-p", project]
+            v1_cmd = ["runai", "list", "jobs", "-p", project]
         else:
-            v1_cmd.append("--all-projects")
+            v1_cmd = ["runai", "list", "jobs", "--all-projects"]
         return cls._cli_candidates(conn, [v2_cmd], [v1_cmd, ["runai", "list", "jobs"]], key="workload_list", subs={"project": project or ""})
 
     @classmethod
@@ -2264,21 +2232,15 @@ class AutoscalerBLL:
         name = request.workload_name
         project = request.project or getattr(conn, "runai_project", None)
         workload_type = request.workload_type or "workload"
-        v2_commands = [
-            ["runai", "workload", "delete", name, "--force"],
-            ["runai", "delete", "workload", name, "--force"],
-        ]
+        v2_commands = [["runai", "workload", "delete", "-y", name]]
         if workload_type in {"training", "workspace", "inference"}:
-            v2_commands.insert(0, ["runai", workload_type, "delete", name, "--force"])
+            v2_commands.insert(0, ["runai", workload_type, "delete", name])
         if project:
-            v2_commands = [[*cmd, "--project", project] for cmd in v2_commands]
+            v2_commands = [[*cmd, "-p", project] for cmd in v2_commands]
 
-        v1_commands = [
-            ["runai", "delete", name],
-            ["runai", "delete", "job", name],
-        ]
+        v1_commands = [["runai", "delete", "job", name]]
         if project:
-            v1_commands = [[*cmd, "--project", project] for cmd in v1_commands]
+            v1_commands = [[*cmd, "-p", project] for cmd in v1_commands]
         return cls._cli_candidates(conn, v2_commands, v1_commands, key="delete_workload", subs={"name": name, "project": project or ""})
 
     @classmethod
@@ -2286,22 +2248,22 @@ class AutoscalerBLL:
         name = request.workload_name
         project = request.project or getattr(conn, "runai_project", None)
         workload_type = request.workload_type or "workload"
-        v2_commands = [
-            ["runai", "workload", "suspend", name],
-            ["runai", "suspend", "workload", name],
-        ]
-        if workload_type in {"training", "workspace", "inference"}:
-            v2_commands.insert(0, ["runai", workload_type, "suspend", name])
+        v2_commands = []
+        if workload_type in {"training", "workspace"}:
+            v2_commands.append(["runai", workload_type, "suspend", name])
         if project:
-            v2_commands = [[*cmd, "--project", project] for cmd in v2_commands]
+            v2_commands = [[*cmd, "-p", project] for cmd in v2_commands]
 
-        v1_commands = [
-            ["runai", "suspend", name],
-            ["runai", "suspend", "job", name],
-        ]
+        v1_commands = [["runai", "suspend", name]]
         if project:
-            v1_commands = [[*cmd, "--project", project] for cmd in v1_commands]
-        return cls._cli_candidates(conn, v2_commands, v1_commands, key="stop_workload", subs={"name": name, "project": project or ""})
+            v1_commands = [[*cmd, "-p", project] for cmd in v1_commands]
+        return cls._cli_candidates(
+            conn,
+            v2_commands,
+            v1_commands,
+            key="stop_workload",
+            subs={"name": name, "project": project or "", "workload_type": workload_type},
+        )
 
     @staticmethod
     def _redact_command(cmd: list) -> str:
@@ -2323,15 +2285,32 @@ class AutoscalerBLL:
             return data
         if not isinstance(data, dict):
             return []
+        empty_collection = None
         for key in ("items", "data", "workloads", "nodes", "projects", "results", "resources"):
             value = data.get(key)
             if isinstance(value, list):
-                return value
+                if value:
+                    return value
+                empty_collection = value
             if isinstance(value, dict):
                 nested = cls._extract_records(value)
                 if nested:
                     return nested
-        return []
+
+        # Run:ai v2 uses command-specific wrapper names (for example
+        # ``environments``, ``compute`` or ``datasources``). Search any
+        # remaining JSON object values so new wrapper names do not silently
+        # turn a successful CLI response into empty Submit Workload cards.
+        for value in data.values():
+            if isinstance(value, list):
+                if value:
+                    return value
+                empty_collection = value
+            elif isinstance(value, dict):
+                nested = cls._extract_records(value)
+                if nested:
+                    return nested
+        return empty_collection or []
 
     @staticmethod
     def _extract_table_records(output: str) -> list:
@@ -2671,6 +2650,39 @@ class AutoscalerBLL:
         if workload.template:
             cmd.extend(["--template", workload.template])
 
+        # Run:ai v2 asset selections populated by the Submit Workload cards.
+        # These are added only to the v2 command below because CLI v1 does not
+        # expose compute/environment/data-source assets.
+        v2_asset_args = []
+        if workload.compute:
+            v2_asset_args.extend(["--compute", workload.compute])
+        if workload.environment:
+            for environment_name in workload.environment.split(","):
+                environment_name = environment_name.strip()
+                if environment_name:
+                    v2_asset_args.extend(["--environment", environment_name])
+        if workload.data_sources:
+            data_sources = cls._load_json(workload.data_sources)
+            if not isinstance(data_sources, list):
+                data_sources = [
+                    {"name": name.strip()}
+                    for name in workload.data_sources.split(",")
+                    if name.strip()
+                ]
+            for data_source in data_sources:
+                if isinstance(data_source, str):
+                    data_source = {"name": data_source}
+                if not isinstance(data_source, dict):
+                    continue
+                name = str(data_source.get("name") or "").strip()
+                source_type = str(data_source.get("type") or "").strip()
+                if not name:
+                    continue
+                descriptor = f"name={name}"
+                if source_type:
+                    descriptor = f"type={source_type},{descriptor}"
+                v2_asset_args.extend(["--datasource", descriptor])
+
         # Command
         if workload.command:
             cmd.extend(["-c", workload.command])
@@ -2751,14 +2763,16 @@ class AutoscalerBLL:
             if workload.scale_to_zero_retention:
                 cmd.extend(["--scale-to-zero-retention-seconds", workload.scale_to_zero_retention])
 
-        # Args after --
+        # Args after -- must remain the final argv tokens.
+        trailing_args = []
         if workload.args:
-            cmd.append("--")
-            cmd.extend(workload.args.split())
+            trailing_args.append("--")
+            trailing_args.extend(workload.args.split())
 
-        prefix_v2 = cls._submit_prefix(conn, "v2", wtype)
-        prefix_v1 = cls._submit_prefix(conn, "v1", wtype)
-        v2_cmd = [*prefix_v2, *cmd]
-        v1_cmd = [*prefix_v1, *cmd]
+        project = workload.project or getattr(conn, "runai_project", None) or ""
+        prefix_v2 = cls._submit_prefix(conn, "v2", wtype, project)
+        prefix_v1 = cls._submit_prefix(conn, "v1", wtype, project)
+        v2_cmd = [*prefix_v2, *cmd, *v2_asset_args, *trailing_args]
+        v1_cmd = [*prefix_v1, *cmd, *trailing_args]
 
         return cls._cli_candidates(conn, [v2_cmd], [v1_cmd])

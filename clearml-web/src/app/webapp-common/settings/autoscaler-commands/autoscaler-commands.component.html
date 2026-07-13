@@ -93,6 +93,12 @@
                         }
                       </div>
 
+                      @if (missingPlaceholders(version.id, entry).length) {
+                        <div class="status error">
+                          Command is missing: {{ missingPlaceholders(version.id, entry).join(', ') }}
+                        </div>
+                      }
+
                       <div class="playground-placeholder-grid">
                         @for (ph of entry.placeholders; track ph.name) {
                           <mat-form-field appearance="outline" class="placeholder-field">
@@ -111,7 +117,7 @@
                       <button type="button"
                               mat-flat-button
                               color="primary"
-                              [disabled]="!connectionOk() || isRunning(version.id, entry.key)"
+                              [disabled]="!connectionOk() || isRunning(version.id, entry.key) || missingPlaceholders(version.id, entry).length > 0"
                               (click)="runCommand(version.id, entry)">
                         @if (isRunning(version.id, entry.key)) { Running… } @else { Run raw command }
                       </button>
