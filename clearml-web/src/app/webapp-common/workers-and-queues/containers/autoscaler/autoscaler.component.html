@@ -256,21 +256,20 @@
 
           <!-- environment asset cards -->
           <div class="asset-cards">
-            @for (resource of environmentResources(); track resource.name) {
+            @for (resource of pagedEnvironments(); track resource.name) {
               <button type="button" class="asset-card"
                       [class.selected]="isEnvironmentSelected(resource)"
                       (click)="toggleEnvironment(resource)">
-                <span class="asset-card-check">
-                  @if (isEnvironmentSelected(resource)) {
-                    <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
-                  }
+                <span class="asset-card-badge">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 </span>
-                <span class="asset-card-body">
-                  <span class="asset-card-name">{{ resource.name }}</span>
-                  @if (resource.image) {
-                    <span class="asset-card-meta">{{ resource.image }}</span>
-                  }
+                <span class="asset-card-icon">
+                  <svg viewBox="0 0 50 50" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="10" y="10" width="30" height="30" rx="4"></rect><path d="M18 18 l14 14 M32 18 l-14 14"></path></svg>
                 </span>
+                <span class="asset-card-name">{{ resource.name }}</span>
+                @if (resource.image) {
+                  <span class="asset-card-meta"><b>Image:</b> {{ resource.image }}</span>
+                }
               </button>
             } @empty {
               <div class="asset-empty-card">
@@ -284,6 +283,15 @@
               </div>
             }
           </div>
+          @if (environmentPageCount() > 1) {
+            <div class="asset-pagination">
+              @for (p of pageArray(environmentPageCount()); track p) {
+                <button type="button" class="asset-page-num"
+                        [class.active]="environmentPage() === p"
+                        (click)="environmentPage.set(p)">{{ p + 1 }}</button>
+              }
+            </div>
+          }
 
           <!-- manual environment fields -->
           <div class="manual-fields form-grid">
@@ -469,22 +477,22 @@
 
           <!-- compute asset cards -->
           <div class="asset-cards">
-            @for (resource of computeResources(); track resource.name) {
+            @for (resource of pagedCompute(); track resource.name) {
               <button type="button" class="asset-card"
                       [class.selected]="isComputeSelected(resource)"
                       (click)="selectCompute(resource)">
-                <span class="asset-card-check">
-                  @if (isComputeSelected(resource)) {
-                    <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
-                  }
+                <span class="asset-card-badge">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 </span>
-                <span class="asset-card-body">
-                  <span class="asset-card-name">{{ resource.name }}</span>
-                  @if (resource.gpu_devices_request) {
-                    <span class="asset-card-meta">{{ resource.gpu_devices_request }} GPU</span>
-                  } @else if (resource.cpu_core_request) {
-                    <span class="asset-card-meta">{{ resource.cpu_core_request }} CPU</span>
-                  }
+                <span class="asset-card-icon">
+                  <svg viewBox="0 0 50 50" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="10" width="40" height="12" rx="2"></rect><line x1="10" y1="16" x2="25" y2="16"></line><circle cx="36" cy="16" r="1.5" fill="currentColor" stroke="none"></circle><circle cx="40" cy="16" r="1.5" fill="currentColor" stroke="none"></circle><rect x="5" y="28" width="40" height="12" rx="2"></rect><line x1="10" y1="34" x2="25" y2="34"></line><circle cx="36" cy="34" r="1.5" fill="currentColor" stroke="none"></circle><circle cx="40" cy="34" r="1.5" fill="currentColor" stroke="none"></circle></svg>
+                </span>
+                <span class="asset-card-name">{{ resource.name }}</span>
+                <span class="asset-card-meta">
+                  @if (resource.gpu_devices_request) { <span>GPU devices: {{ resource.gpu_devices_request }}</span> }
+                  @if (resource.gpu_portion_request) { <span>GPU % (of device): {{ resource.gpu_portion_request }}</span> }
+                  @if (resource.cpu_core_request) { <span>CPU compute (Cores): {{ resource.cpu_core_request }}</span> }
+                  @if (resource.cpu_memory_request) { <span>CPU Memory (MB): {{ resource.cpu_memory_request }}</span> }
                 </span>
               </button>
             } @empty {
@@ -499,6 +507,15 @@
               </div>
             }
           </div>
+          @if (computePageCount() > 1) {
+            <div class="asset-pagination">
+              @for (p of pageArray(computePageCount()); track p) {
+                <button type="button" class="asset-page-num"
+                        [class.active]="computePage() === p"
+                        (click)="computePage.set(p)">{{ p + 1 }}</button>
+              }
+            </div>
+          }
 
           <!-- manual compute fields -->
           <div class="manual-fields form-grid">
@@ -588,21 +605,20 @@
 
           <!-- data source asset cards -->
           <div class="asset-cards">
-            @for (resource of dataSourceResources(); track resource.name) {
+            @for (resource of pagedDataSources(); track resource.name) {
               <button type="button" class="asset-card"
                       [class.selected]="isDataSourceSelected(resource)"
                       (click)="toggleDataSource(resource)">
-                <span class="asset-card-check">
-                  @if (isDataSourceSelected(resource)) {
-                    <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
-                  }
+                <span class="asset-card-badge">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
                 </span>
-                <span class="asset-card-body">
-                  <span class="asset-card-name">{{ resource.name }}</span>
-                  @if (resource.type) {
-                    <span class="asset-card-meta">{{ resource.type }}</span>
-                  }
+                <span class="asset-card-icon">
+                  <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 10 H16 L20 14 H36 V34 H4 Z"></path></svg>
                 </span>
+                <span class="asset-card-name">{{ resource.name }}</span>
+                @if (resource.type) {
+                  <span class="asset-card-meta">Type: {{ resource.type }}</span>
+                }
               </button>
             } @empty {
               <div class="asset-empty-card">
@@ -616,6 +632,15 @@
               </div>
             }
           </div>
+          @if (dataSourcePageCount() > 1) {
+            <div class="asset-pagination">
+              @for (p of pageArray(dataSourcePageCount()); track p) {
+                <button type="button" class="asset-page-num"
+                        [class.active]="dataSourcePage() === p"
+                        (click)="dataSourcePage.set(p)">{{ p + 1 }}</button>
+              }
+            </div>
+          }
 
           <!-- manual data source fields -->
           <div class="manual-fields form-grid">
@@ -734,27 +759,45 @@
                      (click)="selectInstance(instance)"
                      (keydown.enter)="selectInstance(instance)"
                      (keydown.space)="selectInstance(instance)">
-                  <span class="instance-main">
-                    <span class="instance-name">{{ instance.name }}</span>
-                    <span class="instance-meta">{{ instance.status || 'unknown' }} · {{ instance.type || 'workload' }}</span>
-                  </span>
-                  <button mat-icon-button type="button"
-                          aria-label="Instance details"
-                          (click)="openInstanceDetails($event, instance, workloadDialog)">
-                    <mat-icon fontSet="al" fontIcon="al-ico-info-circle"></mat-icon>
-                  </button>
-                  @if (canStopInstance(instance)) {
+                  <div class="ai-logo">
+                    <mat-icon fontSet="al" [fontIcon]="instanceTypeIcon(instance.type)"></mat-icon>
+                  </div>
+                  <div class="ai-body">
+                    <div class="ai-top">
+                      <span class="ai-name">{{ instance.name }}</span>
+                      <span class="ai-status"
+                            [class.pending]="statusClassFor(instance.status) === 'pending'"
+                            [class.failed]="statusClassFor(instance.status) === 'failed'">
+                        {{ (instance.status || 'unknown') | titlecase }}
+                      </span>
+                    </div>
+                    <div class="ai-meta">
+                      {{ (instance.type || 'workload') | titlecase }}
+                      @if (instance.project) {
+                        <span aria-hidden="true">&middot;</span>
+                        <span class="ai-project">{{ instance.project }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="ai-actions">
                     <button mat-icon-button type="button"
-                            aria-label="Stop app instance"
-                            (click)="stopInstance($event, instance)">
-                      <mat-icon fontSet="al" fontIcon="al-ico-abort"></mat-icon>
+                            aria-label="Instance details"
+                            (click)="openInstanceDetails($event, instance, workloadDialog)">
+                      <mat-icon fontSet="al" fontIcon="al-ico-info-circle"></mat-icon>
                     </button>
-                  }
-                  <button mat-icon-button type="button"
-                          aria-label="Delete app instance"
-                          (click)="deleteInstance($event, instance)">
-                    <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
-                  </button>
+                    @if (canStopInstance(instance)) {
+                      <button mat-icon-button type="button"
+                              aria-label="Stop app instance"
+                              (click)="stopInstance($event, instance)">
+                        <mat-icon fontSet="al" fontIcon="al-ico-abort"></mat-icon>
+                      </button>
+                    }
+                    <button mat-icon-button type="button"
+                            aria-label="Delete app instance"
+                            (click)="deleteInstance($event, instance)">
+                      <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+                    </button>
+                  </div>
                 </div>
               }
             </div>

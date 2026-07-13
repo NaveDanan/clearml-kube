@@ -210,6 +210,41 @@ RUNAI_COMMAND_CATALOG = {
                 {"name": "project", "description": "Run:ai project name"},
             ],
         },
+        {
+            "key": "api_token",
+            "label": "REST API: get access token",
+            "description": "POST endpoint used to obtain a Run:ai REST API bearer token for the workload info visualizer (client-credentials grant).",
+            "command": "POST {cp_url}/api/v1/token",
+            "placeholders": [{"name": "cp_url", "description": "Run:ai control plane URL"}],
+        },
+        {
+            "key": "api_workload_details",
+            "label": "REST API: workload details",
+            "description": "GET endpoint for a workload's details (workload info visualizer).",
+            "command": "GET /api/v1/workloads/{workload_id}",
+            "placeholders": [{"name": "workload_id", "description": "Run:ai workload id (uuid)"}],
+        },
+        {
+            "key": "api_workload_events",
+            "label": "REST API: workload events",
+            "description": "GET endpoint for a workload's event history.",
+            "command": "GET /api/v1/workloads/{workload_id}/events",
+            "placeholders": [{"name": "workload_id", "description": "Run:ai workload id (uuid)"}],
+        },
+        {
+            "key": "api_workload_logs",
+            "label": "REST API: workload logs",
+            "description": "GET endpoint for a workload's logs (tailLines applied automatically).",
+            "command": "GET /api/v1/workloads/{workload_id}/logs",
+            "placeholders": [{"name": "workload_id", "description": "Run:ai workload id (uuid)"}],
+        },
+        {
+            "key": "api_workload_metrics",
+            "label": "REST API: workload metrics",
+            "description": "GET endpoint for a workload's GPU/CPU utilization and memory metrics (metric types applied automatically).",
+            "command": "GET /api/v1/workloads/{workload_id}/metrics",
+            "placeholders": [{"name": "workload_id", "description": "Run:ai workload id (uuid)"}],
+        },
     ],
     "v1": [
         {
@@ -490,15 +525,45 @@ class AutoscalerBLL:
         url = (getattr(settings, "runai_cp_url", None) or "").strip()
         return url.rstrip("/") if url else None
 
+    @staticmethod
+    def _catalog_command_default(version: str, key: str) -> Optional[str]:
+        for entry in RUNAI_COMMAND_CATALOG.get(version, []):
+            if entry.get("key") == key:
+                return entry.get("command")
+        return None
+
+    @classmethod
+    def _api_endpoint(cls, settings, key: str, subs: dict = None) -> Optional[str]:
+        """Resolve a REST API URL/path from the editable command catalog (a saved
+        override under v2/v1, else the catalog default), stripping the HTTP verb."""
+        default = cls._catalog_command_default("v2", key) or ""
+        overrides = cls._command_overrides(settings)
+        template = (
+            (overrides.get("v2") or {}).get(key)
+            or (overrides.get("v1") or {}).get(key)
+            or default
+        )
+        if not template:
+            return None
+        try:
+            text = str(template).format_map(_SafeFormatDict(subs or {}))
+        except Exception:
+            text = default
+        parts = text.strip().split(None, 1)
+        if len(parts) == 2 and parts[0].upper() in ("GET", "POST", "PUT", "DELETE", "PATCH"):
+            return parts[1].strip()
+        return text.strip()
+
     def _fetch_api_token(self, settings, company_id: str) -> Optional[str]:
         base = self._api_base(settings)
         client_id = (getattr(settings, "runai_access_key", None) or "").strip()
         client_secret = (getattr(settings, "runai_secret_key", None) or "").strip()
         if not base or not client_id or not client_secret:
             return None
+        token_url = self._api_endpoint(settings, "api_token", {"cp_url": base}) or f"{base}/api/v1/token"
         try:
             resp = requests.post(
-                f"{base}/api/v1/token",
+                token_url,
                 json={
                     "grantType": "client_credentials",
                     "clientId": client_id,
@@ -584,14 +649,18 @@ class AutoscalerBLL:
         if not self._get_api_token(settings, company_id):
             return {"connected": False, "error": "Failed to obtain a Run:ai API access token"}
 
-        wl = f"/api/v1/workloads/{workload_id}"
-        details = self._api_get(settings, company_id, wl) or {}
-        events = self._api_get(settings, company_id, f"{wl}/events") or {}
-        logs = self._api_get(settings, company_id, f"{wl}/logs", {"tailLines": 200})
+        subs = {"workload_id": workload_id}
+        details_path = self._api_endpoint(settings, "api_workload_details", subs) or f"/api/v1/workloads/{workload_id}"
+        events_path = self._api_endpoint(settings, "api_workload_events", subs) or f"/api/v1/workloads/{workload_id}/events"
+        logs_path = self._api_endpoint(settings, "api_workload_logs", subs) or f"/api/v1/workloads/{workload_id}/logs"
+        metrics_path = self._api_endpoint(settings, "api_workload_metrics", subs) or f"/api/v1/workloads/{workload_id}/metrics"
+        details = self._api_get(settings, company_id, details_path) or {}
+        events = self._api_get(settings, company_id, events_path) or {}
+        logs = self._api_get(settings, company_id, logs_path, {"tailLines": 200})
         metrics = self._api_get(
             settings,
             company_id,
-            f"{wl}/metrics",
+            metrics_path,
             [
                 ("metricType", "GPU_UTILIZATION"),
                 ("metricType", "GPU_MEMORY_USAGE_BYTES"),

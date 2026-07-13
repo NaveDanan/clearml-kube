@@ -1,6 +1,6 @@
 import {ChangeDetectionStrategy, Component, ElementRef, OnDestroy, TemplateRef, computed, effect, inject, signal, untracked, viewChild} from '@angular/core';
 import {Store} from '@ngrx/store';
-import {DecimalPipe, NgTemplateOutlet} from '@angular/common';
+import {DecimalPipe, NgTemplateOutlet, TitleCasePipe} from '@angular/common';
 import {AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatInputModule} from '@angular/material/input';
@@ -43,6 +43,7 @@ export type WorkloadType = 'training' | 'workspace' | 'inference';
 
 const INSTANCE_LOG_REFRESH_INTERVAL = 4000;
 const WORKLOAD_INFO_REFRESH_INTERVAL = 5000;
+const ASSET_PAGE_SIZE = 6;
 
 type ConnectionMethod = 'openshift' | 'runai_application';
 type OpenshiftLoginMode = 'fields' | 'command';
@@ -132,6 +133,7 @@ interface EnvVarGroup {
     ReactiveFormsModule,
     NgTemplateOutlet,
     DecimalPipe,
+    TitleCasePipe,
   ]
 })
 export class AutoscalerComponent implements OnDestroy {
@@ -161,6 +163,31 @@ export class AutoscalerComponent implements OnDestroy {
   protected environmentResources = computed<AutoscalerEnvironmentResource[]>(() => this.projectResources()?.environments ?? []);
   protected dataSourceResources = computed<AutoscalerDataSourceResource[]>(() => this.projectResources()?.data_sources ?? []);
   protected nodePoolResources = computed<string[]>(() => this.projectResources()?.node_pools ?? []);
+  // Asset-card pagination (Environment / Compute / Data Sources)
+  protected environmentPage = signal(0);
+  protected computePage = signal(0);
+  protected dataSourcePage = signal(0);
+  protected environmentPageCount = computed(() => Math.max(1, Math.ceil(this.environmentResources().length / ASSET_PAGE_SIZE)));
+  protected computePageCount = computed(() => Math.max(1, Math.ceil(this.computeResources().length / ASSET_PAGE_SIZE)));
+  protected dataSourcePageCount = computed(() => Math.max(1, Math.ceil(this.dataSourceResources().length / ASSET_PAGE_SIZE)));
+  protected pagedEnvironments = computed(() => {
+    const all = this.environmentResources();
+    const page = Math.min(this.environmentPage(), this.environmentPageCount() - 1);
+    return all.slice(page * ASSET_PAGE_SIZE, (page + 1) * ASSET_PAGE_SIZE);
+  });
+  protected pagedCompute = computed(() => {
+    const all = this.computeResources();
+    const page = Math.min(this.computePage(), this.computePageCount() - 1);
+    return all.slice(page * ASSET_PAGE_SIZE, (page + 1) * ASSET_PAGE_SIZE);
+  });
+  protected pagedDataSources = computed(() => {
+    const all = this.dataSourceResources();
+    const page = Math.min(this.dataSourcePage(), this.dataSourcePageCount() - 1);
+    return all.slice(page * ASSET_PAGE_SIZE, (page + 1) * ASSET_PAGE_SIZE);
+  });
+  protected pageArray(count: number): number[] {
+    return Array.from({length: count}, (_, i) => i);
+  }
   protected availableProjects = computed<string[]>(() => {
     const names = new Set<string>();
     const add = (value?: string | null) => {
@@ -627,6 +654,17 @@ export class AutoscalerComponent implements OnDestroy {
       return 'pending';
     }
     return '';
+  }
+
+  protected instanceTypeIcon(type?: string): string {
+    switch ((type || '').toLowerCase()) {
+      case 'workspace':
+        return 'al-ico-experiment-view';
+      case 'inference':
+        return 'al-ico-model-endpoints';
+      default:
+        return 'al-ico-queues';
+    }
   }
 
   private syncWorkloadInfoRefresh(workloadId: string, active: boolean) {

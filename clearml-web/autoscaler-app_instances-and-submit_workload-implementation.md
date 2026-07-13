@@ -166,12 +166,12 @@ scroll internally instead of the whole page:
 
 ## Porting checklist (App Instances)
 
-- [ ] Replace the instance-row template with the `.ai-logo/.ai-body/.ai-top/.ai-meta` markup.
-- [ ] Add the row/status/actions SCSS above to `autoscaler.component.scss`.
-- [ ] Add the flex chain: `.provider-sidebar`, `.sidebar-block`, `.sidebar-state`,
+- [x] Replace the instance-row template with the `.ai-logo/.ai-body/.ai-top/.ai-meta` markup.
+- [x] Add the row/status/actions SCSS above to `autoscaler.component.scss`.
+- [x] Add the flex chain: `.provider-sidebar`, `.sidebar-block`, `.sidebar-state`,
       `.app-instance-list` (remove the fixed `max-height`/`min-height`).
-- [ ] Confirm the routed host stretches to full height (no extra `min-height: 100vh`).
-- [ ] Map `instance.status` → `running` / `pending` / `failed` status classes.
+- [x] Confirm the routed host stretches to full height (`:host`/`.provider-dashboard` height-bound).
+- [x] Map `instance.status` → `running` / `pending` / `failed` status classes (via `statusClassFor`).
 
 ---
 
@@ -302,14 +302,15 @@ and the other dialogs keep ClearML blue:
 
 ## Porting checklist (Submit Workload)
 
-- [ ] Replace each asset selector's cards with the `.asset-card` markup
+- [x] Replace each asset selector's cards with the `.asset-card` markup
       (badge + icon + name + section meta) for Environment / Compute / Data Sources.
-- [ ] Add the `.asset-card*` + `.asset-pagination` SCSS, including
+- [x] Add the `.asset-card*` + `.asset-pagination` SCSS, including
       `--asset-accent` on `.asset-cards`.
-- [ ] Feed section-specific meta from the resource models
+- [x] Feed section-specific meta from the resource models
       (image / GPU+CPU spec / type).
-- [ ] Apply the green palette override to the `runai-workload-dialog` panel class.
-- [ ] Keep pagination active state neutral grey (not primary).
+- [x] Apply the green palette override (on the `.workload-dialog` content wrapper, which
+      cascades to the whole dialog under the `runai-workload-dialog` panel).
+- [x] Keep pagination active state neutral grey (not primary).
 
 ---
 
