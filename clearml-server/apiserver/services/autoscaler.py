@@ -34,20 +34,6 @@ def reset_settings(call: APICall, company: str, _):
     call.result.data = {"updated": autoscaler_bll.reset_company_settings(company)}
 
 
-@endpoint("autoscaler.get_command_templates")
-def get_command_templates(call: APICall, company: str, _):
-    call.result.data = autoscaler_bll.get_command_templates(company)
-
-
-@endpoint("autoscaler.set_command_templates")
-def set_command_templates(call: APICall, company: str, _):
-    call.result.data = {
-        "updated": autoscaler_bll.set_command_templates(
-            company, call.data.get("overrides")
-        )
-    }
-
-
 @endpoint("autoscaler.test_connection")
 def test_connection(call: APICall, company: str, _):
     call.result.data = autoscaler_bll.test_connection(

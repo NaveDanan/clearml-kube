@@ -35,6 +35,28 @@
           <span>Loading commands…</span>
         </div>
       } @else {
+        <section class="playground-intro">
+          <div class="playground-copy">
+            <h5>Testing Playground</h5>
+            <p>Test the saved command templates through the same queued Run:ai worker pipeline used by the autoscaler. Run the connection test first, fill any placeholders, then execute a command to inspect the raw CLI response.</p>
+          </div>
+          <div class="playground-actions">
+            <button type="button" mat-stroked-button [disabled]="testingConnection()" (click)="testConnection()">
+              @if (testingConnection()) { Testing connection… } @else { Verify connection }
+            </button>
+          </div>
+        </section>
+
+        @if (testingConnection()) {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        }
+
+        @if (connectionMessage(); as connectionStatus) {
+          <div class="connection-status" [class.success]="connectionStatus.type === 'success'" [class.error]="connectionStatus.type === 'error'">
+            {{ connectionStatus.text }}
+          </div>
+        }
+
         <mat-tab-group animationDuration="0ms">
           @for (version of versions; track version.id) {
             <mat-tab [label]="version.label">
@@ -68,6 +90,66 @@
                         <span class="placeholders-title">Placeholders:</span>
                         @for (ph of entry.placeholders; track ph.name) {
                           <code class="placeholder" [title]="ph.description">{{ '{' + ph.name + '}' }}</code>
+                        }
+                      </div>
+
+                      <div class="playground-placeholder-grid">
+                        @for (ph of entry.placeholders; track ph.name) {
+                          <mat-form-field appearance="outline" class="placeholder-field">
+                            <mat-label>{{ ph.name }}</mat-label>
+                            <input matInput
+                                   [ngModel]="getPlaceholderValue(version.id, entry.key, ph.name)"
+                                   (ngModelChange)="setPlaceholderValue(version.id, entry.key, ph.name, $event)"
+                                   [placeholder]="ph.description">
+                            <mat-hint>{{ ph.description }}</mat-hint>
+                          </mat-form-field>
+                        }
+                      </div>
+                    }
+
+                    <div class="playground-runner">
+                      <button type="button"
+                              mat-flat-button
+                              color="primary"
+                              [disabled]="!connectionOk() || isRunning(version.id, entry.key)"
+                              (click)="runCommand(version.id, entry)">
+                        @if (isRunning(version.id, entry.key)) { Running… } @else { Run raw command }
+                      </button>
+                      @if (!connectionOk()) {
+                        <span class="playground-hint">Run a successful connection test to enable command execution.</span>
+                      }
+                    </div>
+
+                    @if (getResult(version.id, entry.key); as result) {
+                      <div class="playground-result">
+                        <div class="result-meta">
+                          <span class="result-status" [class.success]="result.status === 'success'" [class.error]="result.status === 'error'">
+                            {{ result.status || 'unknown' }}
+                          </span>
+                          @if (result.return_code) {
+                            <span class="result-code">exit {{ result.return_code }}</span>
+                          }
+                          @if (result.result_data?.command) {
+                            <span class="result-command">{{ result.result_data?.command }}</span>
+                          }
+                        </div>
+                        @if (result.stdout) {
+                          <div class="result-block">
+                            <span class="result-label">stdout</span>
+                            <pre>{{ result.stdout }}</pre>
+                          </div>
+                        }
+                        @if (result.stderr) {
+                          <div class="result-block error-block">
+                            <span class="result-label">stderr</span>
+                            <pre>{{ result.stderr }}</pre>
+                          </div>
+                        }
+                        @if (result.result_data && !result.stdout && !result.stderr) {
+                          <div class="result-block">
+                            <span class="result-label">metadata</span>
+                            <pre>{{ JSON.stringify(result.result_data, null, 2) }}</pre>
+                          </div>
                         }
                       </div>
                     }

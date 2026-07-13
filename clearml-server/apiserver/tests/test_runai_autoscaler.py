@@ -230,6 +230,44 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertEqual(execution.user, "user-id")
         self.assertEqual(execution.worker, "stored-worker")
 
+    def test_run_command_playground_requires_settings_and_enqueues_execution(self):
+        result = self.bll.run_command_playground(
+            "company-id",
+            version="v2",
+            key="project_list",
+            command="runai project list --json",
+            placeholders={},
+        )
+        self.assertEqual(result["status"], "error")
+        self.assertIn("No stored Run:ai connection settings configured", result["stderr"])
+
+        self._settings(worker="stored-worker")
+        result = self.bll.run_command_playground(
+            "company-id",
+            version="v2",
+            key="project_list",
+            command="runai project list --json",
+            placeholders={"project": "project-a"},
+            user_id="user-id",
+            worker_id=None,
+        )
+
+        self.assertEqual(result["status"], "queued")
+        execution = FakeExecution._store[0]
+        self.assertEqual(execution.operation, "command_playground")
+        self.assertEqual(execution.workload_name, "project_list")
+        self.assertEqual(execution.user, "user-id")
+        self.assertEqual(execution.worker, "stored-worker")
+        self.assertEqual(
+            json.loads(execution.workload_params),
+            {
+                "version": "v2",
+                "key": "project_list",
+                "command": "runai project list --json",
+                "placeholders": {"project": "project-a"},
+            },
+        )
+
     def test_delete_workload_handles_saved_only_and_enqueues_with_settings(self):
         saved = FakeAppInstance(id="app-id", company="company-id", name="train-one").save()
         result = self.bll.delete_workload(
@@ -293,6 +331,40 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertIn(["runai-v2", "cluster", "set", "cluster-a"], commands)
         self.assertIn(["runai-v2", "project", "set", "project-a"], commands)
         self.assertIn(["runai-v2", "training", "standard", "submit", "train-one", "-i", "repo/image:latest", "-c", "python train.py", "-g", "1", "--", "--epochs", "1"], commands)
+
+    def test_process_command_playground_executes_selected_version_and_persists_metadata(self):
+        self._settings(runai_cli_version="auto")
+        execution = self._execution(
+            operation="command_playground",
+            workload_name="project_list",
+            workload_params=json.dumps({
+                "version": "v1",
+                "key": "project_list",
+                "command": "runai list projects --json",
+                "placeholders": {},
+            }),
+        )
+
+        with patch.object(autoscaler_mod.tempfile, "mkdtemp", return_value="runai-tmp"), \
+             patch.object(autoscaler_mod.shutil, "rmtree"), \
+             patch.object(autoscaler_mod.shutil, "which", side_effect=lambda binary: f"/usr/local/bin/{binary}"), \
+             patch.object(self.bll, "_establish_connection"), \
+             patch.object(autoscaler_mod.subprocess, "run", return_value=completed(stdout='{"items":[]}')) as run:
+            result = self.bll.process_execution(execution)
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(execution.status, "success")
+        self.assertEqual(execution.stdout, '{"items":[]}')
+        self.assertEqual(run.call_args.args[0], ["runai-v1", "list", "projects", "--json"])
+        self.assertEqual(
+            json.loads(execution.result_data),
+            {
+                "command": "runai-v1 list projects --json",
+                "key": "project_list",
+                "version": "v1",
+                "placeholders": {},
+            },
+        )
 
     def test_collect_project_resources_logs_fetch_attempts(self):
         conn = self._settings()
@@ -408,6 +480,75 @@ class TestAutoscalerBLL(unittest.TestCase):
                 self.assertEqual(result["status"], "error")
                 self.assertEqual(execution.status, "error")
 
+    def test_records_fallback_skips_empty_success_and_uses_non_empty_command(self):
+        # The project-scoped command succeeds but returns no records; the bare
+        # fallback command returns the real assets. The submit-workload dialog
+        # must surface the non-empty result instead of the empty success.
+        def fake_command(cmd, _env, _console_log):
+            if "--project" in cmd:
+                return [], True
+            return [{"name": "compute-a"}], True
+
+        with patch.object(self.bll, "_runai_records_from_command", side_effect=fake_command):
+            records = self.bll._runai_records_with_fallback(
+                [
+                    ["runai-v2", "compute", "list", "--json", "--project", "project-a"],
+                    ["runai-v2", "compute", "list", "--json"],
+                ],
+                {},
+                [],
+            )
+
+        self.assertEqual(records, [{"name": "compute-a"}])
+
+    def test_extract_records_handles_unknown_v2_wrapper_keys(self):
+        # Run:ai v2 wraps the collection under command-specific keys that are not
+        # in the known-key list; the generic fallback must still find the assets.
+        self.assertEqual(
+            self.bll._extract_records({"compute": [{"meta": {"name": "c1"}}]}),
+            [{"meta": {"name": "c1"}}],
+        )
+        self.assertEqual(
+            self.bll._extract_records({"entries": [{"name": "env-a"}], "nextPageToken": "abc"}),
+            [{"name": "env-a"}],
+        )
+        self.assertEqual(
+            self.bll._extract_records({"datasources": [{"name": "d1", "type": "pvc"}]}),
+            [{"name": "d1", "type": "pvc"}],
+        )
+
+    def test_extract_records_real_v2_environment_list_payload(self):
+        # Exact shape returned by `runai-v2 environment list --json`.
+        payload = {
+            "environments": [
+                {"name": "llm-server", "scope": "system", "image": "runai.jfrog.io/core-llm/runai-vllm:v0.6.4-0.10.0"},
+                {"name": "pytorch", "scope": "tenant", "image": "nvcr.io/nvidia/pytorch:25.02-py3"},
+            ]
+        }
+        records = self.bll._extract_records(payload)
+        self.assertEqual([self.bll._asset_name(item) for item in records], ["llm-server", "pytorch"])
+        summaries = [self.bll._summarize_environment(item) for item in records]
+        self.assertEqual(summaries[0]["name"], "llm-server")
+        self.assertEqual(summaries[0]["image"], "runai.jfrog.io/core-llm/runai-vllm:v0.6.4-0.10.0")
+
+    def test_summarize_environment_merges_real_v2_describe_payload(self):
+        # Exact shape returned by `runai-v2 environment describe <name> -o json`.
+        list_item = {"name": "cline8000-gemma", "scope": "project", "image": "old:tag"}
+        describe = {
+            "meta": {"name": "cline8000-gemma", "scope": "project"},
+            "spec": {
+                "image": "dvd12af.rafael.local:5113/vllm/vllm-openai:gemma4-cu130",
+                "command": "vllm serve /models/g-4-31-it",
+                "args": "--host=0.0.0.0 --port=8000",
+            },
+        }
+        merged = self.bll._merge_asset_detail(list_item, self.bll._first_object(describe))
+        summary = self.bll._summarize_environment(merged)
+        self.assertEqual(summary["name"], "cline8000-gemma")
+        self.assertEqual(summary["image"], "dvd12af.rafael.local:5113/vllm/vllm-openai:gemma4-cu130")
+        self.assertEqual(summary["command"], "vllm serve /models/g-4-31-it")
+        self.assertEqual(summary["args"], "--host=0.0.0.0 --port=8000")
+
     def test_cli_version_selection_orders_candidates(self):
         with patch.object(autoscaler_mod.shutil, "which", side_effect=lambda binary: f"/bin/{binary}"):
             v1 = self.bll._project_list_commands(SimpleNamespace(runai_cli_version="v1"))
@@ -459,6 +600,24 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertNotIn(["runai-v2", "data-source", "list", "--json", "--project", "project-a"], datasource)
         self.assertIn(["runai-v2", "nodepool", "list", "--json"], nodepool)
         self.assertNotIn(["runai-v2", "node-pool", "list", "--json"], nodepool)
+
+    def test_project_asset_command_overrides_support_selected_project_placeholder(self):
+        conn = SimpleNamespace(
+            runai_cli_version="v2",
+            command_templates=json.dumps({
+                "v2": {
+                    "compute_list": "runai compute list --json --project {selected_project}",
+                    "environment_describe": "runai environment describe {name} -o json --project {selected_project}",
+                }
+            }),
+        )
+
+        with patch.object(autoscaler_mod.shutil, "which", side_effect=lambda binary: f"/bin/{binary}"):
+            compute = self.bll._compute_list_commands(conn, "project-a")
+            environment = self.bll._environment_describe_commands(conn, "env-a", "project-a")
+
+        self.assertEqual(compute[0], ["runai-v2", "compute", "list", "--json", "--project", "project-a"])
+        self.assertEqual(environment[0], ["runai-v2", "environment", "describe", "env-a", "-o", "json", "--project", "project-a"])
 
     def test_project_scoped_asset_commands_fall_back_to_context_project(self):
         commands = self.bll._with_project([["runai", "compute", "list", "--json"]], "project-a")

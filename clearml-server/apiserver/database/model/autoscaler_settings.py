@@ -35,6 +35,8 @@ class AutoscalerSettings(DbModelMixin, Document):
     user = StringField()
     worker = StringField()
     command_templates = StringField()
+    runai_api_token = StringField()
+    runai_api_token_expiry = DateTimeField()
 
 
 class AutoscalerExecution(DbModelMixin, Document):
