@@ -9,11 +9,12 @@
 #     - values-testing.yaml
 #
 # The ClearML images are intentionally local tags. Before syncing in ArgoCD,
-# build and load them into minikube:
+# build and load them into the clearml minikube profile. These images use
+# imagePullPolicy: Never so Kubernetes will not fall back to docker.io.
 #   docker compose --env-file .env.test -f docker-compose.airgap.yml build
-#   docker build -f .\clearml-server\docker\build\runai-worker.Dockerfile --build-arg BASE_IMAGE=clearml/clearml:2026-07-14 -t clearml/runai-worker:2026-07-14 .
-#   minikube image load clearml/clearml:2026-07-14
-#   minikube image load clearml/runai-worker:2026-07-14
+#   docker build -f .\clearml-server\docker\build\runai-worker.Dockerfile --build-arg BASE_IMAGE=clearml/clearml:2026-07-15 -t clearml/runai-worker:2026-07-15 .
+#   minikube -p clearml image load clearml/clearml:2026-07-15
+#   minikube -p clearml image load clearml/runai-worker:2026-07-15
 #
 # These values expose fixed Kubernetes NodePorts:
 #   web:  30080 -> service port 8080
@@ -28,7 +29,7 @@
 #   kubectl port-forward -n clearml-server svc/clearml-server-fileserver 8081:8081
 
 global:
-  imageRegistry: docker.io
+  imageRegistry: ""
 
 imageCredentials:
   enabled: false
@@ -48,8 +49,8 @@ apiserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-14"
-    pullPolicy: IfNotPresent
+    tag: "2026-07-15"
+    pullPolicy: Never
   service:
     type: NodePort
     nodePort: 30008
@@ -73,8 +74,8 @@ fileserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-14"
-    pullPolicy: IfNotPresent
+    tag: "2026-07-15"
+    pullPolicy: Never
   service:
     type: NodePort
     nodePort: 30081
@@ -104,8 +105,8 @@ webserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-14"
-    pullPolicy: IfNotPresent
+    tag: "2026-07-15"
+    pullPolicy: Never
   service:
     type: NodePort
     nodePort: 30080
@@ -139,8 +140,8 @@ runaiWorker:
   image:
     registry: ""
     repository: "clearml/runai-worker"
-    tag: "2026-07-14"
-    pullPolicy: IfNotPresent
+    tag: "2026-07-15"
+    pullPolicy: Never
   replicaCount: 1
   pollInterval: 10
   batchSize: 5

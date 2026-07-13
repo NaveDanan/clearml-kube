@@ -1,13 +1,17 @@
 # Minimal ClearML values for minikube local deployment
 # Uses locally-built images from this project (Dockerfile.local + runai-worker.Dockerfile)
-# All images must be pre-loaded into minikube (imagePullPolicy: IfNotPresent)
+# All images must be pre-loaded into minikube. The local profile uses
+# imagePullPolicy: Never so Kubernetes will not fall back to docker.io.
+
+global:
+  imageRegistry: ""
 
 # Use the locally-built image for all ClearML components
 apiserver:
   image:
     repository: "clearml/server"
     tag: "local"
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
   podSecurityContext:
     runAsNonRoot: false
     runAsUser: 0
@@ -30,7 +34,7 @@ fileserver:
   image:
     repository: "clearml/server"
     tag: "local"
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
   podSecurityContext:
     runAsNonRoot: false
     runAsUser: 0
@@ -58,7 +62,7 @@ webserver:
   image:
     repository: "clearml/server"
     tag: "local"
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
   podSecurityContext:
     runAsNonRoot: false
     runAsUser: 0
@@ -83,7 +87,7 @@ runaiWorker:
   image:
     repository: "clearml/runai-worker"
     tag: "local"
-    pullPolicy: IfNotPresent
+    pullPolicy: Never
   podSecurityContext:
     runAsNonRoot: false
     runAsUser: 0
