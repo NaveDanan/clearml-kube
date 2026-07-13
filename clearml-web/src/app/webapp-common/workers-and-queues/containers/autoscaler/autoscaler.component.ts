@@ -1,6 +1,6 @@
 import {ChangeDetectionStrategy, Component, ElementRef, OnDestroy, TemplateRef, computed, effect, inject, signal, untracked, viewChild} from '@angular/core';
 import {Store} from '@ngrx/store';
-import {NgTemplateOutlet} from '@angular/common';
+import {DecimalPipe, NgTemplateOutlet} from '@angular/common';
 import {AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatInputModule} from '@angular/material/input';
@@ -32,7 +32,9 @@ import {
   selectAutoscalerProjectResources,
   selectAutoscalerProjectResourcesLoading,
   selectAutoscalerWorkloadLogs,
-  selectAutoscalerWorkloadLogsLoading
+  selectAutoscalerWorkloadLogsLoading,
+  selectAutoscalerWorkloadInfo,
+  selectAutoscalerWorkloadInfoLoading
 } from '../../reducers/index.reducer';
 import {Subscription} from 'rxjs';
 import {debounceTime, distinctUntilChanged} from 'rxjs/operators';
@@ -40,6 +42,7 @@ import {debounceTime, distinctUntilChanged} from 'rxjs/operators';
 export type WorkloadType = 'training' | 'workspace' | 'inference';
 
 const INSTANCE_LOG_REFRESH_INTERVAL = 4000;
+const WORKLOAD_INFO_REFRESH_INTERVAL = 5000;
 
 type ConnectionMethod = 'openshift' | 'runai_application';
 type OpenshiftLoginMode = 'fields' | 'command';
@@ -91,6 +94,7 @@ type WorkloadFormValue = Partial<{
 interface AppInstance {
   key: string;
   id?: string;
+  workload_id?: string;
   source: AppInstanceSource;
   name: string;
   type?: string;
@@ -127,6 +131,7 @@ interface EnvVarGroup {
     MatDialogModule,
     ReactiveFormsModule,
     NgTemplateOutlet,
+    DecimalPipe,
   ]
 })
 export class AutoscalerComponent implements OnDestroy {
@@ -246,6 +251,7 @@ export class AutoscalerComponent implements OnDestroy {
         ...existing,
         key,
         id: existing?.id,
+        workload_id: instance.workload_id || existing?.workload_id,
         source: 'runai',
         name,
         type: instance.type || existing?.type,
@@ -321,11 +327,66 @@ export class AutoscalerComponent implements OnDestroy {
     return instance ? `${instance.name}||${instance.project || ''}` : null;
   });
 
+  // ── Workload info visualizer (REST API: details / events / logs / metrics) ──
+  protected workloadInfo = this.store.selectSignal(selectAutoscalerWorkloadInfo);
+  protected workloadInfoLoading = this.store.selectSignal(selectAutoscalerWorkloadInfoLoading);
+  protected activeWorkloadTab = signal<'metrics' | 'events' | 'logs' | 'details'>('metrics');
+  protected selectedWorkloadId = computed(() => this.selectedInstance()?.workload_id || '');
+  protected wlDetails = computed(() => this.workloadInfo()?.details ?? null);
+  protected wlEvents = computed(() => this.workloadInfo()?.events ?? []);
+  protected wlLogLines = computed<string[]>(() => this.workloadInfo()?.logs?.lines ?? []);
+  protected workloadStatusText = computed(() => this.wlDetails()?.status || this.selectedInstance()?.status || '');
+  protected wlMetricAverages = computed<{label: string; value: number}[]>(() => {
+    const avg = this.workloadInfo()?.metrics?.averages ?? {};
+    const labels: Record<string, string> = {
+      GPU_UTILIZATION: 'GPU compute',
+      GPU_MEMORY_USAGE_BYTES: 'GPU memory',
+      CPU_USAGE_CORES: 'CPU compute',
+      CPU_MEMORY_USAGE_BYTES: 'CPU memory',
+    };
+    return Object.entries(avg).map(([key, value]) => ({label: labels[key] || key, value: value as number}));
+  });
+  protected metricSeries = computed(() => {
+    const series = this.workloadInfo()?.metrics?.series ?? [];
+    const meta: Record<string, {label: string; color: string}> = {
+      GPU_UTILIZATION: {label: 'GPU compute utilization', color: '#3b82f6'},
+      GPU_MEMORY_USAGE_BYTES: {label: 'GPU memory utilization', color: '#a855f7'},
+      CPU_USAGE_CORES: {label: 'CPU compute utilization', color: '#22c55e'},
+      CPU_MEMORY_USAGE_BYTES: {label: 'CPU memory utilization', color: '#f97316'},
+    };
+    const x0 = 40, x1 = 780, yTop = 20, yBottom = 230;
+    return series
+      .map(s => ({
+        type: s.type || '',
+        points: (s.points ?? [])
+          .map(p => p.v)
+          .filter((v): v is number => typeof v === 'number' && isFinite(v)),
+      }))
+      .filter(s => s.points.length > 0)
+      .map(s => {
+        const min = Math.min(...s.points);
+        const max = Math.max(...s.points);
+        const span = max - min || 1;
+        const n = s.points.length;
+        const path = s.points
+          .map((v, i) => {
+            const x = n === 1 ? x1 : x0 + (i / (n - 1)) * (x1 - x0);
+            const y = yBottom - ((v - min) / span) * (yBottom - yTop);
+            return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+          })
+          .join(' ');
+        const m = meta[s.type] || {label: s.type || 'Metric', color: '#3b82f6'};
+        return {type: s.type, label: m.label, color: m.color, path};
+      });
+  });
+  private workloadInfoRefreshId?: ReturnType<typeof setInterval>;
+  private activeWorkloadInfoId: string | null = null;
+
   // Console log panels: the main connection log is collapsed by default and the
   // app-instance-specific log opens when an instance is selected. Only one is
   // expanded at a time so the two logs never appear together.
   protected mainLogExpanded = signal(false);
-  protected instanceLogExpanded = signal(true);
+  protected instanceLogExpanded = signal(false);
   protected mainLogFollow = signal(true);
   protected instanceLogFollow = signal(true);
   private mainLogBody = viewChild<ElementRef<HTMLElement>>('mainLogBody');
@@ -431,6 +492,14 @@ export class AutoscalerComponent implements OnDestroy {
       untracked(() => this.syncInstanceLogRefresh(key, active));
     });
 
+    // Fetch + refresh the selected workload's info (details/events/logs/metrics)
+    // from the Run:ai REST API while a workload is selected.
+    effect(() => {
+      const workloadId = this.selectedWorkloadId();
+      const active = this.selectedProvider() === 'runai' && !!workloadId;
+      untracked(() => this.syncWorkloadInfoRefresh(workloadId, active));
+    });
+
     // Auto-scroll the instance log to the bottom while following live output.
     effect(() => {
       const lines = this.instanceConsoleLines();
@@ -461,6 +530,7 @@ export class AutoscalerComponent implements OnDestroy {
   ngOnDestroy() {
     this.stopDashboardRefresh();
     this.stopInstanceLogRefresh();
+    this.stopWorkloadInfoRefresh();
     this.formSubscription.unsubscribe();
   }
 
@@ -541,10 +611,48 @@ export class AutoscalerComponent implements OnDestroy {
 
   selectInstance(instance: AppInstance) {
     this.selectedInstanceKey.set(instance.key);
-    // Reveal the instance-specific log (and collapse the main connection log).
-    this.instanceLogExpanded.set(true);
-    this.mainLogExpanded.set(false);
-    this.instanceLogFollow.set(true);
+    this.activeWorkloadTab.set('metrics');
+  }
+
+  protected setWorkloadTab(tab: 'metrics' | 'events' | 'logs' | 'details') {
+    this.activeWorkloadTab.set(tab);
+  }
+
+  protected statusClassFor(status?: string): 'pending' | 'failed' | '' {
+    const s = (status || '').toLowerCase();
+    if (['failed', 'error', 'crashed', 'evicted'].includes(s)) {
+      return 'failed';
+    }
+    if (['pending', 'queued', 'initializing', 'creating', 'stopped', 'stopping', 'imported'].includes(s)) {
+      return 'pending';
+    }
+    return '';
+  }
+
+  private syncWorkloadInfoRefresh(workloadId: string, active: boolean) {
+    if (!active || !workloadId) {
+      this.stopWorkloadInfoRefresh();
+      return;
+    }
+    if (workloadId === this.activeWorkloadInfoId && this.workloadInfoRefreshId) {
+      return;
+    }
+    this.stopWorkloadInfoRefresh();
+    this.activeWorkloadInfoId = workloadId;
+    this.store.dispatch(autoscalerActions.setWorkloadInfoLoading({loading: true}));
+    this.store.dispatch(autoscalerActions.getWorkloadInfo({workloadId}));
+    this.workloadInfoRefreshId = setInterval(
+      () => this.store.dispatch(autoscalerActions.getWorkloadInfo({workloadId})),
+      WORKLOAD_INFO_REFRESH_INTERVAL
+    );
+  }
+
+  private stopWorkloadInfoRefresh() {
+    if (this.workloadInfoRefreshId) {
+      clearInterval(this.workloadInfoRefreshId);
+      this.workloadInfoRefreshId = undefined;
+    }
+    this.activeWorkloadInfoId = null;
   }
 
   // --- Console log panels (collapse + follow/resume) ---

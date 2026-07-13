@@ -42,6 +42,18 @@ export class AutoscalerEffects {
     )),
   ));
 
+  getWorkloadInfo = createEffect(() => this.actions$.pipe(
+    ofType(autoscalerActions.getWorkloadInfo),
+    switchMap(action => this.autoscalerApi.autoscalerGetWorkloadInfo({workload_id: action.workloadId}).pipe(
+      map((res: any) => autoscalerActions.setWorkloadInfo({
+        info: res ?? {connected: false, workload_id: action.workloadId},
+      })),
+      catchError(error => of(autoscalerActions.setWorkloadInfo({
+        info: {connected: false, workload_id: action.workloadId, error: this.errorMessage(error, 'Failed to load workload info')},
+      }))),
+    )),
+  ));
+
   updateSettings = createEffect(() => this.actions$.pipe(
     ofType(autoscalerActions.updateSettings),
     switchMap(action => this.autoscalerApi.autoscalerSetSettings(action.settings).pipe(

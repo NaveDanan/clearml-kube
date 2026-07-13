@@ -8,6 +8,7 @@ from apiserver.apimodels.autoscaler import (
     StopWorkloadRequest,
     SaveAppInstanceRequest,
     GetWorkloadLogsRequest,
+    GetWorkloadInfoRequest,
 )
 from apiserver.bll.autoscaler import AutoscalerBLL
 from apiserver.service_repo import endpoint, APICall
@@ -120,3 +121,8 @@ def get_workload_logs(call: APICall, company: str, request: GetWorkloadLogsReque
     call.result.data = autoscaler_bll.get_workload_logs(
         company, request, user_id=call.identity.user, worker_id=call.worker
     )
+
+
+@endpoint("autoscaler.get_workload_info")
+def get_workload_info(call: APICall, company: str, request: GetWorkloadInfoRequest):
+    call.result.data = autoscaler_bll.get_workload_info(company, request.workload_id)

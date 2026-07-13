@@ -123,6 +123,31 @@ export interface AutoscalerWorkloadLogs {
   lines?: string[];
 }
 
+export interface AutoscalerWorkloadInfo {
+  connected?: boolean;
+  error?: string;
+  workload_id?: string;
+  details?: {
+    name?: string;
+    type?: string;
+    status?: string;
+    project?: string;
+    cluster?: string;
+    image?: string;
+    gpus?: number;
+    node_pool?: string;
+    command?: string;
+    created?: string;
+    submitted_by?: string;
+  };
+  events?: Array<{time?: string; message?: string; reason?: string; level?: string}>;
+  logs?: {lines?: string[]; source?: string};
+  metrics?: {
+    series?: Array<{type?: string; points?: Array<{t?: string; v?: number | null}>}>;
+    averages?: Record<string, number>;
+  };
+}
+
 export interface AutoscalerDashboardData {
   connected?: boolean;
   error?: string;
@@ -153,6 +178,7 @@ export interface AutoscalerDashboardData {
   }>;
   instances?: Array<{
     name?: string;
+    workload_id?: string;
     type?: string;
     status?: string;
     project?: string;
@@ -205,6 +231,10 @@ export const autoscalerActions = createActionGroup({
     'Set Workload Logs Loading': props<{loading: boolean}>(),
     'Set Workload Logs': props<{logs: AutoscalerWorkloadLogs}>(),
     'Clear Workload Logs': emptyProps(),
+    'Get Workload Info': props<{workloadId: string}>(),
+    'Set Workload Info Loading': props<{loading: boolean}>(),
+    'Set Workload Info': props<{info: AutoscalerWorkloadInfo}>(),
+    'Clear Workload Info': emptyProps(),
     'Reset Settings': emptyProps(),
   }
 });

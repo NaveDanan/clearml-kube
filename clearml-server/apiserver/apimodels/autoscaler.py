@@ -102,3 +102,10 @@ class GetWorkloadLogsRequest(Base):
     workload_type = StringField()
     project = StringField()
     tail = StringField()
+
+
+class GetWorkloadInfoRequest(Base):
+    workload_id = StringField()
+    instance_id = StringField()
+    workload_name = StringField()
+    project = StringField()

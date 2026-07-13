@@ -8,8 +8,11 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from typing import Optional
 
+import requests
+
 from apiserver.apimodels.autoscaler import (
     DeleteWorkloadRequest,
+    GetWorkloadInfoRequest,
     GetWorkloadLogsRequest,
     SaveAppInstanceRequest,
     SetSettingsRequest,
@@ -460,10 +463,248 @@ class AutoscalerBLL:
             set_on_insert__id=db_id(),
             **update_dict,
         )
+        # Best-effort: prefetch a Run:ai REST API access token right after the
+        # connection is saved, so the workload info visualizer can query the API
+        # immediately. Failures are non-fatal (the token is fetched lazily too).
+        try:
+            saved = AutoscalerSettings.objects(company=company_id).first()
+            if saved and self._connection_method(saved) == "runai_application":
+                self._get_api_token(saved, company_id, force=True)
+        except Exception as ex:
+            log.warning(f"Run:ai token prefetch failed: {ex}")
         return result
 
     def reset_company_settings(self, company_id: str) -> int:
         return AutoscalerSettings.objects(company=company_id).delete()
+
+    # ------------------------------------------------------------------ #
+    # Run:ai REST API (workload info visualizer)                          #
+    # Fetches workload details/events/logs/metrics directly from the      #
+    # Run:ai control plane using a cached bearer token (NOT the CLI).     #
+    # ------------------------------------------------------------------ #
+    _api_timeout = 15
+    _token_skew = timedelta(seconds=60)
+
+    @classmethod
+    def _api_base(cls, settings) -> Optional[str]:
+        url = (getattr(settings, "runai_cp_url", None) or "").strip()
+        return url.rstrip("/") if url else None
+
+    def _fetch_api_token(self, settings, company_id: str) -> Optional[str]:
+        base = self._api_base(settings)
+        client_id = (getattr(settings, "runai_access_key", None) or "").strip()
+        client_secret = (getattr(settings, "runai_secret_key", None) or "").strip()
+        if not base or not client_id or not client_secret:
+            return None
+        try:
+            resp = requests.post(
+                f"{base}/api/v1/token",
+                json={
+                    "grantType": "client_credentials",
+                    "clientId": client_id,
+                    "clientSecret": client_secret,
+                },
+                timeout=self._api_timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as ex:
+            log.warning(f"Run:ai token request failed: {ex}")
+            return None
+        token = data.get("accessToken") or data.get("access_token")
+        if not token:
+            return None
+        expires_in = data.get("expiresIn") or data.get("expires_in") or 1800
+        try:
+            expiry = datetime.utcnow() + timedelta(seconds=int(expires_in))
+        except (TypeError, ValueError):
+            expiry = datetime.utcnow() + timedelta(seconds=1800)
+        AutoscalerSettings.objects(company=company_id).update_one(
+            set__runai_api_token=token,
+            set__runai_api_token_expiry=expiry,
+        )
+        return token
+
+    def _get_api_token(self, settings, company_id: str, force: bool = False) -> Optional[str]:
+        if not force:
+            token = getattr(settings, "runai_api_token", None)
+            expiry = getattr(settings, "runai_api_token_expiry", None)
+            if token and expiry and expiry - self._token_skew > datetime.utcnow():
+                return token
+        return self._fetch_api_token(settings, company_id)
+
+    def refresh_api_token(self, company_id: str) -> Optional[str]:
+        settings = AutoscalerSettings.objects(company=company_id).first()
+        if not settings:
+            return None
+        return self._get_api_token(settings, company_id, force=True)
+
+    def _api_get(self, settings, company_id: str, path: str, params=None):
+        base = self._api_base(settings)
+        if not base:
+            return None
+        token = self._get_api_token(settings, company_id)
+        if not token:
+            return None
+        url = f"{base}{path}"
+        try:
+            resp = requests.get(
+                url,
+                params=params,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=self._api_timeout,
+            )
+            if resp.status_code == 401:
+                token = self._get_api_token(settings, company_id, force=True)
+                if not token:
+                    return None
+                resp = requests.get(
+                    url,
+                    params=params,
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=self._api_timeout,
+                )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as ex:
+            log.warning(f"Run:ai API GET {path} failed: {ex}")
+            return None
+
+    def get_workload_info(self, company_id: str, workload_id: str) -> dict:
+        """Aggregate details/events/logs/metrics for one Run:ai workload via the
+        REST API (used by the workload info visualizer)."""
+        workload_id = (workload_id or "").strip()
+        if not workload_id:
+            return {"connected": False, "error": "Missing workload id"}
+        settings = AutoscalerSettings.objects(company=company_id).first()
+        if not settings:
+            return {"connected": False, "error": "No stored Run:ai connection settings configured"}
+        if not self._api_base(settings):
+            return {"connected": False, "error": "Run:ai control plane URL is not configured"}
+        if not self._get_api_token(settings, company_id):
+            return {"connected": False, "error": "Failed to obtain a Run:ai API access token"}
+
+        wl = f"/api/v1/workloads/{workload_id}"
+        details = self._api_get(settings, company_id, wl) or {}
+        events = self._api_get(settings, company_id, f"{wl}/events") or {}
+        logs = self._api_get(settings, company_id, f"{wl}/logs", {"tailLines": 200})
+        metrics = self._api_get(
+            settings,
+            company_id,
+            f"{wl}/metrics",
+            [
+                ("metricType", "GPU_UTILIZATION"),
+                ("metricType", "GPU_MEMORY_USAGE_BYTES"),
+                ("metricType", "CPU_USAGE_CORES"),
+                ("metricType", "CPU_MEMORY_USAGE_BYTES"),
+                ("numberOfSamples", "60"),
+            ],
+        )
+        return {
+            "connected": True,
+            "workload_id": workload_id,
+            "details": self._summarize_workload_details(details),
+            "events": self._summarize_workload_events(events),
+            "logs": self._summarize_api_logs(logs),
+            "metrics": self._summarize_workload_metrics(metrics),
+        }
+
+    @classmethod
+    def _summarize_workload_details(cls, data) -> dict:
+        item = data.get("workload") if isinstance(data, dict) and isinstance(data.get("workload"), dict) else data
+        item = item if isinstance(item, dict) else {}
+        spec = item.get("spec") if isinstance(item.get("spec"), dict) else {}
+        merged = {**spec, **item}
+        return {
+            "name": cls._pick(merged, ("name", "workloadName", "workload_name")) or "",
+            "type": cls._pick(merged, ("type", "workloadType", "kind", "category")) or "",
+            "status": cls._pick(merged, ("phase", "status", "state")) or "unknown",
+            "project": cls._pick(merged, ("project", "projectName", "namespace")) or "",
+            "cluster": cls._pick(merged, ("cluster", "clusterName", "clusterId")) or "",
+            "image": cls._pick(merged, ("image", "imageName")) or "",
+            "gpus": cls._find_number(merged, ("gpu", "gpus", "gpuDevices", "requestedGpus")),
+            "node_pool": cls._pick(merged, ("nodePool", "node_pool", "nodePoolName")) or "",
+            "command": cls._pick(merged, ("command", "cmd")) or "",
+            "created": cls._pick(merged, ("createdAt", "creationTimestamp", "created")) or "",
+            "submitted_by": cls._pick(merged, ("submittedBy", "user", "owner")) or "",
+        }
+
+    @classmethod
+    def _summarize_workload_events(cls, data) -> list:
+        rows = cls._as_list(data, ("events", "items", "data"))
+        events = []
+        for row in rows[:100]:
+            if not isinstance(row, dict):
+                continue
+            events.append({
+                "time": cls._pick(row, ("createdAt", "timestamp", "time", "creationTimestamp")) or "",
+                "message": cls._pick(row, ("message", "description", "note")) or "",
+                "reason": cls._pick(row, ("reason", "type", "eventType")) or "",
+                "level": (cls._pick(row, ("type", "severity", "level")) or "").lower(),
+            })
+        return events
+
+    @classmethod
+    def _summarize_api_logs(cls, data) -> dict:
+        if data is None:
+            return {"lines": [], "source": "runai"}
+        if isinstance(data, dict):
+            raw = data.get("logs") or data.get("log") or data.get("raw") or ""
+            lines = data.get("lines") if isinstance(data.get("lines"), list) else None
+            if lines is None:
+                lines = [ln for ln in str(raw).splitlines() if ln]
+        elif isinstance(data, list):
+            lines = [str(ln) for ln in data if str(ln)]
+        else:
+            lines = [ln for ln in str(data).splitlines() if ln]
+        return {"lines": lines[-500:], "source": "runai"}
+
+    @classmethod
+    def _summarize_workload_metrics(cls, data) -> dict:
+        series = cls._as_list(data, ("measurements", "metrics", "series", "data"))
+        out = []
+        averages = {}
+        for entry in series:
+            if not isinstance(entry, dict):
+                continue
+            metric_type = cls._pick(entry, ("type", "metricType", "name")) or ""
+            values = entry.get("values") if isinstance(entry.get("values"), list) else []
+            points = []
+            nums = []
+            for v in values:
+                if isinstance(v, dict):
+                    ts = cls._pick(v, ("timestamp", "time", "date")) or ""
+                    num = cls._to_number(cls._pick(v, ("value", "val", "y")))
+                else:
+                    ts = ""
+                    num = cls._to_number(v)
+                if num is not None:
+                    nums.append(num)
+                points.append({"t": ts, "v": num})
+            out.append({"type": metric_type, "points": points})
+            if nums:
+                averages[metric_type] = round(sum(nums) / len(nums), 2)
+        return {"series": out, "averages": averages}
+
+    @staticmethod
+    def _as_list(data, keys) -> list:
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            for key in keys:
+                val = data.get(key)
+                if isinstance(val, list):
+                    return val
+        return []
+
+    @staticmethod
+    def _to_number(value):
+        try:
+            if value is None or value == "":
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
     # ------------------------------------------------------------------ #
     # Editable Run:ai CLI command templates ("Autoscalar Commands" tab)  #
@@ -2078,6 +2319,7 @@ class AutoscalerBLL:
     def _summarize_workload(cls, item: dict) -> dict:
         return {
             "name": cls._pick(item, ("name", "workloadName", "workload_name", "id")) or "Unnamed workload",
+            "workload_id": cls._pick(item, ("id", "uuid", "workloadId", "workload_id")),
             "type": cls._pick(item, ("type", "workloadType", "workload_type", "category")) or "",
             "status": cls._pick(item, ("status", "state", "phase", "workloadStatus")) or "unknown",
             "project": cls._pick(item, ("project", "projectName", "project_name", "namespace")) or "",

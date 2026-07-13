@@ -769,118 +769,159 @@
     </aside>
 
     <main class="provider-content">
-      <div class="stats-grid">
-        <section class="dashboard-card idle-card">
-          <h2>
-            {{ selectedInstance()?.name || 'App Instance' }}
-            @if (dashboardLoading()) {
-              <mat-spinner diameter="16"></mat-spinner>
-            }
-          </h2>
-          <div class="selected-state">{{ selectedInstance()?.status || 'No instance selected' }}</div>
-          <div class="card-meta">
-            <span>{{ selectedInstance()?.project || 'No project' }}</span>
-            <span>{{ selectedInstance()?.type || 'workload' }}</span>
-            <span>Updated {{ lastRefreshLabel() }}</span>
-          </div>
-        </section>
-
-        <section class="dashboard-card resources-card">
-          <h2>Resources and queues</h2>
-          <div class="bar-chart" aria-label="Run:ai GPU allocation chart">
-            @for (bar of resourceBars(); track bar.label) {
-              <span [style.height.px]="bar.height" [attr.title]="bar.label + ': ' + bar.value + ' GPUs'"></span>
-            }
-          </div>
-          <div class="resource-summary">
-            <span>Instance GPU {{ formatNumber(selectedInstance()?.gpus) }}</span>
-            <span>Cluster GPU {{ formatNumber(dashboard()?.resources?.gpu_allocated) }} / {{ formatNumber(dashboard()?.resources?.gpu_total) }}</span>
-            <span>Requested {{ formatNumber(dashboard()?.resources?.gpu_requested) }}</span>
-          </div>
-        </section>
-      </div>
-
-      <section class="dashboard-card gauge-card">
-        <h2>Instances</h2>
-        <div class="gauge" aria-hidden="true">
-          <span class="gauge-fill" [style.clip-path]="'polygon(0 0, ' + instanceGaugePercent() + '% 0, ' + instanceGaugePercent() + '% 100%, 0 100%)'"></span>
-          <span class="gauge-needle"></span>
-        </div>
-        <div class="instance-summary">
-          <span>{{ formatNumber(dashboard()?.running_instances) }} running</span>
-          <span>{{ formatNumber(dashboard()?.pending_instances) }} pending</span>
-          <span>{{ formatNumber(dashboard()?.failed_instances) }} failed</span>
-          <span>{{ formatNumber(dashboard()?.total_instances) }} total</span>
-        </div>
-      </section>
-
-      <section class="dashboard-card console-card">
-        <div class="console-panel" [class.expanded]="instanceLogExpanded()">
-          <button type="button" class="console-toggle" (click)="toggleInstanceLog()"
-                  [attr.aria-expanded]="instanceLogExpanded()">
-            <mat-icon fontSet="al" [fontIcon]="instanceLogExpanded() ? 'al-ico-arrow-down' : 'al-ico-arrow-right'"></mat-icon>
-            <span class="console-title">
-              App Instance Log
-              @if (selectedInstance()?.name) {
-                <span class="console-subtitle">· {{ selectedInstance()?.name }}</span>
+      @if (selectedInstance()) {
+        <div class="workload-view">
+          <header class="wl-header">
+            <div class="wl-header-top">
+              <div class="wl-hexagon">RUN</div>
+              <div class="wl-title">{{ selectedInstance()?.name }}</div>
+              <div class="wl-status"
+                   [class.warn]="statusClassFor(workloadStatusText()) === 'pending'"
+                   [class.fail]="statusClassFor(workloadStatusText()) === 'failed'">
+                {{ statusClassFor(workloadStatusText()) === '' ? 'No issues found' : (workloadStatusText() || 'Unknown') }}
+              </div>
+              @if (workloadInfoLoading()) {
+                <mat-spinner diameter="16"></mat-spinner>
               }
-              @if (instanceLogSource()) {
-                <span class="console-source">{{ instanceLogSource() === 'openshift' ? 'OpenShift pod' : 'Run:ai' }}</span>
-              }
-            </span>
-            @if (instanceLogsLoading()) {
-              <mat-spinner diameter="14"></mat-spinner>
-            }
-          </button>
-          @if (instanceLogExpanded()) {
-            <div class="console-body">
-              @if (!selectedInstance()) {
-                <div class="console-log">
-                  <div class="console-line">Select an app instance to view its console log</div>
+              <div class="wl-info" title="Workload details">i</div>
+            </div>
+            <nav class="wl-tabs">
+              <button class="wl-tab" type="button" [class.active]="activeWorkloadTab() === 'events'"
+                      (click)="setWorkloadTab('events')">Event History</button>
+              <button class="wl-tab" type="button" [class.active]="activeWorkloadTab() === 'metrics'"
+                      (click)="setWorkloadTab('metrics')">Metrics</button>
+              <button class="wl-tab" type="button" [class.active]="activeWorkloadTab() === 'logs'"
+                      (click)="setWorkloadTab('logs')">Logs</button>
+              <button class="wl-tab" type="button" [class.active]="activeWorkloadTab() === 'details'"
+                      (click)="setWorkloadTab('details')">Details</button>
+            </nav>
+          </header>
+
+          <!-- ===== METRICS ===== -->
+          <div class="wl-panel" [class.active]="activeWorkloadTab() === 'metrics'" data-panel="metrics">
+            <section class="metric-card attached-top">
+              <div class="metric-card-header">
+                <div class="metric-card-title-area">
+                  <span class="metric-card-title">Resources utilization</span>
                 </div>
-              } @else {
-                <div #instanceLogBody class="console-log" (scroll)="onLogScroll($event, 'instance')">
-                  @for (line of instanceConsoleLines(); track $index) {
-                    <div class="console-line">{{ line }}</div>
+                <div class="metric-card-controls">
+                  <span class="metric-time">
+                    <mat-icon fontSet="al" fontIcon="al-ico-time" class="sm"></mat-icon>
+                    <span>Last hour</span>
+                  </span>
+                </div>
+              </div>
+              <div class="metric-card-content">
+                <div class="util-layout">
+                  <div class="chart-wrap">
+                    <svg class="chart-svg" viewBox="0 0 800 260" preserveAspectRatio="none">
+                      <line x1="40" y1="20" x2="780" y2="20" class="grid-line" /><text x="30" y="24" class="axis-text" text-anchor="end">100%</text>
+                      <line x1="40" y1="72" x2="780" y2="72" class="grid-line" /><text x="30" y="76" class="axis-text" text-anchor="end">75%</text>
+                      <line x1="40" y1="125" x2="780" y2="125" class="grid-line" /><text x="30" y="129" class="axis-text" text-anchor="end">50%</text>
+                      <line x1="40" y1="178" x2="780" y2="178" class="grid-line" /><text x="30" y="182" class="axis-text" text-anchor="end">25%</text>
+                      <line x1="40" y1="230" x2="780" y2="230" class="grid-line" style="stroke:var(--color-outline)" /><text x="30" y="234" class="axis-text" text-anchor="end">0%</text>
+                      @for (series of metricSeries(); track series.type) {
+                        <path [attr.d]="series.path" fill="none" [attr.stroke]="series.color" stroke-width="2" />
+                      }
+                    </svg>
+                    <div class="legend-container">
+                      @for (series of metricSeries(); track series.type) {
+                        <div class="legend-item"><span class="legend-color-box" [style.background]="series.color"></span><span>{{ series.label }}</span></div>
+                      }
+                    </div>
+                  </div>
+                  <div class="stats-sidebar">
+                    <div class="stats-sidebar-title">Average utilization</div>
+                    @for (avg of wlMetricAverages(); track avg.label) {
+                      <div class="stat-row"><span class="stat-label">{{ avg.label }}</span><span class="stat-value">{{ avg.value | number:'1.0-2' }}</span></div>
+                    } @empty {
+                      <div class="stat-row"><span class="stat-label">{{ workloadInfoLoading() ? 'Loading…' : 'No metrics available' }}</span></div>
+                    }
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ===== EVENT HISTORY ===== -->
+          <div class="wl-panel" [class.active]="activeWorkloadTab() === 'events'" data-panel="events">
+            <section class="metric-card attached-top">
+              <div class="metric-card-header">
+                <div class="metric-card-title-area"><span class="metric-card-title">Event history</span></div>
+              </div>
+              <div class="metric-card-content">
+                <div class="event-list">
+                  @for (ev of wlEvents(); track $index) {
+                    <div class="event-row">
+                      <span class="event-dot" [class.warn]="ev.level === 'warn'" [class.fail]="ev.level === 'fail'"></span>
+                      <span class="event-time">{{ ev.time }}</span>
+                      <span class="event-msg" [title]="ev.message">{{ ev.message }}</span>
+                      <span class="event-reason">{{ ev.reason }}</span>
+                    </div>
+                  } @empty {
+                    <div class="event-row">
+                      <span class="event-dot"></span><span class="event-time"></span>
+                      <span class="event-msg">{{ workloadInfoLoading() ? 'Loading events…' : 'No events reported' }}</span>
+                      <span class="event-reason"></span>
+                    </div>
                   }
                 </div>
-                @if (!instanceLogFollow()) {
-                  <button type="button" class="resume-logs" (click)="resumeLogs('instance')">
-                    <mat-icon fontSet="al" fontIcon="al-ico-arrow-to-bottom"></mat-icon>
-                    Resume logs
-                  </button>
-                }
-              }
-            </div>
-          }
-        </div>
-
-        <div class="console-panel" [class.expanded]="mainLogExpanded()">
-          <button type="button" class="console-toggle" (click)="toggleMainLog()"
-                  [attr.aria-expanded]="mainLogExpanded()">
-            <mat-icon fontSet="al" [fontIcon]="mainLogExpanded() ? 'al-ico-arrow-down' : 'al-ico-arrow-right'"></mat-icon>
-            <span class="console-title">Console Log</span>
-          </button>
-          @if (mainLogExpanded()) {
-            <div class="console-body">
-              <div #mainLogBody class="console-log" (scroll)="onLogScroll($event, 'main')">
-                @if (dashboardError()) {
-                  <div class="console-line error">{{ dashboardError() }}</div>
-                }
-                @for (line of consoleLines(); track $index) {
-                  <div class="console-line">{{ line }}</div>
-                }
               </div>
-              @if (!mainLogFollow()) {
-                <button type="button" class="resume-logs" (click)="resumeLogs('main')">
-                  <mat-icon fontSet="al" fontIcon="al-ico-arrow-to-bottom"></mat-icon>
-                  Resume logs
-                </button>
-              }
-            </div>
-          }
+            </section>
+          </div>
+
+          <!-- ===== LOGS ===== -->
+          <div class="wl-panel" [class.active]="activeWorkloadTab() === 'logs'" data-panel="logs">
+            <section class="metric-card attached-top">
+              <div class="metric-card-header">
+                <div class="metric-card-title-area">
+                  <span class="metric-card-title">Logs</span>
+                  <span class="log-source">{{ workloadInfo()?.logs?.source || 'Run:ai' }}</span>
+                </div>
+              </div>
+              <div class="metric-card-content">
+                <div class="wl-log">
+                  @for (line of wlLogLines(); track $index) {
+                    <div class="log-line">{{ line }}</div>
+                  } @empty {
+                    <div class="log-line">{{ workloadInfoLoading() ? 'Loading logs…' : 'No logs available' }}</div>
+                  }
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <!-- ===== DETAILS ===== -->
+          <div class="wl-panel" [class.active]="activeWorkloadTab() === 'details'" data-panel="details">
+            <section class="metric-card attached-top">
+              <div class="metric-card-header">
+                <div class="metric-card-title-area"><span class="metric-card-title">Details</span></div>
+              </div>
+              <div class="metric-card-content">
+                <div class="details-grid">
+                  <div class="detail-item"><span class="detail-key">Workload name</span><span class="detail-val">{{ wlDetails()?.name || selectedInstance()?.name || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Type</span><span class="detail-val">{{ wlDetails()?.type || selectedInstance()?.type || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Project</span><span class="detail-val">{{ wlDetails()?.project || selectedInstance()?.project || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Status</span><span class="detail-val">{{ wlDetails()?.status || selectedInstance()?.status || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Cluster</span><span class="detail-val">{{ wlDetails()?.cluster || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Image</span><span class="detail-val">{{ wlDetails()?.image || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">GPU devices</span><span class="detail-val">{{ wlDetails()?.gpus ?? formatNumber(selectedInstance()?.gpus) }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Node pool</span><span class="detail-val">{{ wlDetails()?.node_pool || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Submitted by</span><span class="detail-val">{{ wlDetails()?.submitted_by || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Created</span><span class="detail-val">{{ wlDetails()?.created || selectedInstance()?.age || '—' }}</span></div>
+                  <div class="detail-item"><span class="detail-key">Command</span><span class="detail-val">{{ wlDetails()?.command || '—' }}</span></div>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
-      </section>
+      } @else {
+        <div class="workload-empty">
+          <mat-icon fontSet="al" fontIcon="al-ico-experiment-view" class="empty-icon"></mat-icon>
+          <div class="empty-title">Select an app instance</div>
+          <div class="empty-sub">Choose a workload from the list to inspect its metrics, events, logs and details.</div>
+        </div>
+      }
     </main>
   </div>
 } @else {

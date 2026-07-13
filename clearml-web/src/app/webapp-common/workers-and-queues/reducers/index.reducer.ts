@@ -59,3 +59,5 @@ export const selectAutoscalerProjectResources = createSelector(selectAutoscalerS
 export const selectAutoscalerProjectResourcesLoading = createSelector(selectAutoscalerState, state => state?.projectResourcesLoading);
 export const selectAutoscalerWorkloadLogs = createSelector(selectAutoscalerState, state => state?.workloadLogs);
 export const selectAutoscalerWorkloadLogsLoading = createSelector(selectAutoscalerState, state => state?.workloadLogsLoading);
+export const selectAutoscalerWorkloadInfo = createSelector(selectAutoscalerState, state => state?.workloadInfo);
+export const selectAutoscalerWorkloadInfoLoading = createSelector(selectAutoscalerState, state => state?.workloadInfoLoading);

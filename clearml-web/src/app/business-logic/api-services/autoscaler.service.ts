@@ -88,4 +88,8 @@ export class ApiAutoscalerService {
   public autoscalerRunCommandPlayground(request: object): Observable<any> {
     return this.apiRequest.post<any>(`${this.basePath}/autoscaler.run_command_playground`, request);
   }
+
+  public autoscalerGetWorkloadInfo(request: object): Observable<any> {
+    return this.apiRequest.post<any>(`${this.basePath}/autoscaler.get_workload_info`, request);
+  }
 }

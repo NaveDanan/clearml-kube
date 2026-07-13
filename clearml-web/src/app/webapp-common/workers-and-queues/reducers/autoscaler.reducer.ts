@@ -6,7 +6,8 @@ import {
   AutoscalerExecution,
   AutoscalerProjectResources,
   AutoscalerSettingsData,
-  AutoscalerWorkloadLogs
+  AutoscalerWorkloadLogs,
+  AutoscalerWorkloadInfo
 } from '../actions/autoscaler.actions';
 
 export interface AutoscalerState {
@@ -21,6 +22,8 @@ export interface AutoscalerState {
   projectResourcesLoading: boolean;
   workloadLogs: AutoscalerWorkloadLogs | null;
   workloadLogsLoading: boolean;
+  workloadInfo: AutoscalerWorkloadInfo | null;
+  workloadInfoLoading: boolean;
 }
 
 export const initialState: AutoscalerState = {
@@ -35,6 +38,8 @@ export const initialState: AutoscalerState = {
   projectResourcesLoading: false,
   workloadLogs: null,
   workloadLogsLoading: false,
+  workloadInfo: null,
+  workloadInfoLoading: false,
 };
 
 export const autoscalerReducer = createReducer(
@@ -92,6 +97,20 @@ export const autoscalerReducer = createReducer(
     ...state,
     workloadLogs: null,
     workloadLogsLoading: false,
+  })),
+  on(autoscalerActions.setWorkloadInfoLoading, (state, {loading}) => ({
+    ...state,
+    workloadInfoLoading: loading,
+  })),
+  on(autoscalerActions.setWorkloadInfo, (state, {info}) => ({
+    ...state,
+    workloadInfo: info,
+    workloadInfoLoading: false,
+  })),
+  on(autoscalerActions.clearWorkloadInfo, (state) => ({
+    ...state,
+    workloadInfo: null,
+    workloadInfoLoading: false,
   })),
   on(autoscalerActions.resetSettings, () => ({...initialState})),
 );
