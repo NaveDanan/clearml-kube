@@ -1,12 +1,15 @@
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime, timedelta
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
+from urllib.parse import quote
 
 import requests
 
@@ -94,9 +97,9 @@ RUNAI_COMMAND_CATALOG = {
         {
             "key": "workload_list",
             "label": "List workloads",
-            "description": "List workloads for the dashboard in the selected project.",
-            "command": "runai workload list --json --no-pagination -p {project}",
-            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+            "description": "List every workload from every project for the dashboard.",
+            "command": "runai workload list --json -A",
+            "placeholders": [],
         },
         {
             "key": "compute_list",
@@ -214,9 +217,10 @@ RUNAI_COMMAND_CATALOG = {
         {
             "key": "api_token",
             "label": "REST API: get access token",
-            "description": "POST endpoint used to obtain a Run:ai REST API bearer token for the workload info visualizer (client-credentials grant).",
+            "description": "POST endpoint used to obtain a Run:ai REST API bearer token. The client id and client secret are read from the Run:ai application keys in the Connection dialog.",
             "command": "POST {cp_url}/api/v1/token",
             "placeholders": [{"name": "cp_url", "description": "Run:ai control plane URL"}],
+            "kind": "rest",
         },
         {
             "key": "api_workload_details",
@@ -224,27 +228,31 @@ RUNAI_COMMAND_CATALOG = {
             "description": "GET endpoint for a workload's details (workload info visualizer).",
             "command": "GET /api/v1/workloads/{workload_id}",
             "placeholders": [{"name": "workload_id", "description": "Run:ai workload id (uuid)"}],
+            "kind": "rest",
         },
         {
             "key": "api_workload_events",
             "label": "REST API: workload events",
-            "description": "GET endpoint for a workload's event history.",
+            "description": "GET endpoint for a workload's complete event history (offset/limit pagination is applied automatically).",
             "command": "GET /api/v1/workloads/{workload_id}/events",
             "placeholders": [{"name": "workload_id", "description": "Run:ai workload id (uuid)"}],
+            "kind": "rest",
         },
         {
             "key": "api_workload_logs",
             "label": "REST API: workload logs",
-            "description": "GET endpoint for a workload's logs (tailLines applied automatically).",
+            "description": "GET endpoint for all currently available workload logs; JSON and plain-text responses are supported.",
             "command": "GET /api/v1/workloads/{workload_id}/logs",
             "placeholders": [{"name": "workload_id", "description": "Run:ai workload id (uuid)"}],
+            "kind": "rest",
         },
         {
             "key": "api_workload_metrics",
             "label": "REST API: workload metrics",
-            "description": "GET endpoint for a workload's GPU/CPU utilization and memory metrics (metric types applied automatically).",
+            "description": "GET endpoint for workload-lifetime GPU/CPU utilization and memory metrics (metricType/start/end are applied automatically).",
             "command": "GET /api/v1/workloads/{workload_id}/metrics",
             "placeholders": [{"name": "workload_id", "description": "Run:ai workload id (uuid)"}],
+            "kind": "rest",
         },
     ],
     "v1": [
@@ -279,9 +287,9 @@ RUNAI_COMMAND_CATALOG = {
         {
             "key": "workload_list",
             "label": "List workloads",
-            "description": "List jobs for the dashboard in the selected project.",
-            "command": "runai list jobs -p {project}",
-            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+            "description": "List every job from every project for the dashboard.",
+            "command": "runai list jobs --all-projects",
+            "placeholders": [],
         },
         {
             "key": "submit",
@@ -344,7 +352,6 @@ class AutoscalerBLL:
         "OC_BINARY",
     )
     _project_flag_command_keys = frozenset({
-        "workload_list",
         "compute_list",
         "compute_describe",
         "environment_list",
@@ -383,8 +390,12 @@ class AutoscalerBLL:
         "node_type",
         "priority",
         "preemptibility",
+        "run_as_uid",
+        "run_as_gid",
+        "supplemental_groups",
         "existing_pvc",
         "working_dir",
+        "large_shm",
         "parallelism",
         "runs",
         "restart_policy",
@@ -467,6 +478,15 @@ class AutoscalerBLL:
     # Run:ai control plane using a cached bearer token (NOT the CLI).     #
     # ------------------------------------------------------------------ #
     _api_timeout = 15
+    _api_page_limit = 500
+    _api_max_pages = 1000
+    _api_metric_samples = 1000
+    _api_metric_types = (
+        "GPU_UTILIZATION",
+        "GPU_MEMORY_USAGE_BYTES",
+        "CPU_USAGE_CORES",
+        "CPU_MEMORY_USAGE_BYTES",
+    )
     _token_skew = timedelta(seconds=60)
 
     @classmethod
@@ -498,18 +518,60 @@ class AutoscalerBLL:
             text = str(template).format_map(_SafeFormatDict(subs or {}))
         except Exception:
             text = default
-        parts = text.strip().split(None, 1)
+        # REST catalog entries are displayed as HTTP requests.  Only the request
+        # line controls routing; headers/body shown by the UI must never become
+        # part of the URL if a multi-line override is saved.
+        request_line = text.strip().splitlines()[0].strip()
+        parts = request_line.split(None, 1)
         if len(parts) == 2 and parts[0].upper() in ("GET", "POST", "PUT", "DELETE", "PATCH"):
             return parts[1].strip()
-        return text.strip()
+        return request_line
 
-    def _fetch_api_token(self, settings, company_id: str) -> Optional[str]:
+    @staticmethod
+    def _api_url(base: str, path: str) -> str:
+        path = (path or "").strip()
+        if path.lower().startswith(("http://", "https://")):
+            return path
+        return f"{base.rstrip('/')}/{path.lstrip('/')}"
+
+    @classmethod
+    def _token_url(cls, settings) -> Optional[str]:
+        """Resolve the token URL from a control-plane base URL.
+
+        The Connection dialog expects a base URL without ``/api/v1/token``.  Be
+        tolerant of users including the suffix, while avoiding a duplicated
+        token path in the resulting request.
+        """
+        base = cls._api_base(settings)
+        if not base:
+            return None
+        if base.lower().endswith("/api/v1/token"):
+            return base
+        token_path = cls._api_endpoint(settings, "api_token", {"cp_url": base}) or "/api/v1/token"
+        return cls._api_url(base, token_path)
+
+    @staticmethod
+    def _redact_token_error(value: str, client_secret: str) -> str:
+        text = str(value or "").strip()
+        if client_secret:
+            text = text.replace(client_secret, "<redacted>")
+        return text[:1000]
+
+    def _fetch_api_token_result(self, settings, company_id: str):
         base = self._api_base(settings)
         client_id = (getattr(settings, "runai_access_key", None) or "").strip()
         client_secret = (getattr(settings, "runai_secret_key", None) or "").strip()
-        if not base or not client_id or not client_secret:
-            return None
-        token_url = self._api_endpoint(settings, "api_token", {"cp_url": base}) or f"{base}/api/v1/token"
+        missing = []
+        if not base:
+            missing.append("Run:ai control plane URL")
+        if not client_id:
+            missing.append("client id / application access key")
+        if not client_secret:
+            missing.append("client secret / application secret key")
+        if missing:
+            return None, f"Missing {', '.join(missing)} in the Connection dialog"
+
+        token_url = self._token_url(settings)
         try:
             resp = requests.post(
                 token_url,
@@ -521,13 +583,35 @@ class AutoscalerBLL:
                 timeout=self._api_timeout,
             )
             resp.raise_for_status()
-            data = resp.json()
+        except requests.RequestException as ex:
+            response = getattr(ex, "response", None)
+            status = getattr(response, "status_code", None)
+            detail = self._redact_token_error(getattr(response, "text", ""), client_secret)
+            suffix = f" (HTTP {status})" if status else ""
+            if detail:
+                suffix += f": {detail}"
+            else:
+                suffix += f": {self._redact_token_error(ex, client_secret)}"
+            return None, f"Run:ai token request to {token_url} failed{suffix}"
         except Exception as ex:
-            log.warning(f"Run:ai token request failed: {ex}")
-            return None
+            return None, (
+                f"Run:ai token request to {token_url} failed: "
+                f"{self._redact_token_error(ex, client_secret)}"
+            )
+
+        try:
+            data = resp.json()
+        except (TypeError, ValueError) as ex:
+            return None, (
+                f"Run:ai token endpoint {token_url} returned invalid JSON: "
+                f"{self._redact_token_error(ex, client_secret)}"
+            )
+        if not isinstance(data, dict):
+            return None, f"Run:ai token endpoint {token_url} returned a non-object JSON response"
+
         token = data.get("accessToken") or data.get("access_token")
         if not token:
-            return None
+            return None, f"Run:ai token endpoint {token_url} response did not contain accessToken"
         expires_in = data.get("expiresIn") or data.get("expires_in") or 1800
         try:
             expiry = datetime.utcnow() + timedelta(seconds=int(expires_in))
@@ -537,15 +621,29 @@ class AutoscalerBLL:
             set__runai_api_token=token,
             set__runai_api_token_expiry=expiry,
         )
+        settings.runai_api_token = token
+        settings.runai_api_token_expiry = expiry
+        return token, None
+
+    def _fetch_api_token(self, settings, company_id: str) -> Optional[str]:
+        token, error = self._fetch_api_token_result(settings, company_id)
+        if error:
+            log.warning(error)
         return token
 
-    def _get_api_token(self, settings, company_id: str, force: bool = False) -> Optional[str]:
+    def _get_api_token_result(self, settings, company_id: str, force: bool = False):
         if not force:
             token = getattr(settings, "runai_api_token", None)
             expiry = getattr(settings, "runai_api_token_expiry", None)
             if token and expiry and expiry - self._token_skew > datetime.utcnow():
-                return token
-        return self._fetch_api_token(settings, company_id)
+                return token, None
+        return self._fetch_api_token_result(settings, company_id)
+
+    def _get_api_token(self, settings, company_id: str, force: bool = False) -> Optional[str]:
+        token, error = self._get_api_token_result(settings, company_id, force)
+        if error:
+            log.warning(error)
+        return token
 
     def refresh_api_token(self, company_id: str) -> Optional[str]:
         settings = AutoscalerSettings.objects(company=company_id).first()
@@ -556,33 +654,135 @@ class AutoscalerBLL:
     def _api_get(self, settings, company_id: str, path: str, params=None):
         base = self._api_base(settings)
         if not base:
-            return None
-        token = self._get_api_token(settings, company_id)
+            return {"ok": False, "data": None, "status": None, "error": "Run:ai control plane URL is not configured"}
+        token, token_error = self._get_api_token_result(settings, company_id)
         if not token:
-            return None
-        url = f"{base}{path}"
+            return {"ok": False, "data": None, "status": None, "error": token_error or "Failed to obtain a Run:ai API access token"}
+        url = self._api_url(base, path)
         try:
             resp = requests.get(
                 url,
                 params=params,
-                headers={"Authorization": f"Bearer {token}"},
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json, text/plain, */*",
+                },
                 timeout=self._api_timeout,
             )
             if resp.status_code == 401:
-                token = self._get_api_token(settings, company_id, force=True)
+                token, token_error = self._get_api_token_result(settings, company_id, force=True)
                 if not token:
-                    return None
+                    return {"ok": False, "data": None, "status": 401, "error": token_error or "Run:ai API authentication failed"}
                 resp = requests.get(
                     url,
                     params=params,
-                    headers={"Authorization": f"Bearer {token}"},
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/json, text/plain, */*",
+                    },
                     timeout=self._api_timeout,
                 )
             resp.raise_for_status()
-            return resp.json()
+            content_type = (resp.headers.get("Content-Type") or "").lower()
+            text = resp.text or ""
+            if "json" in content_type or text.lstrip().startswith(("{", "[")):
+                try:
+                    data = resp.json()
+                except ValueError:
+                    data = text
+            else:
+                data = text
+            result = {"ok": True, "data": data, "status": resp.status_code, "error": None}
+            if resp.status_code == 207:
+                result["warning"] = "Run:ai returned partial data (HTTP 207)"
+            return result
         except Exception as ex:
-            log.warning(f"Run:ai API GET {path} failed: {ex}")
-            return None
+            status = getattr(getattr(ex, "response", None), "status_code", None)
+            response = getattr(ex, "response", None)
+            detail = self._api_error_detail(response)
+            prefix = f"HTTP {status}" if status else type(ex).__name__
+            message = f"{prefix}: {detail or str(ex)}"
+            log.warning(f"Run:ai API GET {path} failed: {message}")
+            return {"ok": False, "data": None, "status": status, "error": message}
+
+    @staticmethod
+    def _api_error_detail(response) -> str:
+        if response is None:
+            return ""
+        try:
+            body = response.json()
+        except (TypeError, ValueError):
+            body = getattr(response, "text", "") or ""
+        if isinstance(body, dict):
+            detail = body.get("message") or body.get("detail") or body.get("error") or body.get("errors")
+            if isinstance(detail, (dict, list)):
+                detail = json.dumps(detail, separators=(",", ":"))
+        else:
+            detail = body
+        return str(detail or "").strip().replace("\n", " ")[:500]
+
+    def _api_get_all_pages(
+        self, settings, company_id: str, path: str, collection_key: str, params=None
+    ) -> dict:
+        """Fetch every offset-based Run:ai collection page.
+
+        Workload events default to 50 entries and allow at most 500 per request.
+        The response's optional ``next`` field is the offset for the next page.
+        """
+        items = []
+        offset = 0
+        seen_offsets = set()
+        base_params = dict(params or {})
+        last_status = None
+        for _ in range(self._api_max_pages):
+            if offset in seen_offsets:
+                return {
+                    "ok": False,
+                    "data": {collection_key: items},
+                    "status": last_status,
+                    "error": "Run:ai returned a repeated pagination offset",
+                }
+            seen_offsets.add(offset)
+            page_params = {
+                **base_params,
+                "offset": offset,
+                "limit": self._api_page_limit,
+            }
+            result = self._api_get(settings, company_id, path, page_params)
+            last_status = result.get("status")
+            if not result.get("ok"):
+                result["data"] = {collection_key: items}
+                return result
+            data = result.get("data")
+            if not isinstance(data, dict):
+                return {
+                    "ok": False,
+                    "data": {collection_key: items},
+                    "status": last_status,
+                    "error": f"Run:ai returned an invalid {collection_key} response",
+                }
+            page_items = data.get(collection_key)
+            if not isinstance(page_items, list):
+                page_items = []
+            items.extend(page_items)
+            next_offset = data.get("next")
+            if next_offset in (None, ""):
+                return {"ok": True, "data": {collection_key: items}, "status": last_status, "error": None}
+            try:
+                offset = int(next_offset)
+            except (TypeError, ValueError):
+                return {
+                    "ok": False,
+                    "data": {collection_key: items},
+                    "status": last_status,
+                    "error": "Run:ai returned an invalid pagination offset",
+                }
+        return {
+            "ok": False,
+            "data": {collection_key: items},
+            "status": last_status,
+            "error": f"Run:ai {collection_key} pagination exceeded {self._api_max_pages} pages",
+        }
 
     def get_workload_info(self, company_id: str, workload_id: str) -> dict:
         """Aggregate details/events/logs/metrics for one Run:ai workload via the
@@ -595,37 +795,108 @@ class AutoscalerBLL:
             return {"connected": False, "error": "No stored Run:ai connection settings configured"}
         if not self._api_base(settings):
             return {"connected": False, "error": "Run:ai control plane URL is not configured"}
-        if not self._get_api_token(settings, company_id):
-            return {"connected": False, "error": "Failed to obtain a Run:ai API access token"}
+        token, token_error = self._get_api_token_result(settings, company_id)
+        if not token:
+            return {"connected": False, "error": token_error or "Failed to obtain a Run:ai API access token"}
 
-        subs = {"workload_id": workload_id}
-        details_path = self._api_endpoint(settings, "api_workload_details", subs) or f"/api/v1/workloads/{workload_id}"
-        events_path = self._api_endpoint(settings, "api_workload_events", subs) or f"/api/v1/workloads/{workload_id}/events"
-        logs_path = self._api_endpoint(settings, "api_workload_logs", subs) or f"/api/v1/workloads/{workload_id}/logs"
-        metrics_path = self._api_endpoint(settings, "api_workload_metrics", subs) or f"/api/v1/workloads/{workload_id}/metrics"
-        details = self._api_get(settings, company_id, details_path) or {}
-        events = self._api_get(settings, company_id, events_path) or {}
-        logs = self._api_get(settings, company_id, logs_path, {"tailLines": 200})
-        metrics = self._api_get(
+        safe_workload_id = quote(workload_id, safe="")
+        subs = {"workload_id": safe_workload_id}
+        details_path = self._api_endpoint(settings, "api_workload_details", subs) or f"/api/v1/workloads/{safe_workload_id}"
+        events_path = self._api_endpoint(settings, "api_workload_events", subs) or f"/api/v1/workloads/{safe_workload_id}/events"
+        logs_path = self._api_endpoint(settings, "api_workload_logs", subs) or f"/api/v1/workloads/{safe_workload_id}/logs"
+        metrics_path = self._api_endpoint(settings, "api_workload_metrics", subs) or f"/api/v1/workloads/{safe_workload_id}/metrics"
+
+        details_result = self._api_get(settings, company_id, details_path)
+        details = details_result.get("data") if details_result.get("ok") else {}
+        events_result = self._api_get_all_pages(
+            settings, company_id, events_path, "events", {"sortOrder": "asc"}
+        )
+        # ``tailLines`` is optional according to the cluster API guide. Omitting
+        # it requests the complete available log rather than the previous 200-line
+        # tail. Run:ai may return either JSON or plain text here.
+        logs_result = self._api_get(settings, company_id, logs_path)
+        metric_start, metric_end = self._workload_metric_range(details)
+        metric_params = [("metricType", name) for name in self._api_metric_types]
+        metric_params.extend([
+            ("start", metric_start),
+            ("end", metric_end),
+            ("numberOfSamples", str(self._api_metric_samples)),
+        ])
+        metrics_result = self._api_get(
             settings,
             company_id,
             metrics_path,
-            [
-                ("metricType", "GPU_UTILIZATION"),
-                ("metricType", "GPU_MEMORY_USAGE_BYTES"),
-                ("metricType", "CPU_USAGE_CORES"),
-                ("metricType", "CPU_MEMORY_USAGE_BYTES"),
-                ("numberOfSamples", "60"),
-            ],
+            metric_params,
         )
-        return {
-            "connected": True,
-            "workload_id": workload_id,
-            "details": self._summarize_workload_details(details),
-            "events": self._summarize_workload_events(events),
-            "logs": self._summarize_api_logs(logs),
-            "metrics": self._summarize_workload_metrics(metrics),
+
+        results = {
+            "details": details_result,
+            "events": events_result,
+            "logs": logs_result,
+            "metrics": metrics_result,
         }
+        errors = {
+            key: result.get("error") or result.get("warning")
+            for key, result in results.items()
+            if result.get("error") or result.get("warning")
+        }
+        details_summary = self._summarize_workload_details(details)
+        if logs_result.get("status") == 404 and details_summary.get("status", "").lower() in {
+            "completed", "failed", "succeeded", "deleted"
+        }:
+            errors["logs"] = (
+                f"Run:ai does not expose logs after a workload enters the "
+                f"{details_summary['status']} state"
+            )
+        successful = [key for key, result in results.items() if result.get("ok")]
+        connected = bool(successful)
+        error = None
+        if errors:
+            error = (
+                "Some Run:ai workload data could not be loaded"
+                if connected
+                else "Run:ai workload API requests failed"
+            )
+        return {
+            "connected": connected,
+            "partial": bool(errors) and connected,
+            "error": error,
+            "errors": errors,
+            "workload_id": workload_id,
+            "details": details_summary,
+            "events": self._summarize_workload_events(events_result.get("data")),
+            "logs": self._summarize_api_logs(logs_result.get("data")),
+            "metrics": self._summarize_workload_metrics(
+                metrics_result.get("data"), metric_start, metric_end
+            ),
+        }
+
+    @staticmethod
+    def _workload_metric_range(details) -> tuple:
+        item = details.get("workload") if isinstance(details, dict) and isinstance(details.get("workload"), dict) else details
+        item = item if isinstance(item, dict) else {}
+        now = datetime.utcnow()
+
+        def parse(value):
+            if not value:
+                return None
+            try:
+                parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+                if parsed.tzinfo:
+                    parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+                return parsed
+            except (TypeError, ValueError):
+                return None
+
+        start = parse(item.get("createdAt") or item.get("creationTimestamp") or item.get("created"))
+        end = parse(item.get("completedAt") or item.get("deletedAt")) or now
+        if not start or start >= end:
+            start = end - timedelta(hours=1)
+
+        def iso(value):
+            return value.isoformat(timespec="milliseconds") + "Z"
+
+        return iso(start), iso(end)
 
     @classmethod
     def _summarize_workload_details(cls, data) -> dict:
@@ -633,15 +904,24 @@ class AutoscalerBLL:
         item = item if isinstance(item, dict) else {}
         spec = item.get("spec") if isinstance(item.get("spec"), dict) else {}
         merged = {**spec, **item}
+        requested = merged.get("workloadRequestedResources")
+        requested = requested if isinstance(requested, dict) else {}
+        gpu = requested.get("gpu") if isinstance(requested.get("gpu"), dict) else {}
+        requested_gpu = cls._to_number(gpu.get("request") if gpu else None)
+        images = merged.get("images") if isinstance(merged.get("images"), list) else []
+        node_pools = merged.get("currentNodePools") or merged.get("requestedNodePools") or []
+        if isinstance(node_pools, list):
+            node_pools = ", ".join(str(value) for value in node_pools)
         return {
             "name": cls._pick(merged, ("name", "workloadName", "workload_name")) or "",
             "type": cls._pick(merged, ("type", "workloadType", "kind", "category")) or "",
             "status": cls._pick(merged, ("phase", "status", "state")) or "unknown",
             "project": cls._pick(merged, ("project", "projectName", "namespace")) or "",
             "cluster": cls._pick(merged, ("cluster", "clusterName", "clusterId")) or "",
-            "image": cls._pick(merged, ("image", "imageName")) or "",
-            "gpus": cls._find_number(merged, ("gpu", "gpus", "gpuDevices", "requestedGpus")),
-            "node_pool": cls._pick(merged, ("nodePool", "node_pool", "nodePoolName")) or "",
+            "image": cls._pick(merged, ("image", "imageName")) or ", ".join(str(value) for value in images),
+            "gpus": requested_gpu if requested_gpu is not None
+                    else cls._find_number(merged, ("gpu", "gpus", "gpuDevices", "requestedGpus")),
+            "node_pool": cls._pick(merged, ("nodePool", "node_pool", "nodePoolName")) or node_pools,
             "command": cls._pick(merged, ("command", "cmd")) or "",
             "created": cls._pick(merged, ("createdAt", "creationTimestamp", "created")) or "",
             "submitted_by": cls._pick(merged, ("submittedBy", "user", "owner")) or "",
@@ -651,37 +931,62 @@ class AutoscalerBLL:
     def _summarize_workload_events(cls, data) -> list:
         rows = cls._as_list(data, ("events", "items", "data"))
         events = []
-        for row in rows[:100]:
+        for row in rows:
             if not isinstance(row, dict):
                 continue
+            event_type = str(cls._pick(row, ("type", "severity", "level")) or "").lower()
+            source = cls._pick(row, ("source", "eventIssuer", "issuer", "reportingComponent"))
+            if isinstance(source, dict):
+                source = cls._pick(source, ("component", "name", "host"))
+            involved = row.get("involvedObject")
+            involved = involved if isinstance(involved, dict) else {}
+            level = (
+                "fail" if event_type in {"error", "failed", "failure", "fatal"}
+                else "warn" if event_type in {"warning", "warn"}
+                else event_type
+            )
             events.append({
                 "time": cls._pick(row, ("createdAt", "timestamp", "time", "creationTimestamp")) or "",
                 "message": cls._pick(row, ("message", "description", "note")) or "",
                 "reason": cls._pick(row, ("reason", "type", "eventType")) or "",
-                "level": (cls._pick(row, ("type", "severity", "level")) or "").lower(),
+                "level": level,
+                "event_type": cls._pick(row, ("type", "eventType", "severity")) or "",
+                "issuer": source or "",
+                "component": cls._pick(involved, ("kind", "name"))
+                             or cls._pick(row, ("component", "objectKind")) or "",
             })
         return events
 
     @classmethod
     def _summarize_api_logs(cls, data) -> dict:
         if data is None:
-            return {"lines": [], "source": "runai"}
+            return {"lines": [], "source": "Run:ai REST API"}
         if isinstance(data, dict):
-            raw = data.get("logs") or data.get("log") or data.get("raw") or ""
             lines = data.get("lines") if isinstance(data.get("lines"), list) else None
             if lines is None:
-                lines = [ln for ln in str(raw).splitlines() if ln]
+                raw = data.get("logs") or data.get("log") or data.get("raw") or data.get("content") or ""
+                if isinstance(raw, list):
+                    lines = []
+                    for entry in raw:
+                        if isinstance(entry, dict):
+                            entry = entry.get("log") or entry.get("content") or entry.get("lines") or ""
+                        if isinstance(entry, list):
+                            lines.extend(str(line) for line in entry)
+                        else:
+                            lines.extend(str(entry).splitlines())
+                else:
+                    lines = str(raw).splitlines()
         elif isinstance(data, list):
-            lines = [str(ln) for ln in data if str(ln)]
+            lines = [str(ln) for ln in data]
         else:
-            lines = [ln for ln in str(data).splitlines() if ln]
-        return {"lines": lines[-500:], "source": "runai"}
+            lines = str(data).splitlines()
+        return {"lines": lines, "source": "Run:ai REST API"}
 
     @classmethod
-    def _summarize_workload_metrics(cls, data) -> dict:
+    def _summarize_workload_metrics(cls, data, start: str = "", end: str = "") -> dict:
         series = cls._as_list(data, ("measurements", "metrics", "series", "data"))
         out = []
-        averages = {}
+        average_values = {}
         for entry in series:
             if not isinstance(entry, dict):
                 continue
@@ -699,10 +1004,18 @@ class AutoscalerBLL:
                 if num is not None:
                     nums.append(num)
                 points.append({"t": ts, "v": num})
-            out.append({"type": metric_type, "points": points})
+            labels = entry.get("labels") if isinstance(entry.get("labels"), dict) else {}
+            label_suffix = ", ".join(f"{key}={value}" for key, value in sorted(labels.items()))
+            series_id = f"{metric_type}:{label_suffix}" if label_suffix else metric_type
+            out.append({"id": series_id, "type": metric_type, "labels": labels, "points": points})
             if nums:
-                averages[metric_type] = round(sum(nums) / len(nums), 2)
-        return {"series": out, "averages": averages}
+                average_values.setdefault(metric_type, []).extend(nums)
+        averages = {
+            metric_type: round(sum(values) / len(values), 2)
+            for metric_type, values in average_values.items()
+            if values
+        }
+        return {"series": out, "averages": averages, "range": {"start": start, "end": end}}
 
     @staticmethod
     def _as_list(data, keys) -> list:
@@ -734,11 +1047,40 @@ class AutoscalerBLL:
             for version, entries in RUNAI_COMMAND_CATALOG.items()
         }
 
+    @classmethod
+    def _token_request_preview(cls, settings) -> str:
+        token_url = cls._token_url(settings) if settings else None
+        client_id = (getattr(settings, "runai_access_key", None) or "").strip() if settings else ""
+        has_secret = bool((getattr(settings, "runai_secret_key", None) or "").strip()) if settings else False
+        body = json.dumps(
+            {
+                "grantType": "client_credentials",
+                "clientId": client_id or "<client id from Connection dialog>",
+                "clientSecret": "******** (from Connection dialog)" if has_secret else "<client secret from Connection dialog>",
+            },
+            indent=2,
+        )
+        return (
+            f'curl `\n  -X POST "{token_url or "<control-plane-url>/api/v1/token"}" `\n'
+            '  -H "Content-Type: application/json" `\n'
+            f"  -d '{body}'"
+        )
+
     def get_command_templates(self, company_id: str) -> dict:
         settings = AutoscalerSettings.objects(company=company_id).first()
         overrides = self._command_overrides(settings) if settings else {}
+        catalog = deepcopy(RUNAI_COMMAND_CATALOG)
+        for entry in catalog.get("v2", []):
+            if entry.get("key") == "api_token":
+                entry["request_preview"] = self._token_request_preview(settings)
+                entry["credential_source"] = (
+                    "clientId = Run:ai Application Access Key; "
+                    "clientSecret = Run:ai Application Secret Key (Connection dialog)."
+                )
+                entry["resolved_url"] = self._token_url(settings) if settings else None
+                break
         return {
-            "catalog": RUNAI_COMMAND_CATALOG,
+            "catalog": catalog,
             "overrides": overrides,
         }
 
@@ -778,10 +1120,50 @@ class AutoscalerBLL:
             if not isinstance(commands, dict):
                 continue
             normalized[version] = {
-                key: cls._ensure_project_placeholder(key, template)
+                key: cls._normalize_command_override(version, key, template)
                 for key, template in commands.items()
             }
         return normalized
+
+    @classmethod
+    def _normalize_command_override(cls, version: str, key: str, template):
+        text = str(template or "").strip()
+        if key == "workload_list":
+            return cls._ensure_all_projects_workload_list(version, text)
+        return cls._ensure_project_placeholder(key, text)
+
+    @staticmethod
+    def _ensure_all_projects_workload_list(version: str, template: str) -> str:
+        """Migrate saved workload-list overrides to the all-projects form.
+
+        Project scoping and ``--no-pagination`` were both responsible for live
+        workloads disappearing from the App Instances list.  Settings created
+        before the catalog correction are normalized when they are read so the
+        dashboard cannot silently retain the old behavior.
+        """
+        if not template:
+            return template
+        try:
+            original = shlex.split(template)
+        except ValueError:
+            return template
+
+        normalized = []
+        skip_next = False
+        for part in original:
+            if skip_next:
+                skip_next = False
+                continue
+            if part in {"-p", "--project"}:
+                skip_next = True
+                continue
+            if part.startswith(("-p=", "--project=")):
+                continue
+            if part in {"-A", "--all", "--all-projects", "--no-pagination"}:
+                continue
+            normalized.append(part)
+        normalized.append("--all-projects" if version == "v1" else "-A")
+        return shlex.join(normalized)
 
     @classmethod
     def _ensure_project_placeholder(cls, key: str, template):
@@ -1562,6 +1944,19 @@ class AutoscalerBLL:
             for command in self._project_list_commands(conn):
                 projects, success = self._runai_records_from_command(command, env, console_log)
                 if success:
+                    if (
+                        self._connection_method(conn) == "runai_application"
+                        and self._api_base(conn)
+                        and getattr(conn, "runai_access_key", None)
+                        and getattr(conn, "runai_secret_key", None)
+                    ):
+                        token, token_error = self._get_api_token_result(
+                            conn, execution.company, force=True
+                        )
+                        if not token:
+                            raise RuntimeError(
+                                token_error or "Failed to obtain a Run:ai API access token"
+                            )
                     return SimpleNamespace(
                         returncode=0,
                         stdout="",
@@ -2217,15 +2612,12 @@ class AutoscalerBLL:
 
     @classmethod
     def _workload_list_commands(cls, conn) -> list:
-        v2_cmd = ["runai", "workload", "list", "--json", "--no-pagination"]
-        v1_cmd = ["runai", "list", "jobs", "--json"]
-        project = getattr(conn, "runai_project", None)
-        if project:
-            v2_cmd = [*v2_cmd, "-p", project]
-            v1_cmd = ["runai", "list", "jobs", "-p", project]
-        else:
-            v1_cmd = ["runai", "list", "jobs", "--all-projects"]
-        return cls._cli_candidates(conn, [v2_cmd], [v1_cmd, ["runai", "list", "jobs"]], key="workload_list", subs={"project": project or ""})
+        return cls._cli_candidates(
+            conn,
+            [["runai", "workload", "list", "--json", "-A"]],
+            [["runai", "list", "jobs", "--all-projects"]],
+            key="workload_list",
+        )
 
     @classmethod
     def _delete_workload_commands(cls, conn, request: DeleteWorkloadRequest) -> list:
@@ -2312,9 +2704,15 @@ class AutoscalerBLL:
                     return nested
         return empty_collection or []
 
-    @staticmethod
-    def _extract_table_records(output: str) -> list:
-        lines = []
+    @classmethod
+    def _extract_table_records(cls, output: str) -> list:
+        """Parse legacy CLI v1 tables while retaining a raw fallback.
+
+        CLI v1 does not reliably provide JSON output.  Parsing its header is
+        necessary for all-project workload rows to retain name, project, and
+        phase instead of collapsing into ``Unnamed workload`` entries.
+        """
+        content = []
         for line in output.splitlines():
             text = line.strip()
             if not text:
@@ -2324,15 +2722,60 @@ class AutoscalerBLL:
                 continue
             if set(text) <= {"-", "+", "|", " "}:
                 continue
-            header_tokens = set(lowered.split())
+            content.append(text.replace("\t", "  "))
+
+        if not content:
+            return []
+
+        header_index = None
+        headers = []
+        compact_header = False
+        for index, text in enumerate(content):
+            candidates = [part.strip() for part in re.split(r"\s{2,}", text) if part.strip()]
+            words = set(text.lower().replace("_", " ").split())
             if (
-                not lines
-                and header_tokens & {"project", "name"}
-                and header_tokens & {"status", "state", "phase"}
+                words & {"project", "name"}
+                and words & {"status", "state", "phase"}
             ):
+                if len(candidates) <= 1:
+                    candidates = text.split()
+                    compact_header = True
+                header_index = index
+                headers = [cls._table_header_name(part) for part in candidates]
+                break
+
+        if header_index is None:
+            return [{"raw": text} for text in content]
+
+        records = []
+        for text in content[header_index + 1:]:
+            values = (
+                text.split(None, len(headers) - 1)
+                if compact_header
+                else [part.strip() for part in re.split(r"\s{2,}", text, maxsplit=len(headers) - 1)]
+            )
+            if len(values) != len(headers):
+                records.append({"raw": text})
                 continue
-            lines.append({"raw": text})
-        return lines
+            record = {header: value for header, value in zip(headers, values)}
+            record["raw"] = text
+            records.append(record)
+        return records
+
+    @staticmethod
+    def _table_header_name(header: str) -> str:
+        normalized = re.sub(r"[^a-z0-9]+", "_", header.lower()).strip("_")
+        return {
+            "job": "name",
+            "job_name": "name",
+            "workload": "name",
+            "workload_name": "name",
+            "state": "phase",
+            "status": "phase",
+            "project_name": "project",
+            "workload_type": "type",
+            "gpu": "gpus",
+        }.get(normalized, normalized)
 
     @classmethod
     def _build_dashboard_data(cls, workloads: list, nodes: list, projects: list, console_log: list) -> dict:
@@ -2359,21 +2802,49 @@ class AutoscalerBLL:
             "status_counts": status_counts,
             "resources": resources,
             "queues": queues,
-            "instances": instances[:100],
+            "instances": instances,
             "console_log": console_log[-20:],
         }
 
     @classmethod
     def _summarize_workload(cls, item: dict) -> dict:
         return {
-            "name": cls._pick(item, ("name", "workloadName", "workload_name", "id")) or "Unnamed workload",
+            "name": cls._pick(item, ("name", "workloadName", "workload_name", "jobName", "job_name", "id")) or "Unnamed workload",
             "workload_id": cls._pick(item, ("id", "uuid", "workloadId", "workload_id")),
             "type": cls._pick(item, ("type", "workloadType", "workload_type", "category")) or "",
-            "status": cls._pick(item, ("status", "state", "phase", "workloadStatus")) or "unknown",
+            "status": cls._canonical_workload_phase(item),
             "project": cls._pick(item, ("project", "projectName", "project_name", "namespace")) or "",
             "gpus": cls._find_number(item, ("gpu", "gpus", "gpuDevices", "gpu_devices", "requestedGpus")),
             "age": cls._pick(item, ("age", "createdAt", "created", "creationTimestamp")) or "",
         }
+
+    @classmethod
+    def _canonical_workload_phase(cls, item: dict) -> str:
+        # ``phase`` is the authoritative value returned by
+        # ``runai workload list --json -A``.  Older CLI v1 tables use STATUS or
+        # STATE, so those are retained only as compatibility fallbacks.
+        value = cls._pick(item, ("phase",))
+        if value in (None, ""):
+            value = cls._pick(item, ("status", "state", "workloadStatus"))
+        text = str(value or "").strip()
+        aliases = {
+            "running": "Running",
+            "ready": "Running",
+            "active": "Running",
+            "completed": "Completed",
+            "succeeded": "Completed",
+            "success": "Completed",
+            "finished": "Completed",
+            "creating": "Creating",
+            "initializing": "Initializing",
+            "pending": "Pending",
+            "queued": "Pending",
+            "failed": "Failed",
+            "error": "Failed",
+            "crashed": "Failed",
+            "evicted": "Failed",
+        }
+        return aliases.get(text.lower(), text or "Unknown")
 
     @classmethod
     def _summarize_resources(cls, nodes: list, projects: list, instances: list) -> dict:
@@ -2559,6 +3030,9 @@ class AutoscalerBLL:
             "args": cls._asset_text(item, ("args", "arguments")),
             "working_dir": cls._asset_value(item, ("workingDir", "working_dir", "workingDirectory")),
             "environment_variables": cls._asset_env_vars(item),
+            "run_as_uid": cls._asset_value(item, ("runAsUid", "run_as_uid")),
+            "run_as_gid": cls._asset_value(item, ("runAsGid", "run_as_gid")),
+            "supplemental_groups": cls._asset_value(item, ("supplementalGroups", "supplemental_groups")),
         }
 
     @classmethod
@@ -2634,13 +3108,11 @@ class AutoscalerBLL:
         if wtype not in ("training", "workspace", "inference"):
             raise ValueError(f"Unknown workload type: {wtype}")
 
-        # ``cmd`` accumulates the workload arguments that follow the editable
-        # submit base command (the prefix). The concrete prefix per CLI version
-        # is resolved from the command-template catalog/overrides below.
+        # ``cmd`` accumulates flags only. The workload name must be inserted
+        # immediately after the ``submit`` token; placing it after a project
+        # flag makes Run:ai interpret it as a container argument when ``--`` is
+        # present ("found args prior to args marker").
         cmd = []
-
-        if workload.workload_name:
-            cmd.append(workload.workload_name)
 
         # Image
         if workload.image:
@@ -2657,10 +3129,12 @@ class AutoscalerBLL:
         if workload.compute:
             v2_asset_args.extend(["--compute", workload.compute])
         if workload.environment:
-            for environment_name in workload.environment.split(","):
-                environment_name = environment_name.strip()
-                if environment_name:
-                    v2_asset_args.extend(["--environment", environment_name])
+            # An environment is a complete container definition. Run:ai accepts
+            # one environment asset per workload, and the dialog enforces the
+            # same invariant. Keep the first value for older saved payloads.
+            environment_name = workload.environment.split(",", 1)[0].strip()
+            if environment_name:
+                v2_asset_args.extend(["--environment", environment_name])
         if workload.data_sources:
             data_sources = cls._load_json(workload.data_sources)
             if not isinstance(data_sources, list):
@@ -2682,10 +3156,6 @@ class AutoscalerBLL:
                 if source_type:
                     descriptor = f"type={source_type},{descriptor}"
                 v2_asset_args.extend(["--datasource", descriptor])
-
-        # Command
-        if workload.command:
-            cmd.extend(["-c", workload.command])
 
         # Environment variables
         if workload.environment_variables:
@@ -2724,11 +3194,21 @@ class AutoscalerBLL:
         if workload.preemptibility:
             cmd.extend(["--preemptibility", workload.preemptibility])
 
+        # Security
+        if workload.run_as_uid:
+            cmd.extend(["--run-as-uid", workload.run_as_uid])
+        if workload.run_as_gid:
+            cmd.extend(["--run-as-gid", workload.run_as_gid])
+        if workload.supplemental_groups:
+            cmd.extend(["--supplemental-groups", workload.supplemental_groups])
+
         # Storage
         if workload.existing_pvc:
             cmd.extend(["--existing-pvc", workload.existing_pvc])
         if workload.working_dir:
             cmd.extend(["--working-dir", workload.working_dir])
+        if workload.large_shm:
+            cmd.append("--large-shm")
 
         # Training-specific
         if wtype == "training":
@@ -2763,16 +3243,49 @@ class AutoscalerBLL:
             if workload.scale_to_zero_retention:
                 cmd.extend(["--scale-to-zero-retention-seconds", workload.scale_to_zero_retention])
 
-        # Args after -- must remain the final argv tokens.
+        # Run:ai's --command is a boolean. The command and its arguments both
+        # belong after the args marker, and must be the final argv tokens.
+        command_parts = cls._shell_words(workload.command)
+        argument_parts = cls._shell_words(workload.args)
         trailing_args = []
-        if workload.args:
+        if command_parts:
+            trailing_args.append("--command")
+        if command_parts or argument_parts:
             trailing_args.append("--")
-            trailing_args.extend(workload.args.split())
+            trailing_args.extend(command_parts)
+            trailing_args.extend(argument_parts)
 
         project = workload.project or getattr(conn, "runai_project", None) or ""
-        prefix_v2 = cls._submit_prefix(conn, "v2", wtype, project)
-        prefix_v1 = cls._submit_prefix(conn, "v1", wtype, project)
+        prefix_v2 = cls._insert_submit_name(
+            cls._submit_prefix(conn, "v2", wtype, project), workload.workload_name
+        )
+        prefix_v1 = cls._insert_submit_name(
+            cls._submit_prefix(conn, "v1", wtype, project), workload.workload_name,
+            use_name_flag=True,
+        )
         v2_cmd = [*prefix_v2, *cmd, *v2_asset_args, *trailing_args]
         v1_cmd = [*prefix_v1, *cmd, *trailing_args]
 
         return cls._cli_candidates(conn, [v2_cmd], [v1_cmd])
+
+    @staticmethod
+    def _insert_submit_name(
+        prefix: list, workload_name: Optional[str], use_name_flag: bool = False
+    ) -> list:
+        if not workload_name:
+            return list(prefix)
+        try:
+            submit_index = prefix.index("submit")
+        except ValueError:
+            return [*prefix, "--name", workload_name] if use_name_flag else [*prefix, workload_name]
+        name_tokens = ["--name", workload_name] if use_name_flag else [workload_name]
+        return [*prefix[:submit_index + 1], *name_tokens, *prefix[submit_index + 1:]]
+
+    @staticmethod
+    def _shell_words(value: Optional[str]) -> list:
+        if not value or not str(value).strip():
+            return []
+        try:
+            return shlex.split(str(value))
+        except ValueError as ex:
+            raise ValueError(f"Invalid workload command or arguments: {ex}")

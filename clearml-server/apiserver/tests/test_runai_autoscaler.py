@@ -120,6 +120,26 @@ def completed(returncode=0, stdout="ok", stderr=""):
     return SimpleNamespace(returncode=returncode, stdout=stdout, stderr=stderr)
 
 
+def api_response(data=None, text=None, status=200, content_type=None):
+    response = MagicMock()
+    response.status_code = status
+    if text is None and data is not None:
+        text = json.dumps(data)
+    response.text = text or ""
+    response.headers = {
+        "Content-Type": content_type or ("application/json" if data is not None else "text/plain")
+    }
+    if data is None:
+        response.json.side_effect = ValueError("not json")
+    else:
+        response.json.return_value = data
+    if status >= 400:
+        response.raise_for_status.side_effect = autoscaler_mod.requests.HTTPError(
+            f"HTTP {status}", response=response
+        )
+    return response
+
+
 class TestAutoscalerBLL(unittest.TestCase):
     def setUp(self):
         for model in (FakeSettings, FakeExecution, FakeAppInstance):
@@ -210,6 +230,233 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertEqual(updated, 1)
         self.assertEqual(settings.id, "existing-id")
         self.assertEqual(settings.runai_project, "new-project")
+
+    def test_workload_info_fetches_all_events_plain_text_logs_and_lifetime_metrics(self):
+        self._settings(runai_cp_url="https://runai.example")
+        details = {
+            "id": "workload-id",
+            "name": "train-one",
+            "type": "runai-job",
+            "phase": "Running",
+            "projectName": "project-a",
+            "clusterId": "cluster-id",
+            "createdAt": "2026-07-13T08:00:00Z",
+            "images": ["repo/image:latest"],
+            "currentNodePools": ["gpu-pool"],
+            "workloadRequestedResources": {"gpu": {"request": 1.5}},
+            "command": "python train.py",
+            "submittedBy": "user@example.com",
+        }
+        first_page = [
+            {
+                "createdAt": f"2026-07-14T08:{index % 60:02d}:00Z",
+                "message": f"event-{index}",
+                "reason": "Scheduled",
+                "type": "Normal",
+            }
+            for index in range(500)
+        ]
+        final_event = {
+            "createdAt": "2026-07-14T09:00:00Z",
+            "message": "warning-event",
+            "reason": "BackOff",
+            "type": "Warning",
+            "source": "kubelet",
+            "involvedObject": {"kind": "Pod", "name": "train-one-0-0"},
+        }
+        log_lines = [f"line-{index}" for index in range(550)]
+        metrics = {
+            "measurements": [
+                {
+                    "type": "GPU_UTILIZATION",
+                    "labels": {"gpu": "0"},
+                    "values": [{"timestamp": "2026-07-14T08:00:00Z", "value": "10"}],
+                },
+                {
+                    "type": "GPU_UTILIZATION",
+                    "labels": {"gpu": "1"},
+                    "values": [{"timestamp": "2026-07-14T08:00:00Z", "value": "30"}],
+                },
+            ]
+        }
+        metric_params = []
+
+        def get_response(url, params=None, **_):
+            if url.endswith("/events"):
+                self.assertEqual(params["limit"], 500)
+                self.assertEqual(params["sortOrder"], "asc")
+                if params["offset"] == 0:
+                    return api_response({"events": first_page, "next": 500})
+                self.assertEqual(params["offset"], 500)
+                return api_response({"events": [final_event]})
+            if url.endswith("/logs"):
+                self.assertIsNone(params)
+                return api_response(text="\n".join(log_lines), content_type="text/plain")
+            if url.endswith("/metrics"):
+                metric_params.extend(params)
+                return api_response(metrics)
+            return api_response(details)
+
+        token_response = api_response({"accessToken": "token", "expiresIn": 1800})
+        with patch.object(autoscaler_mod.requests, "post", return_value=token_response) as post, \
+             patch.object(autoscaler_mod.requests, "get", side_effect=get_response):
+            result = self.bll.get_workload_info("company-id", "workload-id")
+
+        post.assert_called_once_with(
+            "https://runai.example/api/v1/token",
+            json={
+                "grantType": "client_credentials",
+                "clientId": "access",
+                "clientSecret": "secret",
+            },
+            timeout=self.bll._api_timeout,
+        )
+        self.assertTrue(result["connected"])
+        self.assertFalse(result["partial"])
+        self.assertEqual(len(result["events"]), 501)
+        self.assertEqual(result["events"][-1]["level"], "warn")
+        self.assertEqual(result["events"][-1]["event_type"], "Warning")
+        self.assertEqual(result["events"][-1]["issuer"], "kubelet")
+        self.assertEqual(result["events"][-1]["component"], "Pod")
+        self.assertEqual(result["logs"]["lines"], log_lines)
+        self.assertEqual(result["details"]["image"], "repo/image:latest")
+        self.assertEqual(result["details"]["gpus"], 1.5)
+        self.assertEqual(result["details"]["node_pool"], "gpu-pool")
+        self.assertEqual(len(result["metrics"]["series"]), 2)
+        self.assertEqual(
+            {series["id"] for series in result["metrics"]["series"]},
+            {"GPU_UTILIZATION:gpu=0", "GPU_UTILIZATION:gpu=1"},
+        )
+        self.assertEqual(result["metrics"]["averages"]["GPU_UTILIZATION"], 20)
+        self.assertIn(("start", "2026-07-13T08:00:00.000Z"), metric_params)
+        self.assertTrue(any(key == "end" and value.endswith("Z") for key, value in metric_params))
+        self.assertIn(("numberOfSamples", "1000"), metric_params)
+        self.assertEqual(
+            [value for key, value in metric_params if key == "metricType"],
+            list(self.bll._api_metric_types),
+        )
+
+    def test_workload_info_surfaces_terminal_log_failure_without_hiding_other_sections(self):
+        self._settings(
+            runai_cp_url="https://runai.example",
+            runai_api_token="cached-token",
+            runai_api_token_expiry=datetime.utcnow() + timedelta(hours=1),
+        )
+        details = {
+            "name": "done",
+            "phase": "Completed",
+            "createdAt": "2026-07-14T08:00:00Z",
+            "completedAt": "2026-07-14T09:00:00Z",
+        }
+
+        def get_response(url, **_):
+            if url.endswith("/events"):
+                return api_response({"events": []})
+            if url.endswith("/logs"):
+                return api_response({"message": "logs not found"}, status=404)
+            if url.endswith("/metrics"):
+                return api_response({"measurements": []})
+            return api_response(details)
+
+        with patch.object(autoscaler_mod.requests, "get", side_effect=get_response), \
+             patch.object(autoscaler_mod.requests, "post") as post:
+            result = self.bll.get_workload_info("company-id", "workload-id")
+
+        post.assert_not_called()
+        self.assertTrue(result["connected"])
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["details"]["status"], "Completed")
+        self.assertIn("does not expose logs", result["errors"]["logs"])
+        self.assertEqual(result["metrics"]["range"], {
+            "start": "2026-07-14T08:00:00.000Z",
+            "end": "2026-07-14T09:00:00.000Z",
+        })
+
+    def test_token_url_appends_endpoint_to_control_plane_base_without_duplication(self):
+        settings = self._settings(runai_cp_url="https://runai.example")
+        self.assertEqual(
+            self.bll._token_url(settings),
+            "https://runai.example/api/v1/token",
+        )
+
+        settings.runai_cp_url = "https://runai.example/api/v1/token"
+        self.assertEqual(
+            self.bll._token_url(settings),
+            "https://runai.example/api/v1/token",
+        )
+
+    def test_command_catalog_previews_full_token_request_with_connection_credentials_masked(self):
+        self._settings(
+            runai_cp_url="https://runai.example",
+            runai_access_key="saved-client-id",
+            runai_secret_key="saved-client-secret",
+        )
+
+        response = self.bll.get_command_templates("company-id")
+        token_entry = next(
+            entry for entry in response["catalog"]["v2"] if entry["key"] == "api_token"
+        )
+
+        preview = token_entry["request_preview"]
+        self.assertIn('POST "https://runai.example/api/v1/token"', preview)
+        self.assertIn('"grantType": "client_credentials"', preview)
+        self.assertIn('"clientId": "saved-client-id"', preview)
+        self.assertIn('"clientSecret": "******** (from Connection dialog)"', preview)
+        self.assertNotIn("saved-client-secret", preview)
+        self.assertIn("Run:ai Application Access Key", token_entry["credential_source"])
+
+    def test_workload_info_surfaces_token_http_error_without_exposing_secret(self):
+        self._settings(runai_cp_url="https://runai.example", runai_secret_key="super-secret")
+        response = api_response(
+            {"error": "invalid client secret super-secret"}, status=401
+        )
+
+        with patch.object(autoscaler_mod.requests, "post", return_value=response):
+            result = self.bll.get_workload_info("company-id", "workload-id")
+
+        self.assertFalse(result["connected"])
+        self.assertIn("https://runai.example/api/v1/token", result["error"])
+        self.assertIn("HTTP 401", result["error"])
+        self.assertNotIn("super-secret", result["error"])
+        self.assertIn("<redacted>", result["error"])
+
+    def test_workload_info_uses_editable_api_command_overrides(self):
+        overrides = {
+            "v2": {
+                "api_workload_details": "GET https://api-proxy.example/details/{workload_id}",
+                "api_workload_events": "GET /custom/{workload_id}/events",
+                "api_workload_logs": "GET /custom/{workload_id}/logs",
+                "api_workload_metrics": "GET /custom/{workload_id}/metrics",
+            }
+        }
+        self._settings(
+            runai_cp_url="https://runai.example",
+            runai_api_token="cached-token",
+            runai_api_token_expiry=datetime.utcnow() + timedelta(hours=1),
+            command_templates=json.dumps(overrides),
+        )
+        requested_urls = []
+
+        def get_response(url, **_):
+            requested_urls.append(url)
+            if url.endswith("/events"):
+                return api_response({"events": []})
+            if url.endswith("/logs"):
+                return api_response(text="")
+            if url.endswith("/metrics"):
+                return api_response({"measurements": []})
+            return api_response({"name": "custom"})
+
+        with patch.object(autoscaler_mod.requests, "get", side_effect=get_response):
+            result = self.bll.get_workload_info("company-id", "id/with space")
+
+        self.assertTrue(result["connected"])
+        self.assertEqual(requested_urls, [
+            "https://api-proxy.example/details/id%2Fwith%20space",
+            "https://runai.example/custom/id%2Fwith%20space/events",
+            "https://runai.example/custom/id%2Fwith%20space/logs",
+            "https://runai.example/custom/id%2Fwith%20space/metrics",
+        ])
 
     def test_test_connection_requires_saved_settings_and_enqueues_execution(self):
         result = self.bll.test_connection("company-id")
@@ -330,7 +577,11 @@ class TestAutoscalerBLL(unittest.TestCase):
         )
         self.assertIn(["runai-v2", "cluster", "set", "cluster-a"], commands)
         self.assertIn(["runai-v2", "project", "set", "project-a"], commands)
-        self.assertIn(["runai-v2", "training", "standard", "submit", "-p", "project-a", "train-one", "-i", "repo/image:latest", "-c", "python train.py", "-g", "1", "--", "--epochs", "1"], commands)
+        self.assertIn([
+            "runai-v2", "training", "standard", "submit", "train-one",
+            "-p", "project-a", "-i", "repo/image:latest", "-g", "1",
+            "--command", "--", "python", "train.py", "--epochs", "1",
+        ], commands)
 
     def test_process_command_playground_executes_selected_version_and_persists_metadata(self):
         self._settings(runai_cli_version="auto")
@@ -438,6 +689,21 @@ class TestAutoscalerBLL(unittest.TestCase):
 
         self.assertEqual(result["status"], "error")
         self.assertIn("authentication failed", execution.stderr)
+
+    def test_process_connection_test_verifies_rest_token_when_control_plane_is_configured(self):
+        self._settings(runai_cp_url="https://runai.example")
+        execution = self._execution(operation="test_connection", workload_params="{}")
+
+        with patch.object(AutoscalerBLL, "_establish_connection"), \
+             patch.object(AutoscalerBLL, "_set_runai_context"), \
+             patch.object(AutoscalerBLL, "_project_list_commands", return_value=[["runai", "project", "list"]]), \
+             patch.object(AutoscalerBLL, "_runai_records_from_command", return_value=([{"name": "one"}], True)), \
+             patch.object(self.bll, "_get_api_token_result", return_value=("token", None)) as get_token, \
+             patch.object(autoscaler_mod.shutil, "rmtree"):
+            result = self.bll.process_execution(execution)
+
+        self.assertEqual(result["status"], "success")
+        get_token.assert_called_once_with(FakeSettings._store[0], "company-id", force=True)
 
     def test_process_execution_missing_settings_persists_error(self):
         execution = self._execution()
@@ -551,6 +817,28 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertEqual(summary["command"], "vllm serve /models/g-4-31-it")
         self.assertEqual(summary["args"], "--host=0.0.0.0 --port=8000")
 
+    def test_summarize_environment_includes_described_variables_and_security(self):
+        detail = {
+            "meta": {"name": "secure-env"},
+            "spec": {
+                "environmentVariables": [
+                    {"name": "HOME", "value": "/home/app"},
+                    {"name": "MODEL", "value": "gemma"},
+                ],
+                "runAsUid": 1000,
+                "runAsGid": 2000,
+                "supplementalGroups": "3000,4000",
+            },
+        }
+        summary = self.bll._summarize_environment(
+            self.bll._merge_asset_detail({}, detail)
+        )
+
+        self.assertEqual(summary["environment_variables"], "HOME=/home/app,MODEL=gemma")
+        self.assertEqual(summary["run_as_uid"], "1000")
+        self.assertEqual(summary["run_as_gid"], "2000")
+        self.assertEqual(summary["supplemental_groups"], "3000,4000")
+
     def test_cli_version_selection_orders_candidates(self):
         with patch.object(autoscaler_mod.shutil, "which", side_effect=lambda binary: f"/bin/{binary}"):
             v1 = self.bll._project_list_commands(SimpleNamespace(runai_cli_version="v1"))
@@ -589,6 +877,41 @@ class TestAutoscalerBLL(unittest.TestCase):
             "datasource_describe",
             "nodepool_list",
         }.isdisjoint(v1_keys))
+
+    def test_workload_list_catalog_and_runtime_fetch_every_project_without_single_page_mode(self):
+        catalog = {
+            version: next(entry for entry in entries if entry["key"] == "workload_list")
+            for version, entries in autoscaler_mod.RUNAI_COMMAND_CATALOG.items()
+        }
+        self.assertEqual(catalog["v2"]["command"], "runai workload list --json -A")
+        self.assertEqual(catalog["v1"]["command"], "runai list jobs --all-projects")
+        self.assertNotIn("--no-pagination", catalog["v2"]["command"])
+
+        with patch.object(autoscaler_mod.shutil, "which", side_effect=lambda binary: f"/bin/{binary}"):
+            v2 = self.bll._workload_list_commands(SimpleNamespace(
+                runai_cli_version="v2", runai_project="project-a"
+            ))
+            v1 = self.bll._workload_list_commands(SimpleNamespace(
+                runai_cli_version="v1", runai_project="project-a"
+            ))
+
+        self.assertEqual(v2, [["runai-v2", "workload", "list", "--json", "-A"]])
+        self.assertEqual(v1, [["runai-v1", "list", "jobs", "--all-projects"]])
+
+    def test_legacy_workload_list_overrides_are_migrated_to_all_projects(self):
+        conn = SimpleNamespace(
+            runai_cli_version="auto",
+            command_templates=json.dumps({
+                "v2": {"workload_list": "runai workload list --json --no-pagination -p={project}"},
+                "v1": {"workload_list": "runai list jobs -p {project}"},
+            }),
+        )
+
+        with patch.object(autoscaler_mod.shutil, "which", side_effect=lambda binary: f"/bin/{binary}"):
+            commands = self.bll._workload_list_commands(conn)
+
+        self.assertEqual(commands[0], ["runai-v2", "workload", "list", "--json", "-A"])
+        self.assertEqual(commands[1], ["runai-v1", "list", "jobs", "--all-projects"])
 
     def test_v2_project_asset_describe_commands_use_supported_json_flags(self):
         conn = SimpleNamespace(runai_cli_version="v2")
@@ -726,8 +1049,89 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertIn(["-p", "project-a"], [command[index:index + 2] for index in range(len(command) - 1)])
         self.assertIn(["--compute", "compute-a"], [command[index:index + 2] for index in range(len(command) - 1)])
         self.assertIn(["--environment", "environment-a"], [command[index:index + 2] for index in range(len(command) - 1)])
-        self.assertIn(["--environment", "environment-b"], [command[index:index + 2] for index in range(len(command) - 1)])
+        self.assertNotIn("environment-b", command)
         self.assertIn(["--datasource", "type=pvc,name=data-a"], [command[index:index + 2] for index in range(len(command) - 1)])
+
+    def test_submit_command_places_name_and_custom_command_around_args_marker(self):
+        workload = self.bll._workload_from_execution(SimpleNamespace(
+            workload_params=json.dumps(self._workload(
+                command='python "train script.py"',
+                args='--epochs 2 --label "night run"',
+                run_as_uid="1000",
+                run_as_gid="2000",
+                supplemental_groups="3000,4000",
+                large_shm=True,
+            ).to_struct()),
+        ))
+
+        for version in ("v2", "v1"):
+            with self.subTest(version=version), \
+                 patch.object(autoscaler_mod.shutil, "which", return_value=f"/bin/runai-{version}"):
+                command = self.bll._build_workload_cmds(
+                    SimpleNamespace(runai_cli_version=version), workload
+                )[0]
+
+            submit_index = command.index("submit")
+            marker_index = command.index("--")
+            if version == "v2":
+                self.assertEqual(command[submit_index + 1], "train-one")
+                self.assertLess(command.index("train-one"), command.index("-p"))
+            else:
+                self.assertEqual(
+                    command[submit_index + 1:submit_index + 3],
+                    ["--name", "train-one"],
+                )
+                self.assertLess(command.index("--name"), command.index("-p"))
+            self.assertIn("--command", command[:marker_index])
+            self.assertNotIn("-c", command)
+            self.assertEqual(
+                command[marker_index + 1:],
+                ["python", "train script.py", "--epochs", "2", "--label", "night run"],
+            )
+            pairs = [command[index:index + 2] for index in range(len(command) - 1)]
+            self.assertIn(["--run-as-uid", "1000"], pairs)
+            self.assertIn(["--run-as-gid", "2000"], pairs)
+            self.assertIn(["--supplemental-groups", "3000,4000"], pairs)
+            self.assertIn("--large-shm", command[:marker_index])
+
+    def test_dashboard_uses_phase_and_returns_every_workload(self):
+        phases = ("Running", "Completed", "Creating", "Initializing", "Pending", "Failed")
+        workloads = [
+            {
+                "id": f"workload-{index}",
+                "name": f"workload-{index}",
+                "project": f"project-{index % 3}",
+                "phase": phases[index % len(phases)],
+                "status": "WrongStatus",
+            }
+            for index in range(137)
+        ]
+
+        dashboard = self.bll._build_dashboard_data(workloads, [], [], [])
+
+        self.assertEqual(dashboard["total_instances"], 137)
+        self.assertEqual(len(dashboard["instances"]), 137)
+        self.assertEqual(dashboard["instances"][0]["status"], "Running")
+        self.assertEqual(dashboard["instances"][1]["status"], "Completed")
+        self.assertNotIn("wrongstatus", dashboard["status_counts"])
+
+    def test_v1_workload_table_parser_retains_name_phase_and_project(self):
+        output = (
+            "NAME          STATUS        PROJECT       TYPE\n"
+            "train-one     Running       project-a     Training\n"
+            "workspace-a   Completed     project-b     Workspace\n"
+        )
+
+        records = self.bll._extract_table_records(output)
+        summaries = [self.bll._summarize_workload(record) for record in records]
+
+        self.assertEqual(
+            [(item["name"], item["status"], item["project"]) for item in summaries],
+            [
+                ("train-one", "Running", "project-a"),
+                ("workspace-a", "Completed", "project-b"),
+            ],
+        )
 
     def test_build_env_adds_default_cli_paths(self):
         with patch.dict(autoscaler_mod.os.environ, {"PATH": "/custom/bin"}, clear=True):
@@ -807,7 +1211,7 @@ class TestAutoscalerBLL(unittest.TestCase):
         with patch.object(autoscaler_mod.subprocess, "run", return_value=completed(stdout=table)):
             records, success = self.bll._runai_records_from_command(["runai", "list", "projects"], {}, console_log)
         self.assertTrue(success)
-        self.assertEqual(records, [{"raw": "project-a Running"}])
+        self.assertEqual(records, [{"name": "project-a", "phase": "Running", "raw": "project-a Running"}])
 
         with patch.object(autoscaler_mod.subprocess, "run", return_value=completed(stdout="WARNING only\n")):
             records, success = self.bll._runai_records_from_command(["runai", "list", "projects"], {}, console_log)

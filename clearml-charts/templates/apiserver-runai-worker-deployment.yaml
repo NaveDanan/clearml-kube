@@ -138,6 +138,9 @@ spec:
         - name: runai-ca-source
           secret:
             secretName: {{ .Values.runaiWorker.caCert.existingSecret | default (printf "%s-ca" (include "runaiWorker.referenceName" .)) }}
+            items:
+              - key: {{ .Values.runaiWorker.caCert.secretKey }}
+                path: {{ .Values.runaiWorker.caCert.secretKey }}
         - name: runai-ca-bundle
           emptyDir: {}
       {{- end }}

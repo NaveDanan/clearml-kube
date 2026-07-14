@@ -99,7 +99,7 @@
       <mat-form-field appearance="outline">
         <mat-label>Run:ai Control Plane URL</mat-label>
         <input matInput formControlName="runai_cp_url" placeholder="https://runai.example.com">
-        <mat-hint>Required for the Run:ai v2 CLI</mat-hint>
+        <mat-hint>Base URL only. REST authentication posts to this URL plus /api/v1/token.</mat-hint>
       </mat-form-field>
 
       <mat-form-field appearance="outline">
@@ -250,7 +250,7 @@
           <mat-expansion-panel-header>
             <mat-panel-title>Environment</mat-panel-title>
             @if (selectedEnvironments().length) {
-              <mat-panel-description>{{ selectedEnvironments().length }} selected</mat-panel-description>
+              <mat-panel-description>{{ selectedEnvironments()[0] }}</mat-panel-description>
             }
           </mat-expansion-panel-header>
 
@@ -462,6 +462,32 @@
                 </button>
               </div>
             </mat-expansion-panel>
+
+            <mat-expansion-panel class="nested-panel">
+              <mat-expansion-panel-header>
+                <mat-panel-title>Security</mat-panel-title>
+              </mat-expansion-panel-header>
+
+              <div class="form-grid">
+                <mat-form-field appearance="outline">
+                  <mat-label>UID</mat-label>
+                  <input matInput formControlName="run_as_uid" type="number" min="0"
+                         placeholder="e.g. 1000">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline">
+                  <mat-label>GID</mat-label>
+                  <input matInput formControlName="run_as_gid" type="number" min="0"
+                         placeholder="e.g. 1000">
+                </mat-form-field>
+
+                <mat-form-field appearance="outline" class="full-width">
+                  <mat-label>Supplemental Groups</mat-label>
+                  <input matInput formControlName="supplemental_groups"
+                         placeholder="Comma-separated group IDs, e.g. 100,200">
+                </mat-form-field>
+              </div>
+            </mat-expansion-panel>
           </mat-accordion>
 
         </mat-expansion-panel>
@@ -548,6 +574,12 @@
               <mat-label>GPU Memory</mat-label>
               <input matInput formControlName="gpu_memory_request" placeholder="e.g. 8G">
             </mat-form-field>
+
+            <div class="full-width">
+              <mat-slide-toggle class="shm-toggle" formControlName="large_shm">
+                Large shared memory
+              </mat-slide-toggle>
+            </div>
           </div>
 
           <!-- nested: Scheduling -->
@@ -841,6 +873,9 @@
                         <span aria-hidden="true">&middot;</span>
                         <span class="ai-project">{{ instance.project }}</span>
                       }
+                      @if (isDemoInstance(instance)) {
+                        <span class="dev-demo-badge">Demo data</span>
+                      }
                     </div>
                   </div>
                   <div class="ai-actions">
@@ -849,18 +884,20 @@
                             (click)="openInstanceDetails($event, instance, workloadDialog)">
                       <mat-icon fontSet="al" fontIcon="al-ico-info-circle"></mat-icon>
                     </button>
-                    @if (canStopInstance(instance)) {
+                    @if (!isDemoInstance(instance) && canStopInstance(instance)) {
                       <button mat-icon-button type="button"
                               aria-label="Stop app instance"
                               (click)="stopInstance($event, instance)">
                         <mat-icon fontSet="al" fontIcon="al-ico-abort"></mat-icon>
                       </button>
                     }
-                    <button mat-icon-button type="button"
-                            aria-label="Delete app instance"
-                            (click)="deleteInstance($event, instance)">
-                      <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
-                    </button>
+                    @if (!isDemoInstance(instance)) {
+                      <button mat-icon-button type="button"
+                              aria-label="Delete app instance"
+                              (click)="deleteInstance($event, instance)">
+                        <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+                      </button>
+                    }
                   </div>
                 </div>
               }
@@ -880,13 +917,20 @@
         <div class="workload-view">
           <header class="wl-header">
             <div class="wl-header-top">
-              <div class="wl-hexagon">RUN</div>
+              <div class="wl-logo" aria-hidden="true">
+                <svg viewBox="0 0 163.3 108" xmlns="http://www.w3.org/2000/svg" focusable="false">
+                  <path fill="#76b900" d="M60.9,32.2v-9.7c1-0.1,1.9-0.1,2.9-0.1c26.7-0.8,44.2,23,44.2,23S89.1,71.5,68.8,71.5c-2.7,0-5.3-0.4-7.9-1.3V40.7c10.4,1.3,12.5,5.8,18.7,16.2l13.9-11.7c0,0-10.2-13.3-27.2-13.3C64.5,31.9,62.7,32,60.9,32.2 M60.9,0v14.5l2.9-0.2c37.1-1.3,61.3,30.4,61.3,30.4S97.3,78.6,68.4,78.6c-2.5,0-5-0.2-7.5-0.7v9c2,0.2,4.1,0.4,6.2,0.4c26.9,0,46.4-13.8,65.3-30c3.1,2.5,15.9,8.6,18.6,11.2c-17.9,15-59.7,27.1-83.4,27.1c-2.3,0-4.4-0.1-6.6-0.4V108h102.3V0C163.3,0,60.9,0,60.9,0z M60.9,70.3v7.7C36,73.5,29.1,47.6,29.1,47.6s12-13.2,31.8-15.4v8.4h-0.1c-10.4-1.3-18.6,8.5-18.6,8.5S46.9,65.5,60.9,70.3 M16.7,46.5c0,0,14.7-21.8,44.2-24v-7.9C28.2,17.2,0,44.8,0,44.8s16,46.3,60.9,50.5v-8.4C27.9,82.8,16.7,46.5,16.7,46.5z" />
+                </svg>
+              </div>
               <div class="wl-title">{{ selectedInstance()?.name }}</div>
               <div class="wl-status"
-                   [class.warn]="statusClassFor(workloadStatusText()) === 'pending'"
-                   [class.fail]="statusClassFor(workloadStatusText()) === 'failed'">
-                {{ statusClassFor(workloadStatusText()) === '' ? 'No issues found' : (workloadStatusText() || 'Unknown') }}
+                   [class.warn]="statusClassFor(workloadPhase()) === 'pending'"
+                   [class.fail]="statusClassFor(workloadPhase()) === 'failed'">
+                {{ workloadPhase() || 'Unknown' }}
               </div>
+              @if (demoInstanceSelected()) {
+                <span class="dev-demo-badge header-badge">Development preview</span>
+              }
               @if (workloadInfoLoading()) {
                 <mat-spinner diameter="16"></mat-spinner>
               }
@@ -914,11 +958,14 @@
                 <div class="metric-card-controls">
                   <span class="metric-time">
                     <mat-icon fontSet="al" fontIcon="al-ico-time" class="sm"></mat-icon>
-                    <span>Last hour</span>
+                    <span [title]="workloadMetricRangeTitle()">Workload lifetime</span>
                   </span>
                 </div>
               </div>
               <div class="metric-card-content">
+                @if (workloadSectionError('metrics')) {
+                  <div class="import-error">{{ workloadSectionError('metrics') }}</div>
+                }
                 <div class="util-layout">
                   <div class="chart-wrap">
                     <svg class="chart-svg" viewBox="0 0 800 260" preserveAspectRatio="none">
@@ -927,12 +974,12 @@
                       <line x1="40" y1="125" x2="780" y2="125" class="grid-line" /><text x="30" y="129" class="axis-text" text-anchor="end">50%</text>
                       <line x1="40" y1="178" x2="780" y2="178" class="grid-line" /><text x="30" y="182" class="axis-text" text-anchor="end">25%</text>
                       <line x1="40" y1="230" x2="780" y2="230" class="grid-line" style="stroke:var(--color-outline)" /><text x="30" y="234" class="axis-text" text-anchor="end">0%</text>
-                      @for (series of metricSeries(); track series.type) {
+                      @for (series of metricSeries(); track series.id) {
                         <path [attr.d]="series.path" fill="none" [attr.stroke]="series.color" stroke-width="2" />
                       }
                     </svg>
                     <div class="legend-container">
-                      @for (series of metricSeries(); track series.type) {
+                      @for (series of metricSeries(); track series.id) {
                         <div class="legend-item"><span class="legend-color-box" [style.background]="series.color"></span><span>{{ series.label }}</span></div>
                       }
                     </div>
@@ -952,26 +999,87 @@
 
           <!-- ===== EVENT HISTORY ===== -->
           <div class="wl-panel" [class.active]="activeWorkloadTab() === 'events'" data-panel="events">
-            <section class="metric-card attached-top">
-              <div class="metric-card-header">
-                <div class="metric-card-title-area"><span class="metric-card-title">Event history</span></div>
-              </div>
-              <div class="metric-card-content">
-                <div class="event-list">
-                  @for (ev of wlEvents(); track $index) {
-                    <div class="event-row">
-                      <span class="event-dot" [class.warn]="ev.level === 'warn'" [class.fail]="ev.level === 'fail'"></span>
-                      <span class="event-time">{{ ev.time }}</span>
-                      <span class="event-msg" [title]="ev.message">{{ ev.message }}</span>
-                      <span class="event-reason">{{ ev.reason }}</span>
-                    </div>
-                  } @empty {
-                    <div class="event-row">
-                      <span class="event-dot"></span><span class="event-time"></span>
-                      <span class="event-msg">{{ workloadInfoLoading() ? 'Loading events…' : 'No events reported' }}</span>
-                      <span class="event-reason"></span>
-                    </div>
-                  }
+            <section class="metric-card attached-top event-history-card">
+              <div class="event-history-content">
+                @if (workloadSectionError('events')) {
+                  <div class="import-error">{{ workloadSectionError('events') }}</div>
+                }
+
+                <section class="event-timeline-section">
+                  <h2 class="event-section-title">Status over time</h2>
+                  <div class="event-timeline-chart">
+                    @for (row of eventTimeline().rows; track row.key) {
+                      <div class="event-status-row">
+                        <span class="event-status-label" [attr.data-status]="row.key">{{ row.label }}</span>
+                        <div class="event-timeline-track">
+                          @for (segment of row.segments; track $index) {
+                            <span class="event-timeline-bar"
+                                  [attr.data-status]="row.key"
+                                  [style.left.%]="segment.left"
+                                  [style.width.%]="segment.width"></span>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                  <div class="event-time-axis">
+                    @for (tick of eventTimeline().ticks; track tick) {
+                      <span class="event-time-tick">{{ formatTimelineTick(tick) }}</span>
+                    }
+                  </div>
+                </section>
+
+                <div class="event-filter-bar">
+                  <span class="event-filter-title">Add filter</span>
+                  <div class="event-search-controls">
+                    @if (eventSearchOpen()) {
+                      <input class="event-search-input"
+                             type="search"
+                             aria-label="Search event history"
+                             placeholder="Search events"
+                             [value]="eventSearchTerm()"
+                             (input)="updateEventSearch($event)" />
+                    }
+                    <button class="event-search-button" type="button" (click)="toggleEventSearch()">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                      </svg>
+                      {{ eventSearchOpen() ? 'Close' : 'Search' }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="event-table-responsive">
+                  <table class="event-history-table">
+                    <thead>
+                      <tr>
+                        <th>Date &amp; Time</th>
+                        <th>Event</th>
+                        <th>Event type</th>
+                        <th>Event issuer</th>
+                        <th>Component</th>
+                        <th>Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (ev of filteredWlEvents(); track $index) {
+                        <tr>
+                          <td class="event-date-cell">{{ formatEventTime(ev.time) }}</td>
+                          <td>{{ ev.reason || '—' }}</td>
+                          <td [class.event-text-muted]="!ev.event_type">{{ ev.event_type || '—' }}</td>
+                          <td [class.event-text-muted]="!ev.issuer">{{ ev.issuer || '—' }}</td>
+                          <td [class.event-text-muted]="!ev.component">{{ ev.component || '—' }}</td>
+                          <td [class.event-status-success]="isSuccessfulEvent(ev)">{{ ev.message || '—' }}</td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td class="event-table-empty" colspan="6">
+                            {{ workloadInfoLoading() ? 'Loading events…' : eventSearchTerm() ? 'No events match your search' : 'No events reported' }}
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </section>
@@ -987,6 +1095,9 @@
                 </div>
               </div>
               <div class="metric-card-content">
+                @if (workloadSectionError('logs')) {
+                  <div class="import-error">{{ workloadSectionError('logs') }}</div>
+                }
                 <div class="wl-log">
                   @for (line of wlLogLines(); track $index) {
                     <div class="log-line">{{ line }}</div>
@@ -1005,6 +1116,9 @@
                 <div class="metric-card-title-area"><span class="metric-card-title">Details</span></div>
               </div>
               <div class="metric-card-content">
+                @if (workloadSectionError('details')) {
+                  <div class="import-error">{{ workloadSectionError('details') }}</div>
+                }
                 <div class="details-grid">
                   <div class="detail-item"><span class="detail-key">Workload name</span><span class="detail-val">{{ wlDetails()?.name || selectedInstance()?.name || '—' }}</span></div>
                   <div class="detail-item"><span class="detail-key">Type</span><span class="detail-val">{{ wlDetails()?.type || selectedInstance()?.type || '—' }}</span></div>

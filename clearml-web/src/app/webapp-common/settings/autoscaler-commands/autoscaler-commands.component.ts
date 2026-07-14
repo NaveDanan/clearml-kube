@@ -23,6 +23,10 @@ interface CommandEntry {
   description: string;
   command: string;
   placeholders: CommandPlaceholder[];
+  kind?: 'cli' | 'rest';
+  request_preview?: string;
+  credential_source?: string;
+  resolved_url?: string;
 }
 
 type CommandCatalog = Record<string, CommandEntry[]>;
@@ -202,7 +206,10 @@ export class AutoscalerCommandsComponent {
           this.testingConnection.set(false);
           if (execution?.status === 'success') {
             this.connectionOk.set(true);
-            this.connectionMessage.set({type: 'success', text: 'Connection test succeeded. Playground commands are enabled.'});
+            this.connectionMessage.set({
+              type: 'success',
+              text: 'Connection test succeeded. REST token issuance was also verified when Run:ai application keys were configured.',
+            });
           } else {
             this.connectionOk.set(false);
             this.connectionMessage.set({type: 'error', text: execution?.stderr || 'Connection test failed.'});

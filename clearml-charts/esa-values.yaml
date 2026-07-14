@@ -48,7 +48,7 @@ apiserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-17"
+    tag: "2026-07-20"
   service:
     type: ClusterIP
   ingress:
@@ -73,7 +73,7 @@ fileserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-17"
+    tag: "2026-07-20"
   service:
     type: ClusterIP
   ingress:
@@ -119,7 +119,7 @@ webserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-17"
+    tag: "2026-07-20"
   service:
     type: ClusterIP
   additionalConfigs:
@@ -155,21 +155,21 @@ runaiWorker:
   image:
     repository: "runai-worker"
     pullPolicy: IfNotPresent
-    tag: "2026-07-17"
+    tag: "2026-07-20"
   replicaCount: 1
   pollInterval: 3
   batchSize: 5
   # Trust the internal/company CA so `runai login` and `oc login` do not fail
   # with "x509: certificate signed by unknown authority".
   # Create the secret first, e.g.:
-  #   kubectl -n <namespace> create secret generic runai-worker-ca \
-  #     --from-file=company-ca.crt=./company-ca.crt
+  #   kubectl -n <namespace> create secret generic rf-ca-cert \
+  #     --from-file=rf_ca_bundle.crt=./rf_ca_bundle.crt
   caCert:
     enabled: true
     # Name of an existing secret in the release namespace holding the CA bundle.
-    existingSecret: "runai-worker-ca"
+    existingSecret: "rf-ca-cert"
     # Key inside that secret that contains the PEM bundle.
-    secretKey: "company-ca.crt"
+    secretKey: "rf_ca_bundle.crt"
   resources:
     requests:
       cpu: 100m

@@ -1,7 +1,7 @@
 <div class="autoscaler-commands">
   <header class="page-header">
     <h3>Autoscalar Commands</h3>
-    <p class="subtitle">Review and customize the CLI commands the Run:ai autoscaler runs. Edits are saved per workspace and used the next time a command is executed.</p>
+    <p class="subtitle">Review and customize the CLI commands and REST API endpoints the Run:ai autoscaler uses. Edits are saved per workspace.</p>
   </header>
 
   @if (!opened()) {
@@ -13,7 +13,7 @@
       </span>
       <span class="provider-body">
         <span class="provider-title">Run:ai</span>
-        <span class="provider-desc">Edit V1 / V2 CLI commands</span>
+        <span class="provider-desc">Edit V1 / V2 CLI and REST API commands</span>
       </span>
       <mat-icon fontSet="al" fontIcon="al-ico-arrow-right" class="provider-chevron"></mat-icon>
     </button>
@@ -25,7 +25,7 @@
         </button>
         <div class="editor-title">
           <span class="editor-kicker">Run:ai</span>
-          <h4>CLI Commands</h4>
+          <h4>CLI &amp; REST API Commands</h4>
         </div>
       </div>
 
@@ -38,7 +38,7 @@
         <section class="playground-intro">
           <div class="playground-copy">
             <h5>Testing Playground</h5>
-            <p>Test the saved command templates through the same queued Run:ai worker pipeline used by the autoscaler. Run the connection test first, fill any placeholders, then execute a command to inspect the raw CLI response.</p>
+            <p>Test CLI templates through the same queued Run:ai worker pipeline used by the autoscaler. REST requests run inside the API server and show a resolved request preview below.</p>
           </div>
           <div class="playground-actions">
             <button type="button" mat-stroked-button [disabled]="testingConnection()" (click)="testConnection()">
@@ -85,6 +85,16 @@
                         Reset
                       </button>
                     </div>
+                    @if (entry.request_preview) {
+                      <div class="rest-request-preview">
+                        <div class="preview-title">Resolved REST request preview (PowerShell curl)</div>
+                        @if (entry.credential_source) {
+                          <div class="credential-source">{{ entry.credential_source }}</div>
+                        }
+                        <pre>{{ entry.request_preview }}</pre>
+                        <div class="preview-hint">The client secret is masked here. The actual request uses the saved value from Connection.</div>
+                      </div>
+                    }
                     @if (entry.placeholders?.length) {
                       <div class="command-placeholders">
                         <span class="placeholders-title">Placeholders:</span>
@@ -113,18 +123,22 @@
                       </div>
                     }
 
-                    <div class="playground-runner">
-                      <button type="button"
-                              mat-flat-button
-                              color="primary"
-                              [disabled]="!connectionOk() || isRunning(version.id, entry.key) || missingPlaceholders(version.id, entry).length > 0"
-                              (click)="runCommand(version.id, entry)">
-                        @if (isRunning(version.id, entry.key)) { Running… } @else { Run raw command }
-                      </button>
-                      @if (!connectionOk()) {
-                        <span class="playground-hint">Run a successful connection test to enable command execution.</span>
-                      }
-                    </div>
+                    @if (entry.kind !== 'rest') {
+                      <div class="playground-runner">
+                        <button type="button"
+                                mat-flat-button
+                                color="primary"
+                                [disabled]="!connectionOk() || isRunning(version.id, entry.key) || missingPlaceholders(version.id, entry).length > 0"
+                                (click)="runCommand(version.id, entry)">
+                          @if (isRunning(version.id, entry.key)) { Running… } @else { Run raw command }
+                        </button>
+                        @if (!connectionOk()) {
+                          <span class="playground-hint">Run a successful connection test to enable command execution.</span>
+                        }
+                      </div>
+                    } @else {
+                      <div class="rest-runtime-hint">This REST request is executed internally by the API server; it is not passed to the Run:ai CLI playground.</div>
+                    }
 
                     @if (getResult(version.id, entry.key); as result) {
                       <div class="playground-result">

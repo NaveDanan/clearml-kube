@@ -37,6 +37,10 @@ export interface AutoscalerEnvironmentResource {
   command?: string;
   args?: string;
   working_dir?: string;
+  environment_variables?: string;
+  run_as_uid?: string;
+  run_as_gid?: string;
+  supplemental_groups?: string;
 }
 
 export interface AutoscalerDataSourceResource {
@@ -84,8 +88,12 @@ export interface AutoscalerWorkloadData {
   node_type?: string;
   priority?: string;
   preemptibility?: string;
+  run_as_uid?: string;
+  run_as_gid?: string;
+  supplemental_groups?: string;
   existing_pvc?: string;
   working_dir?: string;
+  large_shm?: boolean;
   parallelism?: string;
   runs?: string;
   restart_policy?: string;
@@ -125,7 +133,9 @@ export interface AutoscalerWorkloadLogs {
 
 export interface AutoscalerWorkloadInfo {
   connected?: boolean;
+  partial?: boolean;
   error?: string;
+  errors?: Partial<Record<'details' | 'events' | 'logs' | 'metrics', string>>;
   workload_id?: string;
   details?: {
     name?: string;
@@ -140,11 +150,25 @@ export interface AutoscalerWorkloadInfo {
     created?: string;
     submitted_by?: string;
   };
-  events?: Array<{time?: string; message?: string; reason?: string; level?: string}>;
+  events?: Array<{
+    time?: string;
+    message?: string;
+    reason?: string;
+    level?: string;
+    event_type?: string;
+    issuer?: string;
+    component?: string;
+  }>;
   logs?: {lines?: string[]; source?: string};
   metrics?: {
-    series?: Array<{type?: string; points?: Array<{t?: string; v?: number | null}>}>;
+    series?: Array<{
+      id?: string;
+      type?: string;
+      labels?: Record<string, string>;
+      points?: Array<{t?: string; v?: number | null}>;
+    }>;
     averages?: Record<string, number>;
+    range?: {start?: string; end?: string};
   };
 }
 

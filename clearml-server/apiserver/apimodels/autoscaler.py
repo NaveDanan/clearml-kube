@@ -1,4 +1,4 @@
-from jsonmodels.fields import StringField, EmbeddedField
+from jsonmodels.fields import BoolField, StringField, EmbeddedField
 from jsonmodels.models import Base
 
 
@@ -46,8 +46,12 @@ class WorkloadRequest(Base):
     node_type = StringField()
     priority = StringField()
     preemptibility = StringField()
+    run_as_uid = StringField()
+    run_as_gid = StringField()
+    supplemental_groups = StringField()
     existing_pvc = StringField()
     working_dir = StringField()
+    large_shm = BoolField(default=False)
     parallelism = StringField()
     runs = StringField()
     restart_policy = StringField()
