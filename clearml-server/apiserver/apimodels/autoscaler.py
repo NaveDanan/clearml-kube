@@ -14,6 +14,7 @@ class RunaiConnectionSettings(Base):
     runai_cluster = StringField()
     runai_project = StringField()
     runai_cli_version = StringField()
+    workload_logs_method = StringField()
     user = StringField()
     worker = StringField()
 

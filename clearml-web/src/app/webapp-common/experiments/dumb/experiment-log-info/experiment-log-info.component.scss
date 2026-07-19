@@ -7,25 +7,71 @@
     height: 100%;
     width: 100%;
     background-color: var(--color-surface-container-low);
-    overflow-x: scroll;
+    color: var(--color-on-surface);
+    overflow: auto;
+    scrollbar-color: var(--color-outline) transparent;
+    scrollbar-width: thin;
+
+    &:focus-visible {
+      outline: 2px solid var(--color-primary);
+      outline-offset: -2px;
+    }
+
+    &::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      border: 3px solid transparent;
+      border-radius: 10px;
+      background: var(--color-outline);
+      background-clip: padding-box;
+    }
   }
 
   .log-line {
-    font: 12px monospace;
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    height: 25px;
+    font-family: "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+      "Segoe UI Emoji", "Apple Color Emoji", monospace;
+    font-size: 12.5px;
+    line-height: 25px;
+    font-variant-ligatures: none;
+
+    &:hover {
+      .timestamp,
+      .entry {
+        background-color: color-mix(in srgb, var(--color-primary), var(--color-surface-container-low) 94%);
+      }
+    }
 
     .timestamp {
-      background-color: color-mix(in srgb, var(--color-surface-container-high), transparent 40%);
-      width: 170px;
-      float: left;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      box-sizing: border-box;
+      width: 180px;
+      flex: 0 0 180px;
       height: 25px;
-      padding: 5px 0 0 20px;
+      padding: 0 16px;
+      color: var(--color-on-surface-variant);
+      background-color: color-mix(in srgb, var(--color-surface-container-high), transparent 25%);
+      border-right: 1px solid var(--color-outline-variant);
+      user-select: none;
     }
 
     .entry {
-      background-color: var(--color-surface-container-low);
+      box-sizing: border-box;
+      min-width: calc(100vw - 180px);
+      flex: 1 0 auto;
       height: 25px;
-      padding: 5px 0 0 190px;
+      padding: 0 14px;
       white-space: pre;
+      unicode-bidi: plaintext;
+      background-color: var(--color-surface-container-low);
       border-bottom: 1px solid transparent;
     }
 
@@ -38,14 +84,17 @@
 
   .get-last {
     position: absolute;
-    right: -140px;
-    bottom: 30px;
-    transition: right 0.5s;
-  }
+    right: 20px;
+    bottom: 20px;
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--color-on-surface), transparent 82%);
+    transition: opacity 180ms ease, transform 180ms ease;
 
-  &:hover {
-    .get-last:not(.at-end) {
-      right: 25px;
+    &.at-end {
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(10px);
     }
   }
 

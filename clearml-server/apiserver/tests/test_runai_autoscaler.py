@@ -167,6 +167,7 @@ class TestAutoscalerBLL(unittest.TestCase):
             runai_cluster="cluster-a",
             runai_project="project-a",
             runai_cli_version="v2",
+            workload_logs_method="api",
             user="user-id",
             worker="worker-id",
         )
@@ -371,6 +372,33 @@ class TestAutoscalerBLL(unittest.TestCase):
             "start": "2026-07-14T08:00:00.000Z",
             "end": "2026-07-14T09:00:00.000Z",
         })
+
+    def test_workload_info_cli_logs_method_skips_logs_rest_endpoint(self):
+        self._settings(
+            runai_cp_url="https://runai.example",
+            workload_logs_method="cli",
+            runai_api_token="cached-token",
+            runai_api_token_expiry=datetime.utcnow() + timedelta(hours=1),
+        )
+        requested_urls = []
+
+        def get_response(url, **_):
+            requested_urls.append(url)
+            if url.endswith("/events"):
+                return api_response({"events": []})
+            if url.endswith("/metrics"):
+                return api_response({"measurements": []})
+            if url.endswith("/logs"):
+                self.fail("CLI log mode must not call the workload logs REST endpoint")
+            return api_response({"name": "train-one", "phase": "Running"})
+
+        with patch.object(autoscaler_mod.requests, "get", side_effect=get_response):
+            result = self.bll.get_workload_info("company-id", "workload-id")
+
+        self.assertTrue(result["connected"])
+        self.assertFalse(result["partial"])
+        self.assertEqual(result["logs"], {"lines": [], "source": "Run:ai CLI"})
+        self.assertFalse(any(url.endswith("/logs") for url in requested_urls))
 
     def test_token_url_appends_endpoint_to_control_plane_base_without_duplication(self):
         settings = self._settings(runai_cp_url="https://runai.example")
@@ -849,6 +877,22 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertTrue(all(command[0] == "runai-v2" for command in v2))
         self.assertEqual(auto[0][0], "runai-v2")
         self.assertEqual(auto[-1][0], "runai-v1")
+
+    def test_v2_workload_logs_prefers_generic_cli_command_without_tail(self):
+        with patch.object(autoscaler_mod.shutil, "which", return_value="/bin/runai-v2"):
+            commands = self.bll._workload_logs_commands(
+                SimpleNamespace(runai_cli_version="v2"),
+                "train-one",
+                "project-a",
+                "training",
+                "200",
+            )
+
+        self.assertEqual(
+            commands[0],
+            ["runai-v2", "workload", "logs", "train-one", "-p", "project-a"],
+        )
+        self.assertNotIn("--tail", commands[0])
 
     def test_command_catalog_declares_only_placeholders_used_by_commands(self):
         for version, entries in autoscaler_mod.RUNAI_COMMAND_CATALOG.items():

@@ -206,11 +206,9 @@ RUNAI_COMMAND_CATALOG = {
             "key": "workload_logs",
             "label": "Workload logs",
             "description": "Read console logs for a single workload.",
-            "command": "runai {workload_type} logs {name} --tail {tail} -p {project}",
+            "command": "runai workload logs {name} -p {project}",
             "placeholders": [
-                {"name": "workload_type", "description": "training, workspace, or inference"},
                 {"name": "name", "description": "Workload name"},
-                {"name": "tail", "description": "Number of trailing log lines"},
                 {"name": "project", "description": "Run:ai project name"},
             ],
         },
@@ -422,6 +420,7 @@ class AutoscalerBLL:
         "runai_cluster",
         "runai_project",
         "runai_cli_version",
+        "workload_logs_method",
         "user",
         "worker",
     )
@@ -803,6 +802,7 @@ class AutoscalerBLL:
         subs = {"workload_id": safe_workload_id}
         details_path = self._api_endpoint(settings, "api_workload_details", subs) or f"/api/v1/workloads/{safe_workload_id}"
         events_path = self._api_endpoint(settings, "api_workload_events", subs) or f"/api/v1/workloads/{safe_workload_id}/events"
+        logs_method = self._workload_logs_method(settings)
         logs_path = self._api_endpoint(settings, "api_workload_logs", subs) or f"/api/v1/workloads/{safe_workload_id}/logs"
         metrics_path = self._api_endpoint(settings, "api_workload_metrics", subs) or f"/api/v1/workloads/{safe_workload_id}/metrics"
 
@@ -811,10 +811,16 @@ class AutoscalerBLL:
         events_result = self._api_get_all_pages(
             settings, company_id, events_path, "events", {"sortOrder": "asc"}
         )
-        # ``tailLines`` is optional according to the cluster API guide. Omitting
-        # it requests the complete available log rather than the previous 200-line
-        # tail. Run:ai may return either JSON or plain text here.
-        logs_result = self._api_get(settings, company_id, logs_path)
+        # CLI log retrieval is performed separately on runai_worker by
+        # get_workload_logs. Do not call a cluster's unsupported logs REST
+        # endpoint when the connection is configured for the CLI method.
+        if logs_method == "cli":
+            logs_result = {"ok": True, "data": None, "status": None, "error": None}
+        else:
+            # ``tailLines`` is optional according to the cluster API guide.
+            # Omitting it requests the complete available log. Run:ai may
+            # return either JSON or plain text here.
+            logs_result = self._api_get(settings, company_id, logs_path)
         metric_start, metric_end = self._workload_metric_range(details)
         metric_params = [("metricType", name) for name in self._api_metric_types]
         metric_params.extend([
@@ -841,7 +847,7 @@ class AutoscalerBLL:
             if result.get("error") or result.get("warning")
         }
         details_summary = self._summarize_workload_details(details)
-        if logs_result.get("status") == 404 and details_summary.get("status", "").lower() in {
+        if logs_method == "api" and logs_result.get("status") == 404 and details_summary.get("status", "").lower() in {
             "completed", "failed", "succeeded", "deleted"
         }:
             errors["logs"] = (
@@ -865,7 +871,11 @@ class AutoscalerBLL:
             "workload_id": workload_id,
             "details": details_summary,
             "events": self._summarize_workload_events(events_result.get("data")),
-            "logs": self._summarize_api_logs(logs_result.get("data")),
+            "logs": (
+                {"lines": [], "source": "Run:ai CLI"}
+                if logs_method == "cli"
+                else self._summarize_api_logs(logs_result.get("data"))
+            ),
             "metrics": self._summarize_workload_metrics(
                 metrics_result.get("data"), metric_start, metric_end
             ),
@@ -981,6 +991,11 @@ class AutoscalerBLL:
         else:
             lines = str(data).splitlines()
         return {"lines": lines, "source": "Run:ai REST API"}
+
+    @staticmethod
+    def _workload_logs_method(settings) -> str:
+        method = (getattr(settings, "workload_logs_method", None) or "api").strip().lower()
+        return method if method in {"api", "cli"} else "api"
 
     @classmethod
     def _summarize_workload_metrics(cls, data, start: str = "", end: str = "") -> dict:
@@ -1734,15 +1749,16 @@ class AutoscalerBLL:
         cls, conn, name: str, project: str, workload_type: str, tail: str
     ) -> list:
         tail = tail or "200"
-        v2_commands = []
+        # The generic workload command is supported on current Run:ai clusters
+        # and intentionally comes first. Some clusters reject --tail for this
+        # command, so line limiting is applied after the command returns.
+        v2_commands = [["runai", "workload", "logs", name]]
         if workload_type in {"training", "workspace", "inference"}:
-            v2_commands.append(["runai", workload_type, "logs", name])
+            v2_commands.append(["runai", workload_type, "logs", name, "--tail", tail])
         v2_commands.extend([
-            ["runai", "workload", "logs", name],
-            ["runai", "training", "logs", name],
-            ["runai", "logs", name],
+            ["runai", "training", "logs", name, "--tail", tail],
+            ["runai", "logs", name, "--tail", tail],
         ])
-        v2_commands = [[*cmd, "--tail", tail] for cmd in v2_commands]
         if project:
             v2_commands = [[*cmd, "-p", project] for cmd in v2_commands]
 
@@ -3149,7 +3165,7 @@ class AutoscalerBLL:
                 if not isinstance(data_source, dict):
                     continue
                 name = str(data_source.get("name") or "").strip()
-                source_type = str(data_source.get("type") or "").strip()
+                source_type = str(data_source.get("type") or "").strip().lower()
                 if not name:
                     continue
                 descriptor = f"name={name}"

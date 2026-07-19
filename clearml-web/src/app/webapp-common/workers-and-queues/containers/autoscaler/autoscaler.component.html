@@ -58,6 +58,15 @@
         </mat-select>
       </mat-form-field>
 
+      <mat-form-field appearance="outline">
+        <mat-label>Workload Logs Method</mat-label>
+        <mat-select formControlName="workload_logs_method">
+          <mat-option value="api">Run:ai REST API</mat-option>
+          <mat-option value="cli">Run:ai CLI</mat-option>
+        </mat-select>
+        <mat-hint>CLI uses: runai workload logs WORKLOAD -p PROJECT</mat-hint>
+      </mat-form-field>
+
       @if (connectionForm.controls.connection_method.value === 'openshift') {
         <mat-form-field appearance="outline">
           <mat-label>OpenShift Login</mat-label>
@@ -1091,7 +1100,7 @@
               <div class="metric-card-header">
                 <div class="metric-card-title-area">
                   <span class="metric-card-title">Logs</span>
-                  <span class="log-source">{{ workloadInfo()?.logs?.source || 'Run:ai' }}</span>
+                  <span class="log-source">{{ wlLogSource() }}</span>
                 </div>
               </div>
               <div class="metric-card-content">
@@ -1102,7 +1111,7 @@
                   @for (line of wlLogLines(); track $index) {
                     <div class="log-line">{{ line }}</div>
                   } @empty {
-                    <div class="log-line">{{ workloadInfoLoading() ? 'Loading logs…' : 'No logs available' }}</div>
+                    <div class="log-line">{{ wlLogsLoading() ? 'Loading logs…' : 'No logs available' }}</div>
                   }
                 </div>
               </div>

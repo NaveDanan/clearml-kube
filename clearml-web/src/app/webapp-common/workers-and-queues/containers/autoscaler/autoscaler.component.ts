@@ -54,6 +54,7 @@ const RUNAI_WORKLOAD_PHASES = ['Running', 'Completed', 'Creating', 'Initializing
 type ConnectionMethod = 'openshift' | 'runai_application';
 type OpenshiftLoginMode = 'fields' | 'command';
 type RunaiCliVersion = 'auto' | 'v1' | 'v2';
+type WorkloadLogsMethod = 'api' | 'cli';
 type ImportMode = 'command' | 'json';
 type AppInstanceSource = 'runai' | 'local' | 'demo';
 type AppInstanceFilter = 'type' | 'status' | 'project';
@@ -524,12 +525,18 @@ export class AutoscalerComponent implements OnDestroy {
   });
   protected instanceLogs = this.store.selectSignal(selectAutoscalerWorkloadLogs);
   protected instanceLogsLoading = this.store.selectSignal(selectAutoscalerWorkloadLogsLoading);
+  private selectedInstanceLogs = computed(() => {
+    const selected = this.selectedInstance();
+    const logs = this.instanceLogs();
+    return selected && logs?.workload_name === selected.name &&
+      (logs.project || '') === (selected.project || '') ? logs : null;
+  });
   protected instanceConsoleLines = computed<string[]>(() => {
     const selected = this.selectedInstance();
     if (!selected) {
       return [];
     }
-    const logs = this.instanceLogs();
+    const logs = this.selectedInstanceLogs();
     if (logs?.error && !(logs?.lines?.length)) {
       return [logs.error];
     }
@@ -539,7 +546,13 @@ export class AutoscalerComponent implements OnDestroy {
     }
     return lines;
   });
-  protected instanceLogSource = computed(() => this.instanceLogs()?.source || '');
+  protected instanceLogSource = computed(() => {
+    const source = this.selectedInstanceLogs()?.source || '';
+    return source === 'runai' ? 'Run:ai CLI' : source === 'openshift' ? 'OpenShift CLI' : source;
+  });
+  protected useCliWorkloadLogs = computed(() =>
+    !this.demoInstanceSelected() && (this.settings()?.workload_logs_method || 'api') === 'cli'
+  );
   // The selected app instance is identified by name + project; track that as a
   // stable string so the log refresh effect does not restart on every dashboard
   // poll (which recreates the instance objects).
@@ -631,7 +644,18 @@ export class AutoscalerComponent implements OnDestroy {
     );
     return {rows, ticks};
   });
-  protected wlLogLines = computed<string[]>(() => this.workloadInfo()?.logs?.lines ?? []);
+  protected wlLogLines = computed<string[]>(() => this.useCliWorkloadLogs()
+    ? this.selectedInstanceLogs()?.lines ?? []
+    : this.workloadInfo()?.logs?.lines ?? []
+  );
+  protected wlLogSource = computed(() => this.useCliWorkloadLogs()
+    ? this.instanceLogSource() || 'Run:ai CLI'
+    : this.workloadInfo()?.logs?.source || 'Run:ai REST API'
+  );
+  protected wlLogsLoading = computed(() => this.useCliWorkloadLogs()
+    ? this.instanceLogsLoading()
+    : this.workloadInfoLoading()
+  );
   protected workloadMetricRangeTitle = computed(() => {
     const range = this.workloadInfo()?.metrics?.range;
     return range?.start && range?.end ? `${range.start} – ${range.end}` : 'Workload lifetime';
@@ -694,6 +718,9 @@ export class AutoscalerComponent implements OnDestroy {
   private activeWorkloadInfoId: string | null = null;
 
   protected workloadSectionError(section: 'details' | 'events' | 'logs' | 'metrics'): string {
+    if (section === 'logs' && this.useCliWorkloadLogs()) {
+      return this.selectedInstanceLogs()?.error || '';
+    }
     const info = this.workloadInfo();
     return info?.errors?.[section] || (info?.connected === false ? info.error || 'Run:ai API request failed' : '');
   }
@@ -942,6 +969,7 @@ export class AutoscalerComponent implements OnDestroy {
     runai_cluster: [''],
     runai_project: [''],
     runai_cli_version: ['auto' as RunaiCliVersion],
+    workload_logs_method: ['api' as WorkloadLogsMethod],
   });
 
   workloadForm = this.fb.group({
@@ -1025,12 +1053,13 @@ export class AutoscalerComponent implements OnDestroy {
       this.patchConnectionFormFromSettings();
     });
 
-    // Drive the app-instance-specific console log: fetch + periodically refresh
-    // the logs for the selected instance while its panel is expanded.
+    // Drive worker-side CLI log collection while either the legacy instance
+    // panel is expanded or the workload Logs tab is configured for CLI logs.
     effect(() => {
       const key = this.selectedInstanceLogKey();
       const expanded = this.instanceLogExpanded();
-      const active = this.selectedProvider() === 'runai' && !!key && expanded && !this.demoInstanceSelected();
+      const cliTabActive = this.useCliWorkloadLogs() && this.activeWorkloadTab() === 'logs';
+      const active = this.selectedProvider() === 'runai' && !!key && (expanded || cliTabActive) && !this.demoInstanceSelected();
       untracked(() => this.syncInstanceLogRefresh(key, active));
     });
 
@@ -1722,6 +1751,7 @@ export class AutoscalerComponent implements OnDestroy {
       runai_cluster: settings.runai_cluster || '',
       runai_project: settings.runai_project || '',
       runai_cli_version: (settings.runai_cli_version as RunaiCliVersion) || 'auto',
+      workload_logs_method: (settings.workload_logs_method as WorkloadLogsMethod) || 'api',
     }, {emitEvent: false});
     this.updateConnectionValidators();
   }

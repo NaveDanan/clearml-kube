@@ -1,6 +1,6 @@
 <cdk-virtual-scroll-viewport itemSize="25" minBufferPx="1000" maxBufferPx="2000"
   class="viewport" tabindex="0">
-  <div *cdkVirtualFor="let line of lines; trackBy: trackByTimestampFn" data-id="logLine" class="log-line" [class.separator]="line.separator">
+  <div *cdkVirtualFor="let line of lines; trackBy: trackByLineFn" data-id="logLine" class="log-line" [class.separator]="line.separator">
     <div class="timestamp" data-id="timeStamp">{{line.timestamp | date:'y-MM-dd HH:mm:ss'}}</div>
     @if (line.hasAnsi) {
       <div data-id="resultEntry" class="entry" [innerHTML]="line.entry | purify"></div>

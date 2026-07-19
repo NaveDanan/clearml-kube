@@ -3,15 +3,78 @@
   height: 100%;
 
   .header {
-    display: grid;
+    display: flex;
     align-items: center;
-    padding: 12px 24px;
-    grid-template-columns: 1fr auto 250px;
-    gap: 24px;
+    justify-content: space-between;
+    box-sizing: border-box;
+    height: 64px;
+    padding: 10px 20px;
+    gap: 20px;
+    background: var(--color-surface-container-low);
+    border-bottom: 1px solid var(--color-outline-variant);
+
+    .console-context,
+    .console-actions {
+      display: flex;
+      align-items: center;
+    }
+
+    .console-context {
+      min-width: 0;
+      gap: 12px;
+    }
+
+    .live-indicator {
+      width: 9px;
+      height: 9px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--color-success);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-success), transparent 84%);
+    }
+
+    .console-copy {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      line-height: 1.25;
+    }
+
+    .console-title {
+      color: var(--color-on-surface);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .hostname {
+      max-width: min(38vw, 520px);
+      color: var(--color-on-surface-variant);
+      font-size: 11px;
+    }
+
+    .console-actions {
+      gap: 12px;
+    }
+
+    button {
+      height: 40px;
+      white-space: nowrap;
+    }
+
+    .log-search {
+      width: 280px;
+      --mat-form-field-container-height: 40px;
+      --mat-form-field-container-vertical-padding: 8px;
+
+      mat-icon {
+        color: var(--color-on-surface-variant);
+        font-size: 16px;
+      }
+    }
   }
 
   sm-experiment-log-info {
-    height: calc(100% - 60px);
+    height: calc(100% - 64px);
     &.no-header {
       height: calc(100%);
     }
@@ -19,9 +82,29 @@
 
   .no-output {
     color: var(--color-empty-state);
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+
     h4 {
       font-weight: 500;
       font-size: 16px;
+    }
+  }
+
+  @media (max-width: 850px) {
+    .header {
+      .console-title,
+      .hostname,
+      .download-label {
+        display: none;
+      }
+
+      .log-search {
+        width: min(52vw, 280px);
+      }
     }
   }
 }

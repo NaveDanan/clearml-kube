@@ -32,6 +32,7 @@ class AutoscalerSettings(DbModelMixin, Document):
     runai_cluster = StringField()
     runai_project = StringField()
     runai_cli_version = StringField(default="auto")
+    workload_logs_method = StringField(default="api")
     user = StringField()
     worker = StringField()
     command_templates = StringField()

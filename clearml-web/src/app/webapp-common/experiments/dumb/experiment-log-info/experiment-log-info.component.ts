@@ -16,12 +16,14 @@ import {SaferPipe} from '@common/shared/pipes/safe.pipe';
 import {MatProgressSpinner} from '@angular/material/progress-spinner';
 import {MatIcon} from '@angular/material/icon';
 import {MatButton} from '@angular/material/button';
+import {buildTerminalLogRows} from './terminal-log.utils';
 
 interface LogRow {
-  timestamp?: string;
+  timestamp?: number | string;
   entry: string;
   separator?: boolean;
   hasAnsi?: boolean;
+  rewriteKey?: string;
 }
 
 @Component({
@@ -181,43 +183,40 @@ export class ExperimentLogInfoComponent implements OnDestroy, AfterViewInit {
   }
 
   private static getRegexFromString(filter: string) {
-    const flags = filter.match(/.*\/([gimy]*)$/);
-    if (flags) {
-      const pattern = flags ? filter.replace(new RegExp('^/(.*?)/' + flags[1] + '$'), '$1') : filter;
-      filter.replace(new RegExp('^/(.*?)/' + flags[1] + '$'), '$1');
-      return new RegExp(pattern, flags[1]);
-    } else {
+    try {
+      const flags = filter.match(/.*\/([gimy]*)$/);
+      if (flags) {
+        const pattern = filter.replace(new RegExp('^/(.*?)/' + flags[1] + '$'), '$1');
+        return new RegExp(pattern, flags[1]);
+      }
       return new RegExp(filter, 'i');
+    } catch {
+      // Keep filtering usable while an incomplete expression is being typed.
+      const literal = filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(literal, 'i');
     }
   }
 
   calcLines() {
-    this.lines = [];
-    this.orgLogs
-      .filter((row) => !this.hasFilter || this.regex.test(row?.msg ?? ''))
-      .forEach(logItem => {
-        if (!logItem.msg) {
-          this.lines.push({timestamp: logItem['timestamp'] || logItem['@timestamp'], entry: '', hasAnsi: false, separator: true});
-          return;
-        }
-        logItem.msg
-          .split('\n')
-          .filter(msg => !!msg)
-          .forEach((msg: string, index) => {
-            const msgHasAnsi = this.hasAnsi(msg);
-            const converted = msg ? (msgHasAnsi ? this.convert.toHtml(msg) : msg) : '';
-            if (!index) {
-              this.lines.push({timestamp: logItem['timestamp'] || logItem['@timestamp'], entry: converted, hasAnsi: msgHasAnsi});
-            } else {
-              this.lines.push({entry: converted, hasAnsi: msgHasAnsi});
-            }
-          });
-        this.lines[this.lines.length - 1].separator = true;
-      });
+    const filteredLogs = this.orgLogs.filter(row => {
+      if (!this.hasFilter) {
+        return true;
+      }
+      this.regex.lastIndex = 0;
+      return this.regex.test(row?.msg ?? '');
+    });
+    this.lines = buildTerminalLogRows(filteredLogs).map(line => {
+      const msgHasAnsi = this.hasAnsi(line.entry);
+      return {
+        ...line,
+        entry: msgHasAnsi ? this.convert.toHtml(line.entry) : line.entry,
+        hasAnsi: msgHasAnsi,
+      };
+    });
   }
 
-  trackByTimestampFn(index: number, line: LogRow) {
-    return line.timestamp;
+  trackByLineFn(index: number, line: LogRow) {
+    return `${line.timestamp ?? 'continuation'}:${index}`;
   }
 
   reset() {

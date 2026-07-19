@@ -12,6 +12,7 @@ export interface AutoscalerSettingsData {
   runai_cluster?: string;
   runai_project?: string;
   runai_cli_version?: 'auto' | 'v1' | 'v2';
+  workload_logs_method?: 'api' | 'cli';
   user?: string;
   worker?: string;
 }
