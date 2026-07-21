@@ -13,6 +13,7 @@ import {HeaderNavbarTabConfig} from '@common/layout/header-navbar-tabs/header-na
 import {selectRouterConfig} from '@common/core/reducers/router-reducer';
 import {activeFeatureToProjectType, routeConfToProjectType} from '~/features/projects/projects-page.utils';
 import {setHideEnterpriseFeatures} from '../actions/layout.actions';
+import {AUTO_REFRESH_INTERVAL} from '~/app.constants';
 
 export interface ViewState {
   loading: Record<string, boolean>;
@@ -20,6 +21,7 @@ export interface ViewState {
   notification: { title: string; message: string };
   backdropActive: boolean;
   autoRefresh: boolean;
+  logRefreshInterval: number;
   applicationVisible: boolean;
   scaleFactor: number;
   firstLogin: boolean;
@@ -52,6 +54,7 @@ export const initViewState: ViewState = {
   notification: null,
   backdropActive: false,
   autoRefresh: true,
+  logRefreshInterval: AUTO_REFRESH_INTERVAL,
   applicationVisible: true,
   scaleFactor: 100,
   firstLogin: false,
@@ -90,6 +93,7 @@ export const selectBackdropActive = createSelector(views, state => state.backdro
 export const selectNotification = createSelector(views, state => state.notification);
 
 export const selectAutoRefresh = createSelector(views, state => state?.autoRefresh);
+export const selectLogRefreshInterval = createSelector(views, state => state?.logRefreshInterval ?? AUTO_REFRESH_INTERVAL);
 export const selectAppVisible = createSelector(views, state => state?.applicationVisible);
 export const selectUserTheme = createSelector(views, state => state?.theme ?? state?.defaultTheme ?? 'system');
 export const selectSystemTheme = createSelector(views, state => state?.systemTheme ?? 'dark');
@@ -179,6 +183,7 @@ export const viewReducers = [
   })),
   on(layoutActions.setBackdrop, (state, action): ViewState => ({...state, backdropActive: action.active})),
   on(layoutActions.setAutoRefresh, (state, action): ViewState => ({...state, autoRefresh: action.autoRefresh})),
+  on(layoutActions.setLogRefreshInterval, (state, action): ViewState => ({...state, logRefreshInterval: action.interval})),
   on(layoutActions.toggleCardsCollapsed, (state, action): ViewState => ({
     ...state,
     tableCardsCollapsed: {

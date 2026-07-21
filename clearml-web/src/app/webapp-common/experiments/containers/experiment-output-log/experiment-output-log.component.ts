@@ -19,6 +19,7 @@ import {
   selectSelectedExperimentFromRouter
 } from '../../reducers';
 import {filter} from 'rxjs/operators';
+import {EMPTY, interval, switchMap, withLatestFrom} from 'rxjs';
 import {last} from 'lodash-es';
 import {IExperimentInfo} from '~/features/experiments/shared/experiment-info.model';
 import {selectSelectedExperiment} from '~/features/experiments/reducers';
@@ -31,12 +32,14 @@ import {
 } from '../../actions/common-experiment-output.actions';
 import {ExperimentLogInfoComponent} from '../../dumb/experiment-log-info/experiment-log-info.component';
 import {RefreshService} from '@common/core/services/refresh.service';
-import {activeLoader} from '@common/core/actions/layout.actions';
-import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
-import {selectThemeMode} from '@common/core/reducers/view.reducer';
+import {activeLoader, setLogRefreshInterval} from '@common/core/actions/layout.actions';
+import {takeUntilDestroyed, toObservable} from '@angular/core/rxjs-interop';
+import {selectThemeMode, selectAutoRefresh, selectAppVisible, selectLogRefreshInterval} from '@common/core/reducers/view.reducer';
 import {MatFormField} from '@angular/material/form-field';
 import {MatIcon} from '@angular/material/icon';
 import {MatButton} from '@angular/material/button';
+import {MatSelect} from '@angular/material/select';
+import {MatOption} from '@angular/material/core';
 import {TooltipDirective} from '@common/shared/ui-components/indicators/tooltip/tooltip.directive';
 import {PushPipe} from '@ngrx/component';
 import {MatInput} from '@angular/material/input';
@@ -54,6 +57,8 @@ import {PipelineItem} from '@common/pipelines-controller/pipeline-controller-inf
     MatFormField,
     MatIcon,
     MatButton,
+    MatSelect,
+    MatOption,
     TooltipDirective,
     PushPipe,
     MatInput,
@@ -80,6 +85,22 @@ export class ExperimentOutputLogComponent {
   private selectedExperiment = this.store.selectSignal(selectSelectedExperiment);
   private experimentId = this.store.selectSignal(selectSelectedExperimentFromRouter);
   protected theme = this.store.selectSignal(selectThemeMode);
+  protected logRefreshInterval = this.store.selectSignal(selectLogRefreshInterval);
+  protected readonly refreshOptions = [
+    {label: 'Off', value: 0},
+    {label: '10 / s', value: 100},
+    {label: '5 / s', value: 200},
+    {label: '2 / s', value: 500},
+    {label: '1s', value: 1000},
+    {label: '2s', value: 2000},
+    {label: '5s', value: 5000},
+    {label: '10s', value: 10000},
+    {label: '30s', value: 30000},
+  ];
+  protected subSecondRefresh = computed(() => {
+    const value = this.logRefreshInterval();
+    return value > 0 && value < 1000;
+  });
 
   protected creator = computed(() => this.log()?.at(-1)?.worker ?? '');
   protected hasLog = computed(() => Array.isArray(this.log()) ? this.log().length > 0 : null);
@@ -153,6 +174,29 @@ export class ExperimentOutputLogComponent {
         }),
       })));
 
+    // Console-specific polling at a user-selectable rate. It is additive: it only
+    // fetches newer lines while following the tail, and honours the global
+    // auto-refresh toggle and window visibility so background tabs stay idle.
+    toObservable(this.logRefreshInterval)
+      .pipe(
+        switchMap(ms => ms > 0 ? interval(ms) : EMPTY),
+        withLatestFrom(
+          this.store.select(selectAutoRefresh),
+          this.store.select(selectAppVisible)
+        ),
+        filter(([, auto, visible]) => auto && visible &&
+          !this.logState().loading() &&
+          !!this.currExperiment()?.id &&
+          (!this.logRef() || this.logRef().atEnd)),
+        takeUntilDestroyed()
+      )
+      .subscribe(() => this.store.dispatch(getExperimentLog({
+        id: this.currExperiment().id,
+        direction: 'next',
+        from: last(this.logRef()?.orgLogs)?.timestamp,
+        autoRefresh: true
+      })));
+
     this.destroy.onDestroy(() => {
       this.store.dispatch(resetLogFilter());
       this.store.dispatch(resetOutput());
@@ -181,5 +225,9 @@ export class ExperimentOutputLogComponent {
 
   downloadLog() {
     this.store.dispatch(downloadFullLog({experimentId: this.currExperiment().id}));
+  }
+
+  changeRefreshInterval(interval: number) {
+    this.store.dispatch(setLogRefreshInterval({interval}));
   }
 }

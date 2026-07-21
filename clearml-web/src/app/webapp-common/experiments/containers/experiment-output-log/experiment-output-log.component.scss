@@ -71,6 +71,51 @@
         font-size: 16px;
       }
     }
+
+    .refresh-rate {
+      width: 108px;
+      --mat-form-field-container-height: 40px;
+      --mat-form-field-container-vertical-padding: 8px;
+
+      mat-icon {
+        color: var(--color-on-surface-variant);
+        font-size: 16px;
+      }
+    }
+
+    .refresh-rate-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .refresh-warning {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      right: 0;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 340px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--color-warning, #FF5602), var(--color-surface-container-low) 84%);
+      color: var(--color-on-surface);
+      border: 1px solid color-mix(in srgb, var(--color-warning, #FF5602), transparent 55%);
+      box-shadow: 0 4px 16px color-mix(in srgb, var(--color-on-surface), transparent 86%);
+      font-size: 11px;
+      line-height: 1.3;
+      white-space: normal;
+
+      mat-icon {
+        flex: 0 0 auto;
+        color: var(--color-warning, #FF5602);
+        font-size: 15px;
+        width: 15px;
+        height: 15px;
+      }
+    }
   }
 
   sm-experiment-log-info {

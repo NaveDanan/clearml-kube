@@ -1,2 +1,7 @@
 /dist
 *.tar
+script-to-test-console/campfire_animation.py
+script-to-test-console/campfire_animation.py
+script-to-test-console/campfire_night.py
+script-to-test-console/train_resnet152_campfire.py
+script-to-test-console/train_with_campfire.py

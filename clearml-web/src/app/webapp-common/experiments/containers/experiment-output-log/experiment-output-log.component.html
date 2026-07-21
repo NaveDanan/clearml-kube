@@ -10,6 +10,23 @@
       </div>
     </div>
     <div class="console-actions">
+      <div class="refresh-rate-wrap">
+        @if (subSecondRefresh()) {
+          <div class="refresh-warning" role="status">
+            <mat-icon fontSet="al" fontIcon="al-ico-alert"></mat-icon>
+            <span>Sub-second polling — heavy server/ES load; for local testing only</span>
+          </div>
+        }
+        <mat-form-field appearance="outline" class="refresh-rate no-bottom" smTooltip="Console refresh rate" matTooltipShowDelay="300">
+          <mat-icon matPrefix fontSet="al" fontIcon="al-ico-refresh"></mat-icon>
+          <mat-select [value]="logRefreshInterval()" (selectionChange)="changeRefreshInterval($event.value)"
+            panelClass="refresh-rate-panel" aria-label="Console refresh rate">
+            @for (opt of refreshOptions; track opt.value) {
+              <mat-option [value]="opt.value">{{opt.label}}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      </div>
       <button mat-stroked-button (click)="downloadLog()">
         <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
         <span class="download-label">Download full log</span>

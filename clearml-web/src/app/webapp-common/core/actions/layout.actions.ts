@@ -10,6 +10,10 @@ export const setAutoRefresh = createAction(
   VIEW_PREFIX + '[set auto refresh]',
   props<{ autoRefresh: boolean }>()
 );
+export const setLogRefreshInterval = createAction(
+  VIEW_PREFIX + '[set log refresh interval]',
+  props<{ interval: number }>()
+);
 export const toggleCardsCollapsed = createAction(
   VIEW_PREFIX + '[toggle table cards collapsed]',
   props<{ entityType: EntityTypeEnum }>()
