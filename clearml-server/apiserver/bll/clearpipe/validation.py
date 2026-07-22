@@ -7,6 +7,7 @@ resource checks through an injected asynchronous resolver.
 """
 
 import ast
+import json
 import re
 from dataclasses import dataclass
 from typing import Any, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
@@ -26,6 +27,9 @@ from .graph_v2 import (
     TaskIdReference,
     TaskNameReference,
     TaskNode,
+    _SECRET_ASSIGNMENT_PATTERN,
+    _is_secret_key,
+    _is_sensitive_url,
     read_graph_v2,
 )
 
@@ -212,6 +216,12 @@ DIAGNOSTIC_CATALOG = {
         "The resource service is unavailable, so execution cannot be preflighted.",
         "Retry resource validation before running.",
         blocks_save=False,
+    ),
+    "CPRES006": _rule(
+        "CPRES006",
+        ERROR,
+        "Resource authorization could not be verified.",
+        "Retry with an authorized resource resolver before saving or running.",
     ),
     "CPPRE001": _rule(
         "CPPRE001",
@@ -687,6 +697,8 @@ class ValidationEngine:
         selected = tuple(affected)
         if not selected:
             return result
+        if self._has_removed_affected_target(selected, graph):
+            return result
         return ValidationResult(
             tuple(issue for issue in result.issues if self._matches_incremental(issue, selected, graph))
         )
@@ -1072,6 +1084,42 @@ class ValidationEngine:
                     return True
         return False
 
+    @staticmethod
+    def _has_removed_affected_target(
+        affected: Sequence[Union[str, DiagnosticTarget]], graph: Optional[GraphV2]
+    ) -> bool:
+        """Fall back to full derivation when an affected stable ID no longer exists.
+
+        A deletion removes the binding target that would otherwise relate its
+        downstream port diagnostic to the incremental request. Full derivation
+        is deterministic and preserves required-input diagnostics.
+        """
+
+        if graph is None:
+            return False
+        current_ids = {
+            item
+            for node in graph.nodes
+            for item in (node.id,) + tuple(port.id for port in node.ports)
+        }
+        current_ids.update(binding.id for binding in graph.bindings)
+        current_ids.update(resource.id for resource in graph.resources)
+        current_ids.update(parameter.id for parameter in graph.parameters)
+        for target in affected:
+            if isinstance(target, DiagnosticTarget):
+                identifiers = (
+                    target.node_id,
+                    target.port_id,
+                    target.binding_id,
+                    target.resource_id,
+                    target.parameter_id,
+                )
+                if any(identifier is not None and identifier not in current_ids for identifier in identifiers):
+                    return True
+            elif not target.startswith("graph") and target not in current_ids:
+                return True
+        return False
+
 
 def validate_graph(
     raw: Union[str, Mapping[str, Any]],
@@ -1105,12 +1153,54 @@ async def preflight_graph(
     return await ValidationEngine(policy=policy, contributors=contributors).preflight(raw, resolver)
 
 
+def _legacy_secret_present(raw: Union[str, Mapping[str, Any]]) -> bool:
+    """Detect prohibited historical secret material without retaining its value."""
+
+    value = raw
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except (TypeError, ValueError):
+            return _legacy_string_has_secret(value)
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if isinstance(key, str) and _is_secret_key(key) and nested not in (None, "", {}, []):
+                return True
+            if _legacy_secret_present(nested):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_legacy_secret_present(item) for item in value)
+    return isinstance(value, str) and _legacy_string_has_secret(value)
+
+
+def _legacy_string_has_secret(value: str) -> bool:
+    if _is_sensitive_url(value) or _SECRET_ASSIGNMENT_PATTERN.search(value):
+        return True
+    for match in re.finditer(r"(?im)^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=", value):
+        if any(_is_secret_key(part) for part in match.group(1).split("_") if part):
+            return True
+    return False
+
+
+def _embedded_secret_issue() -> ValidationIssue:
+    """Compatibility issue consumed by the existing historical-graph read guard."""
+
+    return ValidationIssue.create(
+        "embedded_secret",
+        DiagnosticTarget(kind="graph", path="graph"),
+        "Credentials and secrets must not be stored in a ClearPipe graph.",
+        "Use an approved opaque runtime reference instead of a secret value.",
+    )
+
+
 class GraphValidator:
     """Compatibility facade for existing callers; new consumers use ``ValidationEngine``.
 
-    The former synchronous checker callbacks are intentionally not invoked.
-    CP-18/service code must implement the asynchronous ``ResourceResolver``
-    contract and call ``preflight_graph`` for resource authorization.
+    Existing callers supply synchronous, authorized resource/queue callbacks.
+    They are bridged without direct service imports and fail closed when absent,
+    false, or exceptional. New callers should use ``ResourceResolver`` with
+    ``preflight_graph`` to retain missing/denied/stale distinctions.
     """
 
     def __init__(
@@ -1124,4 +1214,30 @@ class GraphValidator:
         self._engine = ValidationEngine(policy=policy)
 
     def validate(self, graph: Union[str, Mapping[str, Any]]) -> ValidationResult:
-        return self._engine.validate_full(graph)
+        result, parsed = self._engine._validate(graph)
+        issues = list(result.issues)
+        if any(issue.code == "CPSEM010" for issue in issues) or _legacy_secret_present(graph):
+            issues.append(_embedded_secret_issue())
+        if parsed is not None and (self._resource_checker is not None or self._queue_checker is not None):
+            issues.extend(self._synchronous_resource_issues(parsed))
+        return ValidationResult(tuple(issues))
+
+    def _synchronous_resource_issues(self, graph: GraphV2) -> List[ValidationIssue]:
+        issues: List[ValidationIssue] = []
+        for request in self._engine.resource_requests(graph):
+            checker = self._queue_checker if request.kind == "queue" else self._resource_checker
+            if checker is None:
+                issues.append(_issue("CPRES006", request.target))
+                continue
+            try:
+                allowed = (
+                    checker(request.resource_id)
+                    if request.kind == "queue"
+                    else checker(request.kind, request.resource_id)
+                )
+            except Exception:
+                issues.append(_issue("CPRES006", request.target))
+                continue
+            if not allowed:
+                issues.append(_issue("CPRES002", request.target))
+        return issues

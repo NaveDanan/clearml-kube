@@ -6,6 +6,7 @@ from pathlib import Path
 
 from apiserver.bll.clearpipe.validation import (
     DiagnosticTarget,
+    GraphValidator,
     ResourceResolution,
     ValidationContributor,
     ValidationEngine,
@@ -179,6 +180,14 @@ class ClearPipeValidationEngineTests(unittest.TestCase):
         self.assertNotIn("CPSEM003", codes(engine.validate_incremental(graph, ["format-result"])))
         self.assertIn("CPSEM003", codes(engine.validate_incremental(graph, ["normalize"])))
 
+    def test_incremental_validation_derives_required_input_after_binding_deletion(self):
+        graph = fixture("function-graph.v2.json")
+        del graph["bindings"][0]
+        result = ValidationEngine().validate_incremental(graph, ["bind-data-normalized"])
+        missing_input = next(issue for issue in result.issues if issue.code == "CPSEM004")
+        self.assertEqual(missing_input.target.node_id, "format-result")
+        self.assertEqual(missing_input.target.port_id, "in-value")
+
     def test_preflight_distinguishes_missing_denied_stale_pending_and_unavailable_resources(self):
         graph = fixture("function-graph.v2.json")
         for status, code in (
@@ -240,6 +249,63 @@ class ClearPipeValidationEngineTests(unittest.TestCase):
         secret = fixture("invalid-secret-graph.v2.json")
         result = ValidationEngine().validate_full(secret)
         self.assertNotIn("must-not-persist", json.dumps(result.to_dict()))
+
+    def test_compatibility_validator_invokes_authorized_resource_and_queue_checkers(self):
+        resource_calls = []
+        queue_calls = []
+
+        def resource_checker(kind, resource_id):
+            resource_calls.append((kind, resource_id))
+            return True
+
+        def queue_checker(resource_id):
+            queue_calls.append(resource_id)
+            return True
+
+        allowed = GraphValidator(
+            resource_checker=resource_checker, queue_checker=queue_checker
+        ).validate(fixture("task-graph.v2.json"))
+        self.assertTrue(allowed.valid, allowed.to_dict())
+        self.assertEqual(queue_calls, ["default"])
+        self.assertEqual(
+            resource_calls,
+            [
+                ("task", "Pipeline step 1 dataset artifact"),
+                ("task", "Pipeline step 2 process dataset"),
+            ],
+        )
+
+        denied = GraphValidator(
+            resource_checker=resource_checker, queue_checker=lambda _: False
+        ).validate(fixture("function-graph.v2.json"))
+        self.assertFalse(denied.valid)
+        self.assertIn("CPRES002", codes(denied))
+
+        unverifiable = GraphValidator(resource_checker=resource_checker).validate(
+            fixture("function-graph.v2.json")
+        )
+        self.assertFalse(unverifiable.valid)
+        self.assertIn("CPRES006", codes(unverifiable))
+
+        def failing_queue_checker(_):
+            raise RuntimeError("lookup failure")
+
+        callback_failure = GraphValidator(
+            queue_checker=failing_queue_checker
+        ).validate(fixture("function-graph.v2.json"))
+        self.assertFalse(callback_failure.valid)
+        self.assertIn("CPRES006", codes(callback_failure))
+
+    def test_compatibility_validator_blocks_value_safe_unsupported_graph_secrets(self):
+        legacy = {
+            "schema_version": 1,
+            "nodes": [{"config": {"inlineScript": "API_TOKEN = 'must-not-echo'"}}],
+            "edges": [],
+        }
+        result = GraphValidator().validate(legacy)
+        self.assertIn("CPSTR002", codes(result))
+        self.assertIn("embedded_secret", codes(result))
+        self.assertNotIn("must-not-echo", json.dumps(result.to_dict()))
 
 
 if __name__ == "__main__":
