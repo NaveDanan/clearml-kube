@@ -26,7 +26,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 | cp-20-port-edge-semantics | In progress | copilot/cp-20 | Semantic compatibility and edge editing worktree active. |
 | [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 | cp-21-dataset-browser | In progress | copilot/cp-21 | Dataset browser and safe dataset-reference integration worktree active. |
 | [x] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 | cp-22-import-export | Done | 99377c9 | Versioned safe transfer and unsaved-change guards integrated; unsupported generated source fails closed. |
-| [ ] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | In progress | copilot/cp-23 | Lifecycle toolbar and read-only code preview worktree active. |
+| [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
 | [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
 | [ ] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
 | [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 |  | Not started |  |  |
