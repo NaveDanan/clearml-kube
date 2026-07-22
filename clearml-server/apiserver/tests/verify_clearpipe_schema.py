@@ -29,6 +29,19 @@ assert {
     "task_descriptor",
     "execution_snapshot",
 }.issubset(service.definitions)
+assert (
+    "default"
+    not in service.definitions["task_descriptor"]["properties"]["parameters"]["items"][
+        "properties"
+    ]
+)
+assert service.endpoint_groups["task_descriptor"].get_for_version(
+    PartialVersion("2.35")
+).response_schema["properties"]["status"]["enum"] == [
+    "available",
+    "stale",
+    "unavailable",
+]
 
 for action in EXPECTED:
     endpoint = service.endpoint_groups[action].get_for_version(PartialVersion("2.35"))

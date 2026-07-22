@@ -143,8 +143,8 @@ class ParseScriptResponse(models.Base):
 
 class TaskDescriptorResponse(models.Base):
     """
-    `descriptor` is present only for an authorized, existing task. A stale
-    descriptor retains its current safe metadata so the caller can reconcile it.
+    `descriptor` is present only for a visible task. Parameter values and
+    defaults are never descriptor metadata; unavailable access is non-enumerating.
     """
 
     status = StringField(required=True)
@@ -153,8 +153,8 @@ class TaskDescriptorResponse(models.Base):
 
 class ExecutionSnapshotResponse(models.Base):
     """
-    `snapshot` is present only when the run is authorized and has a valid
-    ClearPipeRuntime identity map.
+    `snapshot` is present only when the run is visible and has a valid,
+    server-signed ClearPipeRuntime provenance record.
     """
 
     status = StringField(required=True)

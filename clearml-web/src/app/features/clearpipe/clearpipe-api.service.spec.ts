@@ -221,7 +221,7 @@ describe('ClearpipeApiService', () => {
       descriptor: jasmine.objectContaining({
         identity: {task_id: 'base-1'},
         parameters: [
-          {section: 'Args', name: 'epochs', type: 'int', default: '10'},
+          {section: 'Args', name: 'epochs', type: 'int'},
           {section: 'Args', name: 'api_key', type: 'str'},
         ],
       }),
@@ -243,5 +243,24 @@ describe('ClearpipeApiService', () => {
     expect(encoded).not.toContain('must-not-be-retained');
     expect(encoded).not.toContain('output_error');
     expect(encoded).not.toContain('uri');
+    expect(encoded).not.toContain('"default"');
+  });
+
+  it('normalizes legacy unavailable detail into the non-enumerating descriptor result', () => {
+    requests.post.and.returnValue(of({
+      status: 'denied',
+      descriptor: {
+        identity: {task_id: 'private-task'},
+        context: {name: 'Private', type: 'training', status: 'completed'},
+        parameters: [],
+        artifacts: [],
+      },
+    }));
+
+    let result: unknown;
+    api.taskDescriptor('private-task').subscribe(response => result = response);
+
+    expect(result).toEqual({status: 'unavailable'});
+    expect(JSON.stringify(result)).not.toContain('private-task');
   });
 });

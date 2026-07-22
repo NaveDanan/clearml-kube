@@ -145,6 +145,18 @@ class ClearPipeContractSchemaTests(unittest.TestCase):
             self.assertEqual(endpoint.response_schema["type"], "object")
             self.assertTrue(endpoint.request_schema["properties"])
             self.assertTrue(endpoint.response_schema["properties"])
+        self.assertNotIn(
+            "default",
+            service.definitions["task_descriptor"]["properties"]["parameters"][
+                "items"
+            ]["properties"],
+        )
+        self.assertEqual(
+            service.endpoint_groups["task_descriptor"]
+            .get_for_version(PartialVersion("2.35"))
+            .response_schema["properties"]["status"]["enum"],
+            ["available", "stale", "unavailable"],
+        )
 
     def test_named_opaque_envelopes_do_not_redeclare_graph_semantics(self):
         definitions = SchemaReader().get_schema().services["clearpipe"].definitions

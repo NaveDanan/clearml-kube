@@ -1,3 +1,4 @@
+import hmac
 import json
 import re
 from hashlib import sha256
@@ -59,6 +60,7 @@ from apiserver.bll.queue import QueueBLL
 from apiserver.bll.task import TaskBLL
 from apiserver.bll.task.task_operations import enqueue_task
 from apiserver.bll.util import update_project_time
+from apiserver.config_repo import config
 from apiserver.database.errors import translate_errors_context
 from apiserver.database.model import EntityVisibility
 from apiserver.database.model.model import Model
@@ -81,9 +83,10 @@ PIPELINE_TAG = "pipeline"
 MAX_PAGE_SIZE = 500
 CLEARPIPE_RUNTIME_CONFIGURATION = "ClearPipeRuntime"
 CLEARPIPE_RUNTIME_SCHEMA_VERSION = 1
-CLEARPIPE_RUNTIME_DEFINITION_ID = "clearpipe_definition_id"
-CLEARPIPE_RUNTIME_KIND = "clearpipe_runtime_kind"
-CLEARPIPE_RUNTIME_RUN_KIND = "v2_controller_run"
+CLEARPIPE_RUNTIME_PROVENANCE = "clearpipe_runtime_provenance"
+CLEARPIPE_RUNTIME_PROVENANCE_VERSION = 1
+MAX_RUNTIME_SNAPSHOT_STEPS = 100
+MAX_RUNTIME_SNAPSHOT_MODELS = 500
 _SECRET_PARAMETER_VALUE = re.compile(
     r"(?i)(?:(?:^|[^a-z0-9])(?:password|passwd|secret|token|api[_-]?key|"
     r"access[_-]?key|private[_-]?key|credential)s?(?:$|[^a-z0-9])|"
@@ -304,6 +307,102 @@ def _safe_stored_runtime_configuration(
         return None
 
 
+def _runtime_configuration_digest(task: Task) -> Optional[str]:
+    item = (task.configuration or {}).get(CLEARPIPE_RUNTIME_CONFIGURATION)
+    value = getattr(item, "value", None)
+    return (
+        sha256(value.encode("utf-8")).hexdigest()
+        if isinstance(value, str)
+        else None
+    )
+
+
+def _runtime_provenance_signature(payload: Mapping) -> Optional[str]:
+    secret = config.get("secure.auth.token_secret", None)
+    if not isinstance(secret, str) or not secret:
+        return None
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hmac.new(
+        secret.encode("utf-8"), encoded, digestmod="sha256"
+    ).hexdigest()
+
+
+def _runtime_provenance(
+    run_id: str,
+    company_id: str,
+    definition_id: str,
+    runtime: ClearPipeRuntimeConfiguration,
+    runtime_configuration_value: str,
+) -> dict:
+    payload = {
+        "schema_version": CLEARPIPE_RUNTIME_PROVENANCE_VERSION,
+        "run_task_id": run_id,
+        "company_id": company_id,
+        "definition_task_id": definition_id,
+        "definition_revision": runtime.definition_revision,
+        "graph_digest": runtime.graph_digest,
+        "runtime_configuration_digest": sha256(
+            runtime_configuration_value.encode("utf-8")
+        ).hexdigest(),
+    }
+    signature = _runtime_provenance_signature(payload)
+    if signature is None:
+        raise errors.server_error.InternalError(
+            "ClearPipe runtime provenance signing is unavailable"
+        )
+    return {**payload, "signature": signature}
+
+
+def _verified_runtime_provenance(
+    run: Task, company_id: str
+) -> Optional[ClearPipeRuntimeConfiguration]:
+    provenance = (run.runtime or {}).get(CLEARPIPE_RUNTIME_PROVENANCE)
+    expected_keys = {
+        "schema_version",
+        "run_task_id",
+        "company_id",
+        "definition_task_id",
+        "definition_revision",
+        "graph_digest",
+        "runtime_configuration_digest",
+        "signature",
+    }
+    if not isinstance(provenance, Mapping) or set(provenance) != expected_keys:
+        return None
+    signature = provenance.get("signature")
+    payload = {key: value for key, value in provenance.items() if key != "signature"}
+    expected_signature = _runtime_provenance_signature(payload)
+    if (
+        not isinstance(signature, str)
+        or expected_signature is None
+        or not hmac.compare_digest(signature, expected_signature)
+        or payload.get("schema_version") != CLEARPIPE_RUNTIME_PROVENANCE_VERSION
+        or payload.get("run_task_id") != run.id
+        or payload.get("company_id") != company_id
+        or not isinstance(payload.get("definition_task_id"), str)
+        or not isinstance(payload.get("definition_revision"), int)
+        or not isinstance(payload.get("graph_digest"), str)
+        or not isinstance(payload.get("runtime_configuration_digest"), str)
+    ):
+        return None
+    runtime_digest = _runtime_configuration_digest(run)
+    runtime = _safe_stored_runtime_configuration(run)
+    if (
+        runtime is None
+        or runtime_digest != payload["runtime_configuration_digest"]
+        or runtime.definition_revision != payload["definition_revision"]
+        or runtime.graph_digest != payload["graph_digest"]
+    ):
+        return None
+    try:
+        _get_task(company_id, payload["definition_task_id"])
+    except errors.bad_request.InvalidTaskId:
+        return None
+    return runtime
+
+
 def _v2_configurations(graph: Mapping, generated: GeneratedDefinition, revision: int) -> dict:
     configurations = _canonical_v2_configuration(graph)
     runtime = _runtime_configuration(generated, revision)
@@ -518,28 +617,12 @@ def _timestamp(value) -> Optional[str]:
     return value.isoformat() if value is not None and hasattr(value, "isoformat") else None
 
 
-def _authorized_task_state(company_id: str, task_id: str):
-    """
-    Resolve through TaskBLL first so task visibility matches existing native
-    task APIs. The explicit unavailable state is intentional for the typed
-    ClearPipe contracts and carries no task data.
-    """
-
+def _visible_task(company_id: str, task_id: str) -> Optional[Task]:
+    """Use native visibility checks without turning a task ID into an oracle."""
     try:
-        return "available", task_bll.get_by_id(
-            company_id, task_id, allow_public=True
-        )
+        return task_bll.get_by_id(company_id, task_id, allow_public=True)
     except errors.bad_request.InvalidTaskId:
-        exists = Task.objects(id=task_id).only("id").first() is not None
-        return ("denied" if exists else "missing"), None
-
-
-def _safe_parameter_default(item) -> bool:
-    value = getattr(item, "value", None)
-    return (
-        isinstance(value, (str, int, float, bool))
-        and not _secret_parameter_material(value)
-    )
+        return None
 
 
 def _safe_parameter_descriptors(task: Task) -> list:
@@ -556,8 +639,6 @@ def _safe_parameter_descriptors(task: Task) -> list:
             item_type = getattr(item, "type", None)
             if isinstance(item_type, str) and item_type:
                 descriptor["type"] = item_type
-            if _safe_parameter_default(item):
-                descriptor["default"] = item.value
             descriptors.append(descriptor)
     return sorted(
         descriptors,
@@ -613,9 +694,9 @@ def _task_descriptor(task: Task, company_id: str) -> dict:
 
 def _runtime_step_task_ids(task: Task) -> dict:
     """
-    Read just the task IDs published by controller monitoring. The Pipeline
-    configuration itself is never returned and no arbitrary child fields are
-    trusted as a graph-to-runtime map.
+    Read only monitored child task IDs for server-authenticated runtime step
+    names. Provenance establishes graph-to-step identity; Pipeline monitoring
+    is never returned and cannot introduce graph node IDs.
     """
 
     try:
@@ -637,7 +718,7 @@ def _runtime_step_task_ids(task: Task) -> dict:
     return task_ids
 
 
-def _safe_models(task: Task, company_id: str) -> dict:
+def _safe_models(task: Task, visible_models: Mapping[str, Model]) -> dict:
     result = {}
     task_models = getattr(task, "models", None)
     for direction in ("input", "output"):
@@ -646,9 +727,7 @@ def _safe_models(task: Task, company_id: str) -> dict:
             model_id = getattr(item, "model", None)
             if not isinstance(model_id, str) or not model_id:
                 continue
-            model = Model.objects(
-                Q(id=model_id) & _visible_query(company_id, True)
-            ).only("id", "name").first()
+            model = visible_models.get(model_id)
             if model is None:
                 continue
             descriptor = {"id": model.id}
@@ -660,7 +739,7 @@ def _safe_models(task: Task, company_id: str) -> dict:
     return result
 
 
-def _safe_node_snapshot(task: Task, company_id: str) -> dict:
+def _safe_node_snapshot(task: Task, visible_models: Mapping[str, Model]) -> dict:
     result = {
         "task_id": task.id,
         "status": task.status,
@@ -669,7 +748,7 @@ def _safe_node_snapshot(task: Task, company_id: str) -> dict:
         # content or a URL.
         "log_task_id": task.id,
         "artifacts": _safe_artifact_descriptors(task),
-        "models": _safe_models(task, company_id),
+        "models": _safe_models(task, visible_models),
     }
     for name, value in (
         ("started_at", _timestamp(task.started)),
@@ -687,50 +766,87 @@ def _safe_node_snapshot(task: Task, company_id: str) -> dict:
     return result
 
 
-def _execution_snapshot(run: Task, company_id: str) -> Optional[dict]:
-    runtime = _safe_stored_runtime_configuration(run)
-    run_runtime = getattr(run, "runtime", None) or {}
-    definition_task_id = run_runtime.get(CLEARPIPE_RUNTIME_DEFINITION_ID)
-    marked_run = (
-        run_runtime.get(CLEARPIPE_RUNTIME_KIND) == CLEARPIPE_RUNTIME_RUN_KIND
-        and isinstance(definition_task_id, str)
-        and bool(definition_task_id)
+def _visible_run_children(
+    company_id: str, run_id: str, task_ids
+) -> Mapping[str, Task]:
+    task_ids = tuple(dict.fromkeys(task_ids))
+    if not task_ids:
+        return {}
+    fields = (
+        "id",
+        "parent",
+        "name",
+        "status",
+        "started",
+        "completed",
+        "last_update",
+        "output",
+        "execution",
+        "models",
+        "system_tags",
     )
+    children = Task.objects(
+        Q(id__in=task_ids, parent=run_id) & _visible_query(company_id, True)
+    ).only(*fields)
+    return {child.id: child for child in children}
+
+
+def _visible_models_by_id(company_id: str, model_ids) -> Mapping[str, Model]:
+    model_ids = tuple(sorted(set(model_ids)))
+    if not model_ids or len(model_ids) > MAX_RUNTIME_SNAPSHOT_MODELS:
+        return {}
+    models = Model.objects(
+        Q(id__in=model_ids) & _visible_query(company_id, True)
+    ).only("id", "name")
+    return {model.id: model for model in models}
+
+
+def _task_model_ids(tasks) -> tuple:
+    return tuple(
+        model_id
+        for task in tasks
+        for direction in ("input", "output")
+        for item in (getattr(getattr(task, "models", None), direction, None) or ())
+        if isinstance((model_id := getattr(item, "model", None)), str) and model_id
+    )
+
+
+def _execution_snapshot(run: Task, company_id: str) -> Optional[dict]:
+    runtime = _verified_runtime_provenance(run, company_id)
     if (
         runtime is None
         or not runtime.runtime_steps
         or run.type != TaskType.controller
-        or run_runtime.get("clearpipe_revision") != runtime.definition_revision
-        or run_runtime.get("_pipeline_hash") != runtime.graph_digest
-        # Existing v2 bridge runs predate the explicit definition handoff ID
-        # but are still safe to read once their controller has been submitted.
-        or (not marked_run and getattr(run, "status", None) == TaskStatus.created)
     ):
         return None
     step_task_ids = _runtime_step_task_ids(run)
+    mapped_task_ids = [
+        step_task_ids[item.pipeline_step_name]
+        for item in runtime.runtime_steps
+        if item.pipeline_step_name in step_task_ids
+    ]
+    if len(mapped_task_ids) != len(set(mapped_task_ids)):
+        return None
+    bounded_task_ids = set(mapped_task_ids[:MAX_RUNTIME_SNAPSHOT_STEPS])
+    children = _visible_run_children(company_id, run.id, bounded_task_ids)
+    visible_models = _visible_models_by_id(company_id, _task_model_ids(children.values()))
     nodes = []
-    for identity in runtime.runtime_steps:
+    for index, identity in enumerate(runtime.runtime_steps):
         node = {
             "graph_node_id": identity.graph_node_id,
             "pipeline_step_name": identity.pipeline_step_name,
         }
         step_task_id = step_task_ids.get(identity.pipeline_step_name)
-        if not step_task_id:
+        if not step_task_id or index >= MAX_RUNTIME_SNAPSHOT_STEPS:
             node["record_status"] = "unavailable"
             nodes.append(node)
             continue
-        record_state, child = _authorized_task_state(company_id, step_task_id)
-        if record_state != "available" or child is None:
-            node["record_status"] = record_state
-            nodes.append(node)
-            continue
-        # The controller must have recorded an actual child of this run before
-        # its status or outputs can be exposed.
-        if getattr(child, "parent", None) != run.id:
+        child = children.get(step_task_id)
+        if child is None:
             node["record_status"] = "unavailable"
             nodes.append(node)
             continue
-        node.update(_safe_node_snapshot(child, company_id))
+        node.update(_safe_node_snapshot(child, visible_models))
         nodes.append(node)
     controller = {"task_id": run.id, "status": run.status}
     for name, value in (
@@ -742,13 +858,14 @@ def _execution_snapshot(run: Task, company_id: str) -> Optional[dict]:
             controller[name] = value
     snapshot = {
         "run_task_id": run.id,
+        "definition_task_id": run.runtime[CLEARPIPE_RUNTIME_PROVENANCE][
+            "definition_task_id"
+        ],
         "definition_revision": runtime.definition_revision,
         "graph_digest": runtime.graph_digest,
         "controller": controller,
         "nodes": nodes,
     }
-    if marked_run:
-        snapshot["definition_task_id"] = definition_task_id
     return snapshot
 
 
@@ -1184,11 +1301,15 @@ def start(call: APICall, company_id: str, request: StartRequest):
             "_pipeline_hash": pipeline_hash,
         }
         if v2_graph:
-            run_runtime.update(
-                {
-                    CLEARPIPE_RUNTIME_DEFINITION_ID: definition.id,
-                    CLEARPIPE_RUNTIME_KIND: CLEARPIPE_RUNTIME_RUN_KIND,
-                }
+            runtime_configuration_value = configurations[
+                CLEARPIPE_RUNTIME_CONFIGURATION
+            ].value
+            run_runtime[CLEARPIPE_RUNTIME_PROVENANCE] = _runtime_provenance(
+                run.id,
+                company_id,
+                definition.id,
+                _runtime_configuration(compiled, revision),
+                runtime_configuration_value,
             )
         Task.objects(id=run.id, company=company_id).update_one(
             set__runtime=run_runtime
@@ -1232,16 +1353,18 @@ def start(call: APICall, company_id: str, request: StartRequest):
 def task_descriptor(
     call: APICall, company_id: str, request: TaskDescriptorRequest
 ):
-    status, task = _authorized_task_state(company_id, request.task)
+    task = _visible_task(company_id, request.task)
     if task is None:
-        call.result.data = {"status": status}
+        call.result.data = {"status": "unavailable"}
         return
     descriptor = _task_descriptor(task, company_id)
     if (
         request.known_updated_at is not None
-        and request.known_updated_at != descriptor["context"]["updated_at"]
+        and request.known_updated_at != descriptor["context"].get("updated_at")
     ):
         status = "stale"
+    else:
+        status = "available"
     call.result.data = {"status": status, "descriptor": descriptor}
 
 
@@ -1254,14 +1377,15 @@ def task_descriptor(
 def execution_snapshot(
     call: APICall, company_id: str, request: ExecutionSnapshotRequest
 ):
-    status, run = _authorized_task_state(company_id, request.run)
+    run = _visible_task(company_id, request.run)
     if run is None:
-        call.result.data = {"status": status}
+        call.result.data = {"status": "unavailable"}
         return
     snapshot = _execution_snapshot(run, company_id)
     if snapshot is None:
         call.result.data = {"status": "unavailable"}
         return
+    status = "available"
     if (
         request.definition_revision is not None
         and request.definition_revision != snapshot["definition_revision"]

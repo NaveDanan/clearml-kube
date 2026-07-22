@@ -1,6 +1,7 @@
 import ast
 import json
 import unittest
+from hashlib import sha256
 from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
@@ -304,13 +305,33 @@ class V2StartTests(unittest.TestCase):
         self.assertIn("pipe.add_function_step", script)
         self.assertNotIn("DagRunner", script)
         self.assertTrue(script.endswith('if __name__ == "__main__":\n    pipe.start()\n'))
-        runtime_update.update_one.assert_called_once_with(
-            set__runtime={
-                "clearpipe_revision": 7,
-                "_pipeline_hash": runtime["graph_digest"],
-                "clearpipe_definition_id": "definition",
-                "clearpipe_runtime_kind": "v2_controller_run",
-            }
+        run_runtime = runtime_update.update_one.call_args.kwargs["set__runtime"]
+        self.assertEqual(run_runtime["clearpipe_revision"], 7)
+        self.assertEqual(run_runtime["_pipeline_hash"], runtime["graph_digest"])
+        provenance = run_runtime["clearpipe_runtime_provenance"]
+        self.assertEqual(
+            {
+                key: value
+                for key, value in provenance.items()
+                if key != "signature"
+            },
+            {
+                "schema_version": 1,
+                "run_task_id": "run-1",
+                "company_id": "company-a",
+                "definition_task_id": "definition",
+                "definition_revision": 7,
+                "graph_digest": runtime["graph_digest"],
+                "runtime_configuration_digest": sha256(
+                    clone_kwargs["configuration"]["ClearPipeRuntime"].value.encode("utf-8")
+                ).hexdigest(),
+            },
+        )
+        self.assertEqual(
+            provenance["signature"],
+            clearpipe._runtime_provenance_signature(
+                {key: value for key, value in provenance.items() if key != "signature"}
+            ),
         )
         enqueue.assert_called_once_with(
             task_id="run-1",

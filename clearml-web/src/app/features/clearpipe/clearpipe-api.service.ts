@@ -104,16 +104,15 @@ export interface ClearpipeParseScriptResponse {
   line_count: number;
 }
 
-export type ClearpipeTaskDescriptorStatus = 'available' | 'missing' | 'denied' | 'stale';
-export type ClearpipeExecutionSnapshotStatus = ClearpipeTaskDescriptorStatus | 'unavailable';
+export type ClearpipeTaskDescriptorStatus = 'available' | 'stale' | 'unavailable';
+export type ClearpipeExecutionSnapshotStatus = ClearpipeTaskDescriptorStatus;
 export type ClearpipeArtifactDirection = 'input' | 'output';
-export type ClearpipeRuntimeRecordStatus = 'available' | 'missing' | 'denied' | 'unavailable';
+export type ClearpipeRuntimeRecordStatus = 'available' | 'unavailable';
 
 export interface ClearpipeTaskParameterDescriptor {
   section: string;
   name: string;
   type?: string;
-  default?: string | number | boolean;
 }
 
 export interface ClearpipeTaskArtifactDescriptor {
@@ -163,7 +162,7 @@ export interface ClearpipeExecutionNodeSnapshot {
 
 export interface ClearpipeExecutionSnapshot {
   run_task_id: string;
-  definition_task_id?: string;
+  definition_task_id: string;
   definition_revision: number;
   graph_digest: string;
   controller: {
@@ -506,12 +505,12 @@ export class ClearpipeApiService {
     const graphDigest = this.text(snapshot?.graph_digest);
     const controllerTaskId = this.text(controller?.task_id);
     const controllerStatus = this.text(controller?.status);
-    if (!runTaskId || revision === undefined || !graphDigest || !controllerTaskId || !controllerStatus) {
+    if (!runTaskId || !definitionTaskId || revision === undefined || !graphDigest || !controllerTaskId || !controllerStatus) {
       return undefined;
     }
     return {
       run_task_id: runTaskId,
-      ...(definitionTaskId ? {definition_task_id: definitionTaskId} : {}),
+      definition_task_id: definitionTaskId,
       definition_revision: revision,
       graph_digest: graphDigest,
       controller: {
@@ -530,12 +529,10 @@ export class ClearpipeApiService {
     const section = this.text(parameter?.section);
     const name = this.text(parameter?.name);
     if (!section || !name) return [];
-    const defaultValue = this.safeParameterDefault(parameter?.default, section, name);
     return [{
       section,
       name,
       ...(this.text(parameter?.type) ? {type: this.text(parameter?.type)!} : {}),
-      ...(defaultValue !== undefined ? {default: defaultValue} : {}),
     }];
   }
 
@@ -604,33 +601,20 @@ export class ClearpipeApiService {
     return taskId && name ? [{task_id: taskId, name}] : [];
   }
 
-  private safeParameterDefault(value: unknown, section: string, name: string): string | number | boolean | undefined {
-    if (/(password|passwd|secret|token|api[_ -]?key|access[_ -]?key|credential|private[_ -]?key)/i.test(`${section}/${name}`)) {
-      return undefined;
-    }
-    if (typeof value === 'string') {
-      if (value.length > 512 || /(?:password|passwd|secret|token|api[_ -]?key|access[_ -]?key|credential|private[_ -]?key|bearer)/i.test(value)) {
-        return undefined;
-      }
-      return value;
-    }
-    return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ? value : undefined;
-  }
-
   private taskDescriptorStatus(value: unknown): ClearpipeTaskDescriptorStatus {
-    return value === 'available' || value === 'missing' || value === 'denied' || value === 'stale'
+    return value === 'available' || value === 'stale' || value === 'unavailable'
       ? value
-      : 'missing';
+      : 'unavailable';
   }
 
   private executionSnapshotStatus(value: unknown): ClearpipeExecutionSnapshotStatus {
-    return value === 'available' || value === 'missing' || value === 'denied' || value === 'stale' || value === 'unavailable'
+    return value === 'available' || value === 'stale' || value === 'unavailable'
       ? value
       : 'unavailable';
   }
 
   private runtimeRecordStatus(value: unknown): ClearpipeRuntimeRecordStatus | undefined {
-    return value === 'available' || value === 'missing' || value === 'denied' || value === 'unavailable'
+    return value === 'available' || value === 'unavailable'
       ? value
       : undefined;
   }

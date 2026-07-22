@@ -222,7 +222,7 @@ describe('ClearpipeAdapterService', () => {
 
   it('keeps explicit descriptor availability in typed data and stops cold snapshot polling on teardown', fakeAsync(() => {
     requests.post.and.returnValues(
-      of({status: 'missing'}),
+      of({status: 'unavailable'}),
       of({
         status: 'available',
         snapshot: {
@@ -250,7 +250,7 @@ describe('ClearpipeAdapterService', () => {
     const descriptor = collect(adapter.taskDescriptor('missing-task'));
     expect(descriptor.map(outcome => outcome.status)).toEqual(['loading', 'ready']);
     expect((descriptor[1] as Extract<ClearpipeAdapterOutcome<unknown>, {status: 'ready'}>).data)
-      .toEqual({status: 'missing'});
+      .toEqual({status: 'unavailable'});
     expect(requests.post.calls.argsFor(0)).toEqual([
       '/service/1/api/v2.35/clearpipe.task_descriptor',
       {task: 'missing-task', known_updated_at: undefined},
