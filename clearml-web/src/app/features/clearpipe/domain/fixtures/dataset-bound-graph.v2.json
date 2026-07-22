@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "document": {
+    "id": "dataset-bound-task",
+    "revision": 1,
+    "name": "dataset_bound_task",
+    "project": "examples",
+    "tags": ["clearpipe", "dataset"]
+  },
+  "settings": {"default_execution_queue_id": "queue-default"},
+  "parameters": [],
+  "resources": [
+    {"id": "dataset-iris", "kind": "dataset", "resource_id": "clearml-dataset-id", "label": "Iris dataset"},
+    {"id": "queue-default", "kind": "queue", "resource_id": "default", "label": "default"}
+  ],
+  "outputs": [],
+  "nodes": [
+    {
+      "id": "consume-dataset",
+      "kind": "task",
+      "name": "consume_dataset",
+      "label": "Consume dataset",
+      "base_task": {"kind": "task-id", "task_id": "clearml-base-task-id"},
+      "ports": [
+        {"id": "in-dataset", "kind": "port", "name": "General/dataset_id", "direction": "input", "role": "artifact", "required": true, "multiplicity": "single", "accepted_binding_kinds": ["artifact"], "order": 0}
+      ],
+      "configuration": {"clone_base_task": true, "cache": false},
+      "visual": {"position": {"x": 0, "y": 0}}
+    }
+  ],
+  "bindings": [
+    {"id": "bind-dataset-resource", "kind": "artifact", "source": {"kind": "resource", "resource_id": "dataset-iris"}, "target": {"kind": "port", "node_id": "consume-dataset", "port_id": "in-dataset"}}
+  ],
+  "visual": {"viewport": {"x": 0, "y": 0}, "zoom": 1}
+}

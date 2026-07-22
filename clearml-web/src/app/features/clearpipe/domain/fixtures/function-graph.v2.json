@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "document": {
+    "id": "cp03-two-function",
+    "revision": 1,
+    "name": "function_pipeline",
+    "project": "examples",
+    "version": "1.0.0",
+    "tags": ["clearpipe", "pipeline"]
+  },
+  "settings": {"default_execution_queue_id": "queue-default"},
+  "parameters": [],
+  "resources": [
+    {"id": "queue-default", "kind": "queue", "resource_id": "default", "label": "default"}
+  ],
+  "outputs": [
+    {"id": "output-text", "name": "text", "source": {"kind": "port", "node_id": "format-result", "port_id": "out-text"}}
+  ],
+  "nodes": [
+    {
+      "id": "normalize",
+      "kind": "function",
+      "name": "normalize",
+      "label": "Normalize",
+      "signature": "def normalize(value: int, increment: int = 1) -> int",
+      "source": "def normalize(value: int, increment: int = 1) -> int:\n    return value + increment\n",
+      "ports": [
+        {"id": "in-value", "kind": "port", "name": "value", "direction": "input", "role": "data", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["data"], "order": 0, "default": 41},
+        {"id": "in-increment", "kind": "port", "name": "increment", "direction": "input", "role": "parameter", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["parameter"], "order": 1, "default": 1},
+        {"id": "out-normalized", "kind": "port", "name": "normalized", "direction": "output", "role": "data", "required": false, "multiplicity": "many", "accepted_binding_kinds": ["data"], "order": 0}
+      ],
+      "configuration": {"task_type": "data_processing", "cache": true},
+      "visual": {"position": {"x": 0, "y": 0}}
+    },
+    {
+      "id": "format-result",
+      "kind": "function",
+      "name": "format_result",
+      "label": "Format result",
+      "signature": "def format_result(value: int, prefix: str = 'result=') -> str",
+      "source": "def format_result(value: int, prefix: str = 'result=') -> str:\n    return f\"{prefix}{value}\"\n",
+      "ports": [
+        {"id": "in-value", "kind": "port", "name": "value", "direction": "input", "role": "data", "required": true, "multiplicity": "single", "accepted_binding_kinds": ["data"], "order": 0},
+        {"id": "in-prefix", "kind": "port", "name": "prefix", "direction": "input", "role": "parameter", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["parameter"], "order": 1, "default": "result="},
+        {"id": "out-text", "kind": "port", "name": "text", "direction": "output", "role": "data", "required": false, "multiplicity": "many", "accepted_binding_kinds": ["data"], "order": 0}
+      ],
+      "configuration": {"task_type": "qc", "cache": true},
+      "visual": {"position": {"x": 360, "y": 0}}
+    }
+  ],
+  "bindings": [
+    {"id": "bind-data-normalized", "kind": "data", "source": {"kind": "port", "node_id": "normalize", "port_id": "out-normalized"}, "target": {"kind": "port", "node_id": "format-result", "port_id": "in-value"}},
+    {"id": "bind-inferred-normalize-format", "kind": "inferred", "source": {"kind": "node", "node_id": "normalize"}, "target": {"kind": "node", "node_id": "format-result"}, "derived_from": {"kind": "port", "node_id": "normalize", "port_id": "out-normalized"}}
+  ],
+  "visual": {"viewport": {"x": 20, "y": 30}, "zoom": 1}
+}
