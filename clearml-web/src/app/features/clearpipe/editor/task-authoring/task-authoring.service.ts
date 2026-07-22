@@ -26,6 +26,13 @@ const graphError = (command: string, code: string, message: string): GraphComman
   errors: [{code, path: 'task-authoring', message}],
 });
 
+const sameBindingKinds = (left: GraphPort['accepted_binding_kinds'], right: GraphPort['accepted_binding_kinds']): boolean => {
+  const orderedLeft = [...left].sort();
+  const orderedRight = [...right].sort();
+  return orderedLeft.length === orderedRight.length
+    && orderedLeft.every((kind, index) => kind === orderedRight[index]);
+};
+
 const samePortMetadata = (left: GraphPort, right: GraphPort): boolean =>
   left.id === right.id
   && left.name === right.name
@@ -33,8 +40,7 @@ const samePortMetadata = (left: GraphPort, right: GraphPort): boolean =>
   && left.role === right.role
   && left.required === right.required
   && left.multiplicity === right.multiplicity
-  && left.order === right.order
-  && JSON.stringify(left.accepted_binding_kinds) === JSON.stringify(right.accepted_binding_kinds);
+  && sameBindingKinds(left.accepted_binding_kinds, right.accepted_binding_kinds);
 
 /**
  * CP-24's command and descriptor façade. It keeps no graph or resource copy:
@@ -129,20 +135,7 @@ export class ClearpipeTaskAuthoringService {
         queue_resource_id: queueResourceId,
         retry_on_failure: definition.retryOnFailure,
       });
-      const desiredIds = new Set(ports.map(port => port.id));
-      // Remove only ports proven unbound before assigning descriptor orders so a
-      // replacement cannot transiently violate CP-06's unique-order invariant.
-      current.ports.filter(port => !desiredIds.has(port.id)).forEach(port => this.graphStore.removePort(current.id, port.id));
-      const currentIds = new Set(current.ports.filter(port => desiredIds.has(port.id)).map(port => port.id));
-      ports.forEach(port => {
-        if (currentIds.has(port.id)) {
-          const patch: Omit<GraphPort, 'id'> = {...port};
-          delete (patch as Partial<GraphPort>).id;
-          this.graphStore.updatePort(current.id, port.id, patch);
-        } else {
-          this.graphStore.createPort(current.id, port);
-        }
-      });
+      this.reconcileDescriptorPorts(current, ports);
     });
   }
 
@@ -221,6 +214,37 @@ export class ClearpipeTaskAuthoringService {
 
   disconnect(bindingId: string): SemanticEdgeCommandResult {
     return this.semanticEdges.remove(bindingId);
+  }
+
+  private reconcileDescriptorPorts(current: TaskNode, desired: readonly GraphPort[]): void {
+    const desiredIds = new Set(desired.map(port => port.id));
+    const retained = current.ports.filter(port => desiredIds.has(port.id));
+    const retainedIds = new Set(retained.map(port => port.id));
+
+    current.ports
+      .filter(port => !desiredIds.has(port.id))
+      .forEach(port => this.graphStore.removePort(current.id, port.id));
+
+    (['input', 'output'] as const).forEach(direction => {
+      let temporaryOrder = Math.max(
+        -1,
+        ...current.ports.filter(port => port.direction === direction).map(port => port.order),
+        ...desired.filter(port => port.direction === direction).map(port => port.order),
+      ) + 1;
+      retained
+        .filter(port => port.direction === direction)
+        .forEach(port => this.graphStore.updatePort(current.id, port.id, {order: temporaryOrder++}));
+    });
+
+    desired.forEach(port => {
+      if (!retainedIds.has(port.id)) {
+        this.graphStore.createPort(current.id, port);
+        return;
+      }
+      const patch: Omit<GraphPort, 'id'> = {...port};
+      delete (patch as Partial<GraphPort>).id;
+      this.graphStore.updatePort(current.id, port.id, patch);
+    });
   }
 
   private materializeQueue(definition: TaskAuthoringDefinition): string | undefined {

@@ -357,6 +357,52 @@ describe('CP-24 task-backed authoring', () => {
     }));
   });
 
+  it('updates an unchanged bound parameter port after graph canonicalization', () => {
+    const created = authoring.create(definition('base-task-a'));
+    const threshold = taskParameterPortId('General', 'threshold');
+    expect(store.addParameter({id: 'threshold', name: 'threshold', required: false, order: 0}).ok).toBeTrue();
+    expect(authoring.connectPipelineParameter(created.id!, threshold, 'threshold').eligible).toBeTrue();
+
+    const update = authoring.update(store.node(created.id!) as TaskNode, definition('base-task-a', {
+      label: 'Updated task label',
+    }));
+
+    expect(update.ok).withContext(JSON.stringify(update.errors)).toBeTrue();
+    expect((store.node(created.id!) as TaskNode).label).toBe('Updated task label');
+    expect(store.bindingsForPort(created.id!, threshold)).toHaveSize(1);
+  });
+
+  it('reconciles descriptor insertion and reordering without dropping a surviving bound port', () => {
+    const parameter = (name: string) => ({section: 'General', name});
+    const firstDescriptor = descriptor('base-task-a', {parameters: [parameter('a'), parameter('c')]});
+    const created = authoring.create(definition('base-task-a', {
+      descriptor: firstDescriptor,
+      parameterDefaults: {},
+    }));
+    const cPort = taskParameterPortId('General', 'c');
+    expect(store.addParameter({id: 'value', name: 'value', required: false, order: 0}).ok).toBeTrue();
+    expect(authoring.connectPipelineParameter(created.id!, cPort, 'value').eligible).toBeTrue();
+
+    const inserted = authoring.update(store.node(created.id!) as TaskNode, definition('base-task-a', {
+      descriptor: descriptor('base-task-a', {parameters: [parameter('a'), parameter('b'), parameter('c')]}),
+      parameterDefaults: {},
+    }));
+    expect(inserted.ok).withContext(JSON.stringify(inserted.errors)).toBeTrue();
+    expect((store.node(created.id!) as TaskNode).ports.filter(port => port.direction === 'input')
+      .map(port => [port.name, port.order])).toEqual([['General/a', 0], ['General/b', 1], ['General/c', 2]]);
+    expect(store.bindingsForPort(created.id!, cPort)).toHaveSize(1);
+
+    const reordered = authoring.update(store.node(created.id!) as TaskNode, definition('base-task-a', {
+      descriptor: descriptor('base-task-a', {parameters: [parameter('c'), parameter('b'), parameter('a')]}),
+      parameterDefaults: {},
+    }));
+    expect(reordered.ok).withContext(JSON.stringify(reordered.errors)).toBeTrue();
+    expect((store.node(created.id!) as TaskNode).ports.filter(port => port.direction === 'input')
+      .map(port => [port.name, port.order])).toEqual([['General/c', 0], ['General/b', 1], ['General/a', 2]]);
+    expect(store.bindingsForPort(created.id!, cPort)).toHaveSize(1);
+    expect(decodeGraphV2(store.graph()!).status).toBe('ok');
+  });
+
   it('replaces a legacy project/name reference only after selecting an eligible immutable descriptor identity', () => {
     const legacy = store.createTaskNode({
       name: 'legacy_step',
