@@ -27,9 +27,9 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 | cp-21-dataset-browser | Done | fb42e53 | CP-18-backed dataset browser and safe artifact-binding handoff integrated. |
 | [x] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 | cp-22-import-export | Done | 99377c9 | Versioned safe transfer and unsaved-change guards integrated; unsupported generated source fails closed. |
 | [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
-| [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | Blocked | a1131ad | Authorized task metadata and generic extension host integrated; awaiting typed graph configuration parity and safe task-port descriptor. |
+| [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | In progress | copilot/cp-24-final | Shared graph, resource, descriptor, and extension-host contracts integrated; task authoring resumed. |
 | [x] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 | cp-25-function-authoring | Done | 715effc | Constrained function authoring is host-wired with typed persistence, explicit source fallback, and protected bound ports. |
-| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | Blocked | d5d11f1 | V2 server compilation/start, runtime-step source maps, and definition-scoped result lifecycle are required before execution UI can be accepted. |
+| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | In progress | copilot/cp-26-final | V2 execution, signed runtime snapshots, and typed adapter polling integrated; execution UI resumed. |
 | [x] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Done | f9e579b | Advanced history, clipboard, keyboard, selection, and layout operations integrated with atomic restore safety. |
 | [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 |  | Not started |  |  |
 | [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 |  | Not started |  |  |
