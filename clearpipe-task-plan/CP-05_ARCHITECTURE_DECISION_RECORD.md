@@ -1,9 +1,8 @@
 # CP-05 — ClearPipe architecture decision record and parity matrix
 
-**Status:** Proposed architecture contract for lead review; this document does
-not approve the architecture gate or update the execution board.  Decisions
-marked **Frozen proposal** are the implementation contract to approve, not
-claims that their implementation or runtime validation already exists.
+**Status:** Approved architecture contract (lead approval, 2026-07-22).
+Decisions marked **Frozen** are the implementation contract; they do not claim
+that implementation or runtime validation already exists.
 
 **Evidence baseline:** `a6581e1` in worktree
 `D:\Projects\clearml\.worktrees\cp-05`, incorporating the CP-01 through CP-04
@@ -24,20 +23,20 @@ Evidence precedence for a conflict is:
 3. this ADR after lead approval;
 4. reference UX intent (CP-04), which never overrides backend semantics.
 
-### Frozen proposal summary
+### Frozen decision summary
 
 | ID | Decision | Status | Consequence |
 |---|---|---|---|
-| D-01 | `/clearpipe` authors definitions; `/pipelines` remains project/controller-run discovery, operational lifecycle, and detailed observability. | **Frozen proposal** | Do not add a parallel `/pipelines` editor, list, history, or status API. |
-| D-02 | The sole authoring truth is canonical **ClearPipe graph schema v2**. It contains typed task/function nodes, typed bindings, settings, approved visual metadata, and no transient/editor/runtime data. | **Frozen proposal** | Canvas, forms, persistence, validation, preview, import, and generators consume this document; no component owns a shadow graph. |
-| D-03 | Persist a definition as the existing tagged controller `Task` using `configuration.ClearPipe`; use `runtime.clearpipe_revision` for optimistic concurrency. `configuration.Pipeline`, script, and generated source are derived artifacts. | **Frozen proposal** | Never write the legacy `Pipeline` projection as the authoring source or infer an editable graph from it. |
-| D-04 | A save is a compare-and-swap update of that definition. “Save as” creates a new definition; current revisions are mutable edit tokens, **not** version history. | **Frozen proposal** | No invented version list, immutable snapshot/history, or schedule surface. |
-| D-05 | Canonical v2 execution targets the CP-03 imperative `PipelineController` lowering, invoked by the existing authenticated ClearPipe server lifecycle. The current generic `DagRunner` is legacy-only until it is replaced/adapted to invoke that same compiled definition. | **Frozen proposal; integration gate** | Browser code never runs a pipeline. A v2 Run action stays disabled until CP-26 proves the server invocation path on a real supported Agent. |
-| D-06 | One server-side deterministic compiler produces task and function source. Code preview/export display its no-launch definition output; the server-only launch wrapper is not editable source. | **Frozen proposal** | No independently generated browser source and no editable code preview. |
-| D-07 | Mixed task/function DAGs are supported only for the CP-03 five binding kinds and explicit cross-style references. Decorators, dynamic Python, arbitrary task-source import, and inferred task output schemas are rejected. | **Frozen proposal** | A visual edge is never generic data transport. |
-| D-08 | Server validation/authorization is authoritative. Client validation is early feedback over the same catalog and cannot permit, repair, or silently lower an invalid graph. | **Frozen proposal** | Secret checks, resource/queue access, revision conflicts, and execution eligibility are rechecked on the server. |
-| D-09 | Existing ClearPipe v1 and ordinary `/pipelines` controller representations are imported only if an analyzer proves lossless representability. Otherwise show read-only/unsupported with export/details handoff. | **Frozen proposal** | No lossy partial canvas, automatic conversion, or mutation of a legacy definition. |
-| D-10 | Current WIP’s six generic node kinds and hand-drawn node-to-node edges are not the v2 authoring model. Preserve useful route, access, lifecycle, secret, and service foundations; replace incompatible graph/canvas contracts behind the v2 boundary. | **Frozen proposal** | Hide unsupported WIP choices rather than presenting them as runnable parity. |
+| D-01 | `/clearpipe` authors definitions; `/pipelines` remains project/controller-run discovery, operational lifecycle, and detailed observability. | **Frozen** | Do not add a parallel `/pipelines` editor, list, history, or status API. |
+| D-02 | The sole authoring truth is canonical **ClearPipe graph schema v2**. It contains typed task/function nodes, typed bindings, settings, approved visual metadata, and no transient/editor/runtime data. | **Frozen** | Canvas, forms, persistence, validation, preview, import, and generators consume this document; no component owns a shadow graph. |
+| D-03 | Persist a definition as the existing tagged controller `Task` using `configuration.ClearPipe`; use `runtime.clearpipe_revision` for optimistic concurrency. `configuration.Pipeline`, script, and generated source are derived artifacts. | **Frozen** | Never write the legacy `Pipeline` projection as the authoring source or infer an editable graph from it. |
+| D-04 | A save is a compare-and-swap update of that definition. “Save as” creates a new definition; current revisions are mutable edit tokens, **not** version history. | **Frozen** | No invented version list, immutable snapshot/history, or schedule surface. |
+| D-05 | Canonical v2 execution targets the CP-03 imperative `PipelineController` lowering, invoked by the existing authenticated ClearPipe server lifecycle. The current generic `DagRunner` is legacy-only until it is replaced/adapted to invoke that same compiled definition. | **Frozen; integration gate** | Browser code never runs a pipeline. A v2 Run action stays disabled until CP-26 proves the server invocation path on a real supported Agent. |
+| D-06 | One server-side deterministic compiler produces task and function source. Code preview/export display its no-launch definition output; the server-only launch wrapper is not editable source. | **Frozen** | No independently generated browser source and no editable code preview. |
+| D-07 | Mixed task/function DAGs are supported only for the CP-03 five binding kinds and explicit cross-style references. Decorators, dynamic Python, arbitrary task-source import, and inferred task output schemas are rejected. | **Frozen** | A visual edge is never generic data transport. |
+| D-08 | Server validation/authorization is authoritative. Client validation is early feedback over the same catalog and cannot permit, repair, or silently lower an invalid graph. | **Frozen** | Secret checks, resource/queue access, revision conflicts, and execution eligibility are rechecked on the server. |
+| D-09 | Existing ClearPipe v1 and ordinary `/pipelines` controller representations are imported only if an analyzer proves lossless representability. Otherwise show read-only/unsupported with export/details handoff. | **Frozen** | No lossy partial canvas, automatic conversion, or mutation of a legacy definition. |
+| D-10 | Current WIP’s six generic node kinds and hand-drawn node-to-node edges are not the v2 authoring model. Preserve useful route, access, lifecycle, secret, and service foundations; replace incompatible graph/canvas contracts behind the v2 boundary. | **Frozen** | Hide unsupported WIP choices rather than presenting them as runnable parity. |
 
 ## 2. Reconciled evidence and contradictions
 
@@ -449,11 +448,10 @@ Non-negotiable implementation rules:
    needs CP-06 migration semantics, CP-11 validation, CP-09 fixtures, and an
    owner impact review.
 
-## 12. Lead review record — explicit decisions still requiring approval
+## 12. Lead review record
 
-These are bounded approval gates with a recommendation, not silent open
-architecture questions. They do not authorize an implementation to ignore the
-frozen proposal.
+The lead approved these bounded recommendations on 2026-07-22. They do not
+authorize an implementation to ignore a frozen decision.
 
 | Gate | Recommendation | Why lead approval is needed | Downstream effect |
 |---|---|---|---|
@@ -463,6 +461,12 @@ frozen proposal.
 | L-04: typed contract extension | Approve CP-07 extending the existing `clearpipe.*` responses (not adding a new service) to expose canonical graph, diagnostics, compiled no-launch source/source map, and normalized errors. | Current schema is generic and preview otherwise invites a second browser generator. | CP-07/12/13/14/23 contract and fixture work. |
 | L-05: real-Agent compatibility | Accept “execution unsupported until proven” as a release gate. | CP-03 evidence is source-level only; queue, Agent, package, permissions, and serializer behavior are environment-dependent. | CP-26/28 must record exact run evidence; no fallback/simulated completion. |
 | L-06: future scheduling/collaboration/reports | Keep deferred; require a separate ADR with service, persistence, permission, conflict, and lifecycle evidence. | No verified protocol/endpoint exists. | No packet may expose controls as operational capability. |
+
+**Approval record:** L-01 through L-06 are approved as written. The `/clearpipe`
+route may remain visible under the existing feature flag, but v2 Run and all
+unsupported WIP capabilities remain unavailable until their stated proof gates
+are met. Any change to these decisions requires an ADR update and an impact
+review of every affected contract owner.
 
 ## 13. Evidence references and reproducible checks
 

@@ -8,7 +8,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-02](./cp_02_audit-current-clearpipe.md) | 0 | 5 | cp-02-audit | Done | bfc4ca6 | Evidence pack: CP-02_CLEARPIPE_AUDIT.md |
 | [x] | [CP-03](./cp_03_analyze-clearml-pipeline-semantics.md) | 0 | 5 | cp-03-semantics | Done | ee0864c | Evidence pack and deterministic fixtures: CP-03_CLEARML_PIPELINE_SEMANTICS.md |
 | [x] | [CP-04](./cp_04_analyze-reference-ux.md) | 0 | 5 | cp-04-reference | Done | copilot/cp-04 | Merged 41a688a; evidence pack: CP-04_REFERENCE_UX.md |
-| [ ] | [CP-05](./cp_05_architecture-decision-record.md) | 1 | 5 |  | Not started |  |  |
+| [x] | [CP-05](./cp_05_architecture-decision-record.md) | 1 | 5 | cp-05-architecture | Done | eaf65cc | Approved ADR: CP-05_ARCHITECTURE_DECISION_RECORD.md |
 | [ ] | [CP-06](./cp_06_canonical-graph-schema.md) | 2 | 8 |  | Not started |  |  |
 | [ ] | [CP-07](./cp_07_backend-integration-contracts.md) | 2 | 5 |  | Not started |  |  |
 | [ ] | [CP-08](./cp_08_ux-architecture-contract.md) | 2 | 5 |  | Not started |  |  |
@@ -40,7 +40,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 ## Gate checklist
 
 - [x] **Discovery gate:** CP-01, CP-02, CP-03, and CP-04 are complete.
-- [ ] **Architecture gate:** CP-05 is approved.
+- [x] **Architecture gate:** CP-05 is approved.
 - [ ] **Contract gate:** CP-06, CP-07, CP-08, and CP-09 expose stable interfaces.
 - [ ] **Foundation gate:** CP-10 through CP-19 pass focused checks.
 - [ ] **Feature gate:** CP-20 through CP-27 satisfy their supported subsets.
