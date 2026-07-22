@@ -1,4 +1,4 @@
-import {computed, inject, Injectable, signal} from '@angular/core';
+import {computed, effect, inject, Injectable, signal} from '@angular/core';
 import {GraphCommandResult, GraphStoreService} from '../../domain/graph-store.service';
 import {GraphBinding, GraphNode, GraphV2, GraphVisual, JsonValue, Point} from '../../domain/graph-v2.types';
 import {ClearpipeSemanticEdgeController, SemanticEdgeCommandResult} from '../edges/clearpipe-semantic-edge.controller';
@@ -17,13 +17,11 @@ interface HistoryEntry {
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
-const nodeIdsForBinding = (binding: GraphBinding): readonly string[] => {
-  const ids: string[] = [];
-  [binding.source, binding.target].forEach(endpoint => {
-    if (endpoint.kind === 'node' || endpoint.kind === 'port') ids.push(endpoint.node_id);
-  });
-  if (binding.kind === 'inferred') ids.push(binding.derived_from.node_id);
-  return ids;
+const isInternalBinding = (binding: GraphBinding, nodeIds: ReadonlySet<string>): boolean => {
+  const internalEndpoint = (endpoint: GraphBinding['source'] | GraphBinding['target']): boolean =>
+    (endpoint.kind === 'node' || endpoint.kind === 'port') && nodeIds.has(endpoint.node_id);
+  return internalEndpoint(binding.source) && internalEndpoint(binding.target)
+    && (binding.kind !== 'inferred' || nodeIds.has(binding.derived_from.node_id));
 };
 const safeConfiguration = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(safeConfiguration);
@@ -48,13 +46,20 @@ export class ClearpipeAdvancedEditorOperationsService {
   private readonly cursor = signal(0);
   private readonly clipboardState = signal<ClearpipeClipboardPayload | null>(null);
   private readonly selectionState = signal<readonly string[]>([]);
+  private readonly historyStale = signal(false);
+  private observedGraph = this.store.graph();
 
   readonly selectedNodeIds = this.selectionState.asReadonly();
   readonly clipboard = this.clipboardState.asReadonly();
-  readonly canUndo = computed(() => this.cursor() > 0);
-  readonly canRedo = computed(() => this.cursor() < this.history().length);
+  readonly canUndo = computed(() => !this.historyStale() && this.cursor() > 0);
+  readonly canRedo = computed(() => !this.historyStale() && this.cursor() < this.history().length);
+
+  constructor() {
+    effect(() => this.invalidateForGraph(this.store.graph()));
+  }
 
   select(nodeId: string, additive = false): void {
+    this.synchronizeGraphState();
     if (!this.store.node(nodeId)) return;
     const selected = additive ? new Set(this.selectionState()) : new Set<string>();
     if (additive && selected.has(nodeId)) selected.delete(nodeId);
@@ -63,15 +68,18 @@ export class ClearpipeAdvancedEditorOperationsService {
   }
 
   selectAll(): void {
+    this.synchronizeGraphState();
     const ids = this.store.nodes().map(node => node.id);
     this.setSelection(ids, ids[0] ?? null);
   }
 
   clearSelection(): void {
+    this.synchronizeGraphState();
     this.setSelection([], null);
   }
 
   perform<T extends GraphCommandResult>(label: string, operation: () => T, coalesceKey?: string): T {
+    this.synchronizeGraphState();
     const before = this.snapshot();
     const result = operation();
     if (result.ok && result.changed) this.record(label, before, coalesceKey);
@@ -79,6 +87,7 @@ export class ClearpipeAdvancedEditorOperationsService {
   }
 
   performSemantic(label: string, operation: () => SemanticEdgeCommandResult): SemanticEdgeCommandResult {
+    this.synchronizeGraphState();
     const before = this.snapshot();
     const result = operation();
     if (result.command?.ok && result.command.changed) this.record(label, before);
@@ -114,12 +123,12 @@ export class ClearpipeAdvancedEditorOperationsService {
   }
 
   copy(): ClearpipeClipboardPayload | null {
+    this.synchronizeGraphState();
     const selected = new Set(this.selectionState());
     const nodes = this.store.nodes().filter(node => selected.has(node.id)).map(scrubNode);
     if (!nodes.length) return null;
     const bindings = this.store.bindings().filter(binding => {
-      const ids = nodeIdsForBinding(binding);
-      return ids.length > 0 && ids.every(id => selected.has(id));
+      return isInternalBinding(binding, selected);
     }).map(clone);
     const payload = {nodes, bindings};
     this.clipboardState.set(payload);
@@ -131,6 +140,7 @@ export class ClearpipeAdvancedEditorOperationsService {
   }
 
   paste(payload = this.clipboardState(), offset: Point = {x: 32, y: 32}, label = 'paste'): GraphCommandResult {
+    this.synchronizeGraphState();
     if (!payload?.nodes.length) return {ok: true, changed: false, command: label, errors: []};
     const before = this.snapshot();
     const nodeIds = new Set(this.store.nodes().map(node => node.id));
@@ -154,9 +164,7 @@ export class ClearpipeAdvancedEditorOperationsService {
     });
     if (!result.ok) return result;
     for (const binding of bindings) {
-      const bindingResult = binding.kind === 'data' || binding.kind === 'artifact'
-        ? this.edges.create(binding).command
-        : this.store.addBinding(binding);
+      const bindingResult = this.edges.create(binding).command;
       if (!bindingResult?.ok) {
         this.store.runTransaction('discard-invalid-paste', () => {
           [...idMap.values()].forEach(id => this.store.removeNode(id));
@@ -174,13 +182,17 @@ export class ClearpipeAdvancedEditorOperationsService {
   }
 
   layout(): GraphCommandResult {
-    const positions = assistedLayout(this.store.nodes().map(node => node.id));
+    const positions = assistedLayout(this.store.nodes().map(node => ({
+      id: node.id,
+      dimensions: node.visual.dimensions,
+    })));
     return this.perform('assisted-layout', () => this.store.runTransaction('assisted-layout', () => {
       positions.forEach((position, id) => this.store.setNodePosition(id, position));
     }));
   }
 
   undo(): GraphCommandResult {
+    if (!this.synchronizeGraphState() || this.historyStale()) return this.historyChanged('undo');
     if (!this.canUndo()) return {ok: true, changed: false, command: 'undo', errors: []};
     const entry = this.history()[this.cursor() - 1];
     const result = this.restore(entry.before, 'undo');
@@ -189,6 +201,7 @@ export class ClearpipeAdvancedEditorOperationsService {
   }
 
   redo(): GraphCommandResult {
+    if (!this.synchronizeGraphState() || this.historyStale()) return this.historyChanged('redo');
     if (!this.canRedo()) return {ok: true, changed: false, command: 'redo', errors: []};
     const entry = this.history()[this.cursor()];
     const result = this.restore(entry.after, 'redo');
@@ -207,6 +220,8 @@ export class ClearpipeAdvancedEditorOperationsService {
     }
     this.history.set(entries);
     this.cursor.set(entries.length);
+    this.historyStale.set(false);
+    this.observedGraph = this.store.graph();
   }
 
   private restore(snapshot: GraphV2, label: string): GraphCommandResult {
@@ -220,22 +235,17 @@ export class ClearpipeAdvancedEditorOperationsService {
     });
     if (!restored.ok) return restored;
     for (const binding of snapshot.bindings) {
-      if (binding.kind === 'data' || binding.kind === 'artifact') {
-        const result = this.edges.create(clone(binding));
-        if (!result.command?.ok) return result.command ?? {
-          ok: false, changed: false, command: `history-${label}`, errors: [{code: 'semantic_restore_rejected', path: 'graph.bindings', message: result.message}],
-        };
-      } else {
-        const result = this.store.addBinding(clone(binding));
-        if (!result.ok) return result;
-      }
+      const result = this.edges.create(clone(binding));
+      if (!result.command?.ok) return result.command ?? {
+        ok: false, changed: false, command: `history-${label}`, errors: [{code: 'semantic_restore_rejected', path: 'graph.bindings', message: result.message}],
+      };
     }
+    this.observedGraph = this.store.graph();
     return restored;
   }
 
   private removeBinding(binding: GraphBinding): void {
-    if (binding.kind === 'data' || binding.kind === 'artifact') this.edges.remove(binding.id);
-    else this.store.removeBinding(binding.id);
+    this.edges.remove(binding.id);
   }
 
   private snapshot(): GraphV2 {
@@ -249,6 +259,34 @@ export class ClearpipeAdvancedEditorOperationsService {
     this.selectionState.set(valid);
     this.store.selectNode(primary && valid.includes(primary) ? primary : valid[0] ?? null);
   }
+
+  private synchronizeGraphState(): boolean {
+    const graph = this.store.graph();
+    if (graph === this.observedGraph) return true;
+    this.invalidateForGraph(graph);
+    return false;
+  }
+
+  private invalidateForGraph(graph: GraphV2 | null): void {
+    if (graph === this.observedGraph) return;
+    const hadHistory = this.history().length > 0;
+    this.observedGraph = graph;
+    this.history.set([]);
+    this.cursor.set(0);
+    this.clipboardState.set(null);
+    this.selectionState.set([]);
+    this.store.selectNode(null);
+    this.historyStale.set(hadHistory);
+  }
+
+  private historyChanged(command: 'undo' | 'redo'): GraphCommandResult {
+    return {
+      ok: false,
+      changed: false,
+      command,
+      errors: [{code: 'history_graph_changed', path: 'graph', message: 'Undo and redo are unavailable after the graph changed outside this editor session.'}],
+    };
+  }
 }
 
 const nextStableId = (base: string, occupied: Set<string>): string => {
@@ -261,7 +299,7 @@ const nextStableId = (base: string, occupied: Set<string>): string => {
 };
 
 const remapEndpoint = <T extends GraphBinding['source'] | GraphBinding['target']>(endpoint: T, ids: Map<string, string>): T | null => {
-  if (endpoint.kind !== 'node' && endpoint.kind !== 'port') return endpoint;
+  if (endpoint.kind !== 'node' && endpoint.kind !== 'port') return null;
   const nodeId = ids.get(endpoint.node_id);
   return nodeId ? {...endpoint, node_id: nodeId} as T : null;
 };
