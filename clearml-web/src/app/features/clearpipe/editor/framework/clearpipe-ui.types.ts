@@ -8,6 +8,8 @@ export type ClearpipePortCompatibilityState = 'idle' | 'pending' | 'compatible' 
 
 export interface ClearpipeCatalogEntry {
   readonly id: string;
+  /** Assigned by the live extension registry; callers must not retain it across registrations. */
+  readonly registrationId?: number;
   readonly category: string;
   readonly label: string;
   readonly description: string;
@@ -28,6 +30,15 @@ export interface ClearpipeCatalogAddRequest {
   readonly method: 'click' | 'keyboard';
 }
 
+export interface ClearpipeCatalogDropRequest {
+  readonly entry: ClearpipeCatalogEntry;
+  readonly method: 'drop';
+  /** Position local to the editor's canvas region; feature actions own graph placement. */
+  readonly placement: {readonly x: number; readonly y: number};
+}
+
+export type ClearpipeCatalogActionRequest = ClearpipeCatalogAddRequest | ClearpipeCatalogDropRequest;
+
 /**
  * Catalog actions are feature-owned creation handoffs. The extension host only
  * routes an intent; an action decides whether and how to issue graph commands.
@@ -35,7 +46,7 @@ export interface ClearpipeCatalogAddRequest {
 export interface ClearpipeCatalogActionRegistration {
   readonly catalogEntryId: string;
   readonly availability?: () => ClearpipeCatalogActionAvailability;
-  readonly execute: (request: ClearpipeCatalogAddRequest) => void | Promise<void>;
+  readonly execute: (request: ClearpipeCatalogActionRequest) => void | Promise<void>;
 }
 
 export interface ClearpipeCatalogActionAvailability {

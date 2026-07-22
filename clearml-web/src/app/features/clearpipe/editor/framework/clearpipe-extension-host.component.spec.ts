@@ -22,12 +22,18 @@ describe('ClearPipe editor extension host', () => {
       providers: [
         {provide: ActivatedRoute, useValue: {paramMap: of(convertToParamMap({taskId: 'new'}))}},
         {provide: Router, useValue: router},
-        {provide: ClearpipeAdapterService, useValue: {validate: () => of({status: 'ready', data: {valid: true, issues: []}})}},
+        {
+          provide: ClearpipeAdapterService,
+          useValue: {
+            authentication: () => ({authenticated: true, featureEnabled: true}),
+            validate: () => of({status: 'ready', data: {valid: true, issues: []}}),
+          },
+        },
       ],
     });
     registry = TestBed.inject(ClearpipeExtensionRegistry);
     unregisterExtension = registry.register(clearpipeFixtureTaskExtension);
-    unregisterAction = registry.registerCatalogAction({
+    unregisterAction = registry.registerCatalogAction(clearpipeFixtureTaskExtension, {
       catalogEntryId: 'task',
       execute: () => undefined,
     });
@@ -60,6 +66,48 @@ describe('ClearPipe editor extension host', () => {
     expect(fixture.nativeElement.textContent).toContain('Train model');
     expect(fixture.nativeElement.textContent).toContain('Base task: base-training-task');
     expect(fixture.nativeElement.textContent).toContain('train-model');
+  });
+
+  it('hands a catalog drop to the registered feature action with canvas-local placement', async () => {
+    unregisterAction();
+    const execute = jasmine.createSpy('execute');
+    unregisterAction = registry.registerCatalogAction(clearpipeFixtureTaskExtension, {
+      catalogEntryId: 'task',
+      execute,
+    });
+    const fixture = TestBed.createComponent(ClearpipeEditorComponent);
+    const component = fixture.componentInstance as unknown as {
+      state: {create: () => unknown};
+      routeSurface: {set: (surface: 'ready') => void};
+    };
+    component.state.create();
+    component.routeSurface.set('ready');
+    fixture.detectChanges();
+    const canvas = fixture.nativeElement.querySelector('#clearpipe-canvas') as HTMLElement;
+    spyOn(canvas, 'getBoundingClientRect').and.returnValue({
+      left: 10,
+      top: 20,
+    } as DOMRect);
+    const entry = registry.catalogEntry('task')!;
+    const drop = new Event('drop') as DragEvent;
+    Object.defineProperties(drop, {
+      clientX: {value: 110},
+      clientY: {value: 220},
+      dataTransfer: {
+        value: {
+          getData: () => JSON.stringify({entry, method: 'drop'}),
+        },
+      },
+    });
+
+    canvas.dispatchEvent(drop);
+    await fixture.whenStable();
+
+    expect(execute).toHaveBeenCalledWith(jasmine.objectContaining({
+      entry: jasmine.objectContaining({id: 'task', registrationId: entry.registrationId}),
+      method: 'drop',
+      placement: {x: 100, y: 200},
+    }));
   });
 
   it('shows a safe visible reason when a catalog extension has no registered action', () => {

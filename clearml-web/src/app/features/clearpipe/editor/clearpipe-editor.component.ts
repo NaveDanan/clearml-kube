@@ -21,7 +21,8 @@ import {ClearpipeValidationResult} from '../clearpipe.models';
 import {ClearpipeCatalogComponent} from './framework/clearpipe-catalog.component';
 import {ClearpipeExtensionRegistry} from './framework/clearpipe-extension-registry';
 import {
-  ClearpipeCatalogAddRequest,
+  ClearpipeCatalogActionRequest,
+  ClearpipeCatalogDropRequest,
   ClearpipeCatalogEntry,
   ClearpipeCatalogPresentation,
   ClearpipeInspectorPresentation,
@@ -225,7 +226,7 @@ export class ClearpipeEditorComponent {
     this.canvasRegion()?.nativeElement.focus();
   }
 
-  protected async dispatchCatalogAction(request: ClearpipeCatalogAddRequest): Promise<void> {
+  protected async dispatchCatalogAction(request: ClearpipeCatalogActionRequest): Promise<void> {
     this.catalogActionMessage.set('');
     const result = await this.extensionRegistry.dispatchCatalogAction(request, {readOnly: this.readOnly()});
     if (result.status === 'dispatched') {
@@ -234,6 +235,24 @@ export class ClearpipeEditorComponent {
     }
     this.catalogActionMessage.set(result.message);
     this.announce(result.message);
+  }
+
+  protected allowCatalogDrop(event: DragEvent): void {
+    if (this.readOnly() || !event.dataTransfer?.types.includes('application/x-clearpipe-catalog-entry')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }
+
+  protected async dispatchCatalogDrop(event: DragEvent): Promise<void> {
+    event.preventDefault();
+    const request = this.catalogDropRequest(event);
+    if (!request) {
+      const message = 'This catalog drop is no longer available. Start the drag again.';
+      this.catalogActionMessage.set(message);
+      this.announce(message);
+      return;
+    }
+    await this.dispatchCatalogAction(request);
   }
 
   protected retryLoad(): void {
@@ -310,6 +329,32 @@ export class ClearpipeEditorComponent {
         code: issue.code,
         targetId: issue.node_id,
       }));
+  }
+
+  private catalogDropRequest(event: DragEvent): ClearpipeCatalogDropRequest | null {
+    const raw = event.dataTransfer?.getData('application/x-clearpipe-catalog-entry');
+    if (!raw) return null;
+    try {
+      const candidate = JSON.parse(raw) as {
+        entry?: {id?: unknown; registrationId?: unknown};
+        method?: unknown;
+      };
+      if (candidate.method !== 'drop' || typeof candidate.entry?.id !== 'string'
+        || typeof candidate.entry.registrationId !== 'number') return null;
+      const entry = this.extensionRegistry.catalogEntry(candidate.entry.id);
+      if (!entry || entry.registrationId !== candidate.entry.registrationId) return null;
+      const bounds = this.canvasRegion()?.nativeElement.getBoundingClientRect();
+      return {
+        entry,
+        method: 'drop',
+        placement: {
+          x: Math.max(0, Math.round(event.clientX - (bounds?.left ?? 0))),
+          y: Math.max(0, Math.round(event.clientY - (bounds?.top ?? 0))),
+        },
+      };
+    } catch {
+      return null;
+    }
   }
 
   private announce(message: string): void {

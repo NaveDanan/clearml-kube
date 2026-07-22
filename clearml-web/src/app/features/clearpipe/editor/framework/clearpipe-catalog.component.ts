@@ -3,6 +3,7 @@ import {MatIconModule} from '@angular/material/icon';
 import {
   ClearpipeCatalogAddRequest,
   ClearpipeCatalogDragRequest,
+  ClearpipeCatalogDropRequest,
   ClearpipeCatalogEntry,
   ClearpipeCatalogPresentation,
 } from './clearpipe-ui.types';
@@ -76,7 +77,8 @@ export class ClearpipeCatalogComponent {
     }
     this.draggingEntryId.set(entry.id);
     if (event.dataTransfer) {
-      event.dataTransfer.setData('application/x-clearpipe-catalog-entry', entry.id);
+      const request: Pick<ClearpipeCatalogDropRequest, 'entry' | 'method'> = {entry, method: 'drop'};
+      event.dataTransfer.setData('application/x-clearpipe-catalog-entry', JSON.stringify(request));
       event.dataTransfer.setData('text/plain', entry.id);
       event.dataTransfer.effectAllowed = 'copy';
     }

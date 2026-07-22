@@ -46,7 +46,10 @@ describe('ClearpipeCatalogComponent', () => {
 
     expect(added).toEqual(['task:click', 'task:keyboard']);
     expect(dragged).toEqual(['task']);
-    expect(transfer.setData).toHaveBeenCalledWith('application/x-clearpipe-catalog-entry', 'task');
+    expect(transfer.setData).toHaveBeenCalledWith('application/x-clearpipe-catalog-entry', JSON.stringify({
+      entry: clearpipeFixtureCatalogEntries[0],
+      method: 'drop',
+    }));
   });
 
   it('names loading, error, disabled, and per-entry unavailable states', () => {

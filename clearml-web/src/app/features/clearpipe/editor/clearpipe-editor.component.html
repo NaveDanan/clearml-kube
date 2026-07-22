@@ -104,7 +104,9 @@
           #canvasRegion
           class="workspace-canvas"
           tabindex="-1"
-          aria-label="ClearPipe canvas">
+          aria-label="ClearPipe canvas"
+          (dragover)="allowCatalogDrop($event)"
+          (drop)="dispatchCatalogDrop($event)">
       @if (routeSurface() === 'loading') {
         <section class="route-surface route-surface--loading" aria-live="polite" aria-busy="true">
           <div class="loading-indicator" aria-hidden="true"></div>
