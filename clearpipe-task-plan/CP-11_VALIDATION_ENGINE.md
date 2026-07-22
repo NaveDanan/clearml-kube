@@ -18,6 +18,9 @@ never executes user source: function inspection uses `ast.parse` only.
   `ValidationResult` for structural and CP-03 semantic diagnostics.
 * `ValidationEngine.validate_incremental(raw, affected)` returns only
   diagnostics addressing affected graph paths/IDs, plus graph-level diagnostics.
+  If an affected stable ID no longer exists (for example, after a binding
+  deletion), it deterministically falls back to full derivation so downstream
+  required-port diagnostics are retained.
 * `await ValidationEngine.preflight(raw, resolver)` adds resource outcomes and
   returns `PreflightResult`.
 * `validate_graph`, `validate_incremental`, and `preflight_graph` are matching
@@ -58,6 +61,7 @@ cannot run.
 | `CPRES003` | warning | run | Resource reference is stale |
 | `CPRES004` | info | run | Resource check pending because no resolver is attached |
 | `CPRES005` | warning | run | Resource service unavailable/invalid resolver outcome |
+| `CPRES006` | error | save/run | Compatibility authorization callback missing or failed closed |
 | `CPPRE001` | error | run | Empty draft cannot generate/run |
 | `CPGEN001` | error | save/run | Invalid generator-contributor response |
 | `CPWARN001` | warning | neither | Mutable task project/name identity; prefer immutable task ID |
@@ -79,10 +83,17 @@ Resolver details/exceptions are never exposed in diagnostics. The engine calls
 requests in sorted order and maps statuses to the `CPRES` catalog above.
 
 CP-18/service ownership supplies the authorized resolver. The retained
-`GraphValidator` constructor is only an import-compatible structural/semantic
-facade; its former synchronous resource callbacks are not a resource-validation
-path. Production save/run integration must call asynchronous preflight with the
-real company-authorized resolver.
+`GraphValidator` compatibility facade invokes its existing synchronous
+resource/queue callbacks for every canonical request. Missing, false, or
+exceptional callbacks produce a save/run-blocking `CPRES006`/`CPRES002`; they
+cannot bypass authorization. New integrations should use asynchronous
+preflight with the real company-authorized resolver to retain the full
+missing/denied/stale distinction.
+
+At the historical read boundary, `GraphValidator` also performs a value-safe
+scan using CP-06 secret-key, URL, and assignment decisions. A secret found in
+legacy or unsupported raw material emits the compatibility `embedded_secret`
+guard without copying its value, preserving the existing export/read block.
 
 ## Semantic policy
 
