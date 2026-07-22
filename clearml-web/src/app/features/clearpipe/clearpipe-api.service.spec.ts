@@ -107,12 +107,29 @@ describe('ClearpipeApiService', () => {
       page_size: 25,
       cursor: undefined,
     });
+
     expect(inventory).toEqual({
       tasks: [jasmine.objectContaining({id: 'base-1', taskBaseEligible: true})],
       total: 2,
       next_cursor: 'task-page:1',
     });
     expect(JSON.stringify(inventory)).not.toContain('child-1');
+  });
+
+  it('transports the same opaque idempotency key for duplicate start retries', () => {
+    const key = '00000000-0000-4000-8000-000000000123';
+    requests.post.and.returnValues(
+      of({task: 'run-1', enqueued: true}),
+      of({task: 'run-1', enqueued: true}),
+    );
+
+    const request = {task: 'pipe-1', revision: 3, idempotency_key: key};
+    api.startDefinition(request).subscribe(result => expect(result.run_task_id).toBe('run-1'));
+    api.startDefinition(request).subscribe(result => expect(result.run_task_id).toBe('run-1'));
+
+    expect(requests.post.calls.argsFor(0)[1]).toEqual(jasmine.objectContaining({idempotency_key: key}));
+    expect(requests.post.calls.argsFor(1)[1]).toEqual(jasmine.objectContaining({idempotency_key: key}));
+    expect(JSON.stringify(requests.post.calls.allArgs())).not.toContain('secret');
   });
 
   it('covers each typed CP-07 operation with the v2.35 contract envelopes', () => {

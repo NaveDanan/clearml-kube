@@ -83,6 +83,7 @@ export interface ClearpipeStartRequest {
   parameters?: Record<string, unknown>;
   node_queues?: Record<string, string>;
   verify_watched_queue?: boolean;
+  idempotency_key?: string;
 }
 
 export interface ClearpipeStartResponse {
@@ -339,6 +340,7 @@ export class ClearpipeApiService {
       parameters: request.parameters ?? {},
       node_queues: request.node_queues,
       verify_watched_queue: request.verify_watched_queue ?? true,
+      idempotency_key: request.idempotency_key,
     }).pipe(map(response => ({
       run_task_id: response?.task,
       enqueued: Boolean(response?.enqueued),

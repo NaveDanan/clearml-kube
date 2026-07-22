@@ -118,6 +118,7 @@ class ServiceFailurePolicyTests(unittest.TestCase):
             parameters={},
             node_queues={},
             verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000001",
         )
         return call, request
 
@@ -275,6 +276,7 @@ class V2StartTests(unittest.TestCase):
             parameters={},
             node_queues={},
             verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000002",
         )
         run = SimpleNamespace(id="run-1")
         queue = SimpleNamespace(id="default")
@@ -294,6 +296,8 @@ class V2StartTests(unittest.TestCase):
             clearpipe,
             "_runtime_provenance_key_ring",
             return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe, "_idempotent_run", return_value=None
         ):
             clearpipe.start(call, "company-a", request)
 
@@ -369,6 +373,7 @@ class V2StartTests(unittest.TestCase):
             parameters={"dataset_url": "override-url"},
             node_queues={},
             verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000003",
         )
         lookups = []
 
@@ -396,6 +401,8 @@ class V2StartTests(unittest.TestCase):
             clearpipe,
             "_runtime_provenance_key_ring",
             return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe, "_idempotent_run", return_value=None
         ):
             clearpipe.start(call, "company-a", request)
 
@@ -444,6 +451,7 @@ class V2StartTests(unittest.TestCase):
             parameters={"unknown": "value"},
             node_queues={},
             verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000004",
         )
         clone = Mock()
 
@@ -471,6 +479,7 @@ class V2StartTests(unittest.TestCase):
             parameters={},
             node_queues={},
             verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000005",
         )
         clone = Mock()
         with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
@@ -487,6 +496,91 @@ class V2StartTests(unittest.TestCase):
 
         clone.assert_not_called()
         self.assertIn("provenance signing key", str(error.exception).lower())
+
+    def test_start_reuses_committed_idempotent_run_without_cloning(self):
+        definition = self._definition(
+            json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        )
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000099",
+        )
+        existing = SimpleNamespace(id="committed-run")
+        clone = Mock()
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_resource_checker", return_value=lambda *_: True
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
+        ), patch.object(
+            clearpipe.queue_bll, "get_default", return_value=SimpleNamespace(id="default")
+        ), patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe,
+            "_idempotent_run",
+            return_value=(existing, {"enqueued": True}),
+        ) as idempotent, patch.object(
+            clearpipe.task_bll, "clone_task", clone
+        ):
+            clearpipe.start(call, "company-a", request)
+
+        self.assertEqual(call.result.data, {"task": "committed-run", "enqueued": True})
+        idempotent.assert_called_once()
+        clone.assert_not_called()
+
+    def test_start_rejects_idempotency_key_request_mismatch_without_cloning(self):
+        definition = self._definition(
+            json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        )
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000100",
+        )
+        clone = Mock()
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_resource_checker", return_value=lambda *_: True
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
+        ), patch.object(
+            clearpipe.queue_bll, "get_default", return_value=SimpleNamespace(id="default")
+        ), patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe,
+            "_idempotent_run",
+            side_effect=errors.bad_request.ValidationError(
+                "ClearPipe idempotency key is already bound to a different request"
+            ),
+        ), patch.object(
+            clearpipe.task_bll, "clone_task", clone
+        ):
+            with self.assertRaises(errors.bad_request.ValidationError) as error:
+                clearpipe.start(call, "company-a", request)
+
+        clone.assert_not_called()
+        self.assertNotIn("00000000-0000-4000-8000-000000000100", str(error.exception))
 
     def test_start_rejects_stale_v2_revision_before_creating_a_clone(self):
         definition = SimpleNamespace(id="definition", system_tags=[])

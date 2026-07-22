@@ -1,10 +1,11 @@
 import hmac
 import json
 import re
+import uuid
 from hashlib import sha256
 from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Tuple
 
 from mongoengine import Q
 
@@ -87,6 +88,7 @@ MAX_PAGE_SIZE = 500
 CLEARPIPE_RUNTIME_CONFIGURATION = "ClearPipeRuntime"
 CLEARPIPE_RUNTIME_SCHEMA_VERSION = 1
 CLEARPIPE_RUNTIME_PROVENANCE = "clearpipe_runtime_provenance"
+CLEARPIPE_IDEMPOTENCY = "clearpipe_idempotency"
 CLEARPIPE_RUNTIME_PROVENANCE_VERSION = 2
 CLEARPIPE_LEGACY_PROVENANCE_VERSION = 1
 CLEARPIPE_LEGACY_PROVENANCE_KEY_ID = "legacy-auth-token-v1"
@@ -496,6 +498,113 @@ def _verified_runtime_provenance(
     if _visible_definition(company_id, payload["definition_task_id"]) is None:
         return None
     return runtime
+
+
+def _idempotency_key(value) -> str:
+    if not isinstance(value, str):
+        raise errors.bad_request.ValidationError("Invalid ClearPipe idempotency key")
+    try:
+        parsed = uuid.UUID(value)
+    except (AttributeError, ValueError, TypeError):
+        raise errors.bad_request.ValidationError("Invalid ClearPipe idempotency key")
+    if parsed.version != 4 or str(parsed) != value.lower():
+        raise errors.bad_request.ValidationError("Invalid ClearPipe idempotency key")
+    return str(parsed)
+
+
+def _start_fingerprint(
+    definition_id: str, revision: int, user_id: str, request, queue_id: str
+) -> str:
+    value = {
+        "definition_id": definition_id,
+        "revision": revision,
+        "user_id": user_id,
+        "queue_id": queue_id,
+        "parameters": request.parameters or {},
+        "node_queues": request.node_queues or {},
+    }
+    return sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
+def _sealed_idempotency(
+    key: str,
+    definition_id: str,
+    revision: int,
+    user_id: str,
+    fingerprint: str,
+    queue_id: str,
+    state: str,
+    enqueued: Optional[bool] = None,
+) -> dict:
+    signing_key = _runtime_provenance_signing_key()
+    if signing_key is None:
+        raise errors.server_error.InternalError("ClearPipe idempotency signing is unavailable")
+    key_id, secret = signing_key
+    payload = {
+        "schema_version": 1,
+        "key_id": key_id,
+        "key": key,
+        "definition_id": definition_id,
+        "revision": revision,
+        "user_id": user_id,
+        "fingerprint": fingerprint,
+        "queue_id": queue_id,
+        "state": state,
+    }
+    if enqueued is not None:
+        payload["enqueued"] = bool(enqueued)
+    return {**payload, "signature": _runtime_provenance_signature(payload, secret)}
+
+
+def _verified_idempotency(run: Task) -> Optional[dict]:
+    record = (run.runtime or {}).get(CLEARPIPE_IDEMPOTENCY)
+    required = {
+        "schema_version", "key_id", "key", "definition_id", "revision",
+        "user_id", "fingerprint", "queue_id", "state", "signature",
+    }
+    if not isinstance(record, Mapping) or not required.issubset(record):
+        return None
+    if set(record) - (required | {"enqueued"}):
+        return None
+    payload = {key: value for key, value in record.items() if key != "signature"}
+    signature = record.get("signature")
+    _, _, verification_keys = _runtime_provenance_key_ring()
+    secret = verification_keys.get(payload.get("key_id"))
+    if (
+        not isinstance(signature, str)
+        or not isinstance(secret, str)
+        or payload.get("schema_version") != 1
+        or payload.get("state") not in {"pending", "committed"}
+        or not isinstance(payload.get("revision"), int)
+        or not isinstance(payload.get("key"), str)
+        or not isinstance(payload.get("fingerprint"), str)
+        or not hmac.compare_digest(signature, _runtime_provenance_signature(payload, secret))
+    ):
+        return None
+    return dict(record)
+
+
+def _idempotent_run(
+    company_id: str, user_id: str, key: str, fingerprint: str
+) -> Optional[Tuple[Task, dict]]:
+    runs = Task.objects(
+        Q(company=company_id, runtime__clearpipe_idempotency__key=key)
+    ).only("id", "runtime", "status")
+    for run in runs:
+        record = _verified_idempotency(run)
+        if record is None:
+            continue
+        if (
+            record["user_id"] != user_id
+            or record["fingerprint"] != fingerprint
+        ):
+            raise errors.bad_request.ValidationError(
+                "ClearPipe idempotency key is already bound to a different request"
+            )
+        return run, record
+    return None
 
 
 def _v2_configurations(graph: Mapping, generated: GeneratedDefinition, revision: int) -> dict:
@@ -1496,7 +1605,12 @@ def validate(call: APICall, company_id: str, request: ValidateRequest):
     request_data_model=StartRequest,
     response_data_model=StartResponse,
 )
-def start(call: APICall, company_id: str, request: StartRequest):
+def start(
+    call: APICall,
+    company_id: str,
+    request: StartRequest,
+    _idempotency_locked: bool = False,
+):
     definition = _get_task(company_id, request.task)
     if EntityVisibility.archived.value in (definition.system_tags or []):
         raise errors.bad_request.ValidationError("Archived ClearPipe definitions cannot be started")
@@ -1506,6 +1620,21 @@ def start(call: APICall, company_id: str, request: StartRequest):
     _assert_safe_parameter_overrides(request.parameters or {})
     graph = _graph(definition)
     v2_graph = _is_v2_graph(graph)
+    idempotency_key = (
+        _idempotency_key(getattr(request, "idempotency_key", None))
+        if v2_graph
+        else None
+    )
+    if v2_graph and not _idempotency_locked:
+        lock_digest = sha256(
+            "{}\0{}\0{}".format(company_id, call.identity.user, idempotency_key).encode("utf-8")
+        ).hexdigest()
+        with distributed_lock(
+            name="clearpipe_start_{}".format(lock_digest), timeout=60
+        ):
+            return start(
+                call, company_id, request, _idempotency_locked=True
+            )
     if v2_graph and not can_write_definition(
         definition.company,
         definition.company_origin,
@@ -1548,6 +1677,28 @@ def start(call: APICall, company_id: str, request: StartRequest):
         queue = queue_bll.get_by_id(company_id, request.queue, only=("id",))
     else:
         queue = queue_bll.get_default(company_id)
+    fingerprint = (
+        _start_fingerprint(
+            definition.id,
+            revision,
+            call.identity.user,
+            request,
+            queue.id,
+        )
+        if v2_graph
+        else None
+    )
+    if v2_graph:
+        existing = _idempotent_run(
+            company_id, call.identity.user, idempotency_key, fingerprint
+        )
+        if existing is not None:
+            run, record = existing
+            call.result.data = {
+                "task": run.id,
+                "enqueued": bool(record.get("enqueued")),
+            }
+            return
     if v2_graph:
         compiled = _compile_v2(graph)
         configurations = _v2_configurations(graph, compiled, revision)
@@ -1608,6 +1759,15 @@ def start(call: APICall, company_id: str, request: StartRequest):
                 _runtime_configuration(compiled, revision),
                 runtime_configuration_value,
             )
+            run_runtime[CLEARPIPE_IDEMPOTENCY] = _sealed_idempotency(
+                idempotency_key,
+                definition.id,
+                revision,
+                call.identity.user,
+                fingerprint,
+                queue.id,
+                state="pending",
+            )
         Task.objects(id=run.id, company=company_id).update_one(
             set__runtime=run_runtime
         )
@@ -1620,6 +1780,20 @@ def start(call: APICall, company_id: str, request: StartRequest):
             status_reason="",
             validate=True,
         )
+        if v2_graph:
+            run_runtime[CLEARPIPE_IDEMPOTENCY] = _sealed_idempotency(
+                idempotency_key,
+                definition.id,
+                revision,
+                call.identity.user,
+                fingerprint,
+                queue.id,
+                state="committed",
+                enqueued=bool(queued),
+            )
+            Task.objects(id=run.id, company=company_id).update_one(
+                set__runtime=run_runtime
+            )
     except Exception as start_error:
         if run is not None:
             try:

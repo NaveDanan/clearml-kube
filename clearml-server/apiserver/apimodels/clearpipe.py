@@ -60,6 +60,7 @@ class StartRequest(DefinitionRequest):
     parameters = DictField()
     node_queues = DictField()
     verify_watched_queue = BoolField(default=True)
+    idempotency_key = StringField()
 
 
 class ArchiveRequest(DefinitionRequest):
