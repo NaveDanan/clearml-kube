@@ -29,7 +29,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
 | [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | Blocked | 9902ad1 | Awaiting typed task configuration parity, authorized task metadata, and generic extension-host composition. |
 | [ ] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 | cp-25-function-authoring | In progress | copilot/cp-25 | Constrained function/component authoring worktree active. |
-| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | In progress | copilot/cp-26 | Preflight, real execution adapter, and status handoff worktree active. |
+| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | Blocked | d5d11f1 | V2 server compilation/start, runtime-step source maps, and definition-scoped result lifecycle are required before execution UI can be accepted. |
 | [ ] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | In progress | copilot/cp-27 | History, clipboard, keyboard, and layout operations worktree active. |
 | [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 |  | Not started |  |  |
 | [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 |  | Not started |  |  |
