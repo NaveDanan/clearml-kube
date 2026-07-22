@@ -30,6 +30,13 @@ def parsed_graph(name):
     return result.graph
 
 
+def generated_packet(name):
+    result = read_graph_v2(json.loads((GOLDENS / name).read_text(encoding="utf-8")))
+    if not result.is_supported:
+        raise AssertionError(result)
+    return result.graph
+
+
 @dataclass(frozen=True)
 class ExtendedTaskConfiguration:
     clone_base_task: bool
@@ -65,6 +72,30 @@ class ClearPipeTaskGeneratorTests(unittest.TestCase):
                 for item in generated.manifest.runtime_steps
             ],
             [("stage-data", "stage_data"), ("stage-process", "stage_process")],
+        )
+
+    def test_generator_packet_golden_uses_production_task_and_function_lowerers(self):
+        generated = compile_graph(
+            generated_packet("generator-packet.v2.json"),
+            lowerers={"function": lower_function_node},
+        )
+        expected = (GOLDENS / "generator-packet.expected.py").read_text(encoding="utf-8")
+
+        self.assertEqual(generated.source, expected)
+        ast.parse(generated.source)
+        self.assertNotIn(".start(", generated.source)
+        self.assertNotIn(".start_locally(", generated.source)
+        self.assertIn('base_task_id="base-task-\\"extract\\""', generated.source)
+        self.assertIn('parameter_override={"General/threshold": "${pipeline.task_threshold}"}', generated.source)
+        self.assertIn('parameter_override={"General/model_url": "${extract_data.artifacts.model.url}"}', generated.source)
+        self.assertIn('execution_queue="gpu-fast"', generated.source)
+        self.assertIn('cache_executed_step=True', generated.source)
+        self.assertIn('function_return=["left", "right"]', generated.source)
+        self.assertIn('packages=["pandas==2.2.3"]', generated.source)
+        self.assertIn('default="a\\\\b\\"c"', generated.source)
+        self.assertEqual(
+            generated.manifest.node_ids,
+            ("extract-data", "publish-model", "split-data"),
         )
 
     def test_runtime_identity_payload_round_trips_without_source_line_inference(self):

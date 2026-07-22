@@ -1,0 +1,200 @@
+{
+  "schema_version": 2,
+  "document": {
+    "name": "generator_packet",
+    "project": "clearpipe-tests",
+    "version": "1.0.0",
+    "tags": ["clearpipe", "golden"]
+  },
+  "settings": {"default_execution_queue_id": "queue-default"},
+  "parameters": [
+    {
+      "id": "task-threshold",
+      "name": "task_threshold",
+      "required": false,
+      "order": 0,
+      "default": 0.75
+    },
+    {
+      "id": "prefix",
+      "name": "prefix",
+      "required": false,
+      "order": 1,
+      "default": "a\\b\"c"
+    }
+  ],
+  "resources": [
+    {"id": "queue-default", "kind": "queue", "resource_id": "default", "label": "default"},
+    {"id": "queue-gpu", "kind": "queue", "resource_id": "gpu-fast", "label": "GPU fast"}
+  ],
+  "outputs": [
+    {
+      "id": "model-output",
+      "name": "model_output",
+      "source": {"kind": "port", "node_id": "extract-data", "port_id": "out-model"}
+    },
+    {
+      "id": "left-output",
+      "name": "left_output",
+      "source": {"kind": "port", "node_id": "split-data", "port_id": "out-left"}
+    }
+  ],
+  "nodes": [
+    {
+      "id": "extract-data",
+      "kind": "task",
+      "name": "extract_data",
+      "label": "Extract data",
+      "base_task": {"kind": "task-id", "task_id": "base-task-\"extract\""},
+      "ports": [
+        {
+          "id": "in-threshold",
+          "kind": "port",
+          "name": "General/threshold",
+          "direction": "input",
+          "role": "parameter",
+          "required": false,
+          "multiplicity": "single",
+          "accepted_binding_kinds": ["parameter"],
+          "order": 0
+        },
+        {
+          "id": "out-model",
+          "kind": "port",
+          "name": "artifacts.model.url",
+          "direction": "output",
+          "role": "artifact",
+          "required": false,
+          "multiplicity": "many",
+          "accepted_binding_kinds": ["artifact"],
+          "order": 0
+        }
+      ],
+      "configuration": {
+        "clone_base_task": false,
+        "cache": true,
+        "queue_resource_id": "queue-gpu",
+        "retry_on_failure": 2
+      },
+      "visual": {"position": {"x": 0, "y": 0}}
+    },
+    {
+      "id": "publish-model",
+      "kind": "task",
+      "name": "publish_model",
+      "label": "Publish model",
+      "base_task": {"kind": "task-id", "task_id": "base-task-publish"},
+      "ports": [
+        {
+          "id": "in-model",
+          "kind": "port",
+          "name": "General/model_url",
+          "direction": "input",
+          "role": "artifact",
+          "required": true,
+          "multiplicity": "single",
+          "accepted_binding_kinds": ["artifact"],
+          "order": 0
+        }
+      ],
+      "configuration": {
+        "clone_base_task": true,
+        "cache": false,
+        "queue_resource_id": "queue-gpu",
+        "retry_on_failure": 1
+      },
+      "visual": {"position": {"x": 360, "y": 0}}
+    },
+    {
+      "id": "split-data",
+      "kind": "function",
+      "name": "split_data",
+      "label": "Split data",
+      "signature": "def split_data(value: str = \"input\", prefix: str = 'a\\b\"c') -> tuple[str, str]",
+      "source": "def split_data(value: str = \"input\", prefix: str = 'a\\b\"c') -> tuple[str, str]:\n    return (f\"{prefix}{value}\", value.upper())\n",
+      "ports": [
+        {
+          "id": "in-value",
+          "kind": "port",
+          "name": "value",
+          "direction": "input",
+          "role": "data",
+          "required": false,
+          "multiplicity": "single",
+          "accepted_binding_kinds": ["data"],
+          "order": 0,
+          "default": "input"
+        },
+        {
+          "id": "in-prefix",
+          "kind": "port",
+          "name": "prefix",
+          "direction": "input",
+          "role": "parameter",
+          "required": false,
+          "multiplicity": "single",
+          "accepted_binding_kinds": ["parameter"],
+          "order": 1,
+          "default": "a\\b\"c"
+        },
+        {
+          "id": "out-left",
+          "kind": "port",
+          "name": "left",
+          "direction": "output",
+          "role": "data",
+          "required": false,
+          "multiplicity": "many",
+          "accepted_binding_kinds": ["data"],
+          "order": 0
+        },
+        {
+          "id": "out-right",
+          "kind": "port",
+          "name": "right",
+          "direction": "output",
+          "role": "data",
+          "required": false,
+          "multiplicity": "many",
+          "accepted_binding_kinds": ["data"],
+          "order": 1
+        }
+      ],
+      "configuration": {
+        "task_type": "data_processing",
+        "cache": true,
+        "queue_resource_id": "queue-default",
+        "packages": ["pandas==2.2.3"],
+        "retry_on_failure": 3
+      },
+      "visual": {"position": {"x": 720, "y": 0}}
+    }
+  ],
+  "bindings": [
+    {
+      "id": "bind-task-threshold",
+      "kind": "parameter",
+      "source": {"kind": "parameter", "parameter_id": "task-threshold"},
+      "target": {"kind": "port", "node_id": "extract-data", "port_id": "in-threshold"}
+    },
+    {
+      "id": "bind-artifact-model",
+      "kind": "artifact",
+      "source": {"kind": "port", "node_id": "extract-data", "port_id": "out-model"},
+      "target": {"kind": "port", "node_id": "publish-model", "port_id": "in-model"}
+    },
+    {
+      "id": "bind-extract-publish",
+      "kind": "execution-only",
+      "source": {"kind": "node", "node_id": "extract-data"},
+      "target": {"kind": "node", "node_id": "publish-model"}
+    },
+    {
+      "id": "bind-prefix",
+      "kind": "parameter",
+      "source": {"kind": "parameter", "parameter_id": "prefix"},
+      "target": {"kind": "port", "node_id": "split-data", "port_id": "in-prefix"}
+    }
+  ],
+  "visual": {"viewport": {"x": 0, "y": 0}, "zoom": 1}
+}
