@@ -76,6 +76,21 @@ class ParseScriptRequest(models.Base):
     filename = StringField(default="script.py")
 
 
+class TaskDescriptorRequest(models.Base):
+    """Request a safe, stable base-task port descriptor."""
+
+    task = StringField(required=True)
+    known_updated_at = StringField()
+
+
+class ExecutionSnapshotRequest(models.Base):
+    """Request a safe live snapshot for one submitted ClearPipe v2 run."""
+
+    run = StringField(required=True)
+    definition_revision = IntField()
+    graph_digest = StringField()
+
+
 class DefinitionResponse(models.Base):
     """Normalized definition envelope; graph internals remain CP-06-owned."""
 
@@ -124,3 +139,23 @@ class ParseScriptResponse(models.Base):
     environment = ListField([str], default=[])
     imports = ListField([str], default=[])
     line_count = IntField(required=True)
+
+
+class TaskDescriptorResponse(models.Base):
+    """
+    `descriptor` is present only for an authorized, existing task. A stale
+    descriptor retains its current safe metadata so the caller can reconcile it.
+    """
+
+    status = StringField(required=True)
+    descriptor = DictField()
+
+
+class ExecutionSnapshotResponse(models.Base):
+    """
+    `snapshot` is present only when the run is authorized and has a valid
+    ClearPipeRuntime identity map.
+    """
+
+    status = StringField(required=True)
+    snapshot = DictField()

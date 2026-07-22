@@ -150,4 +150,98 @@ describe('ClearpipeApiService', () => {
     expect(requests.post.calls.argsFor(6)[1]).toEqual({task: 'p1', revision: 4, force: true});
     expect(requests.post.calls.argsFor(7)[1]).toEqual({script: 'print(1)', filename: 'pipe.py'});
   });
+
+  it('uses safe typed task-descriptor and execution-snapshot DTOs without retaining raw task data', () => {
+    requests.post.and.returnValues(
+      of({
+        status: 'stale',
+        descriptor: {
+          identity: {task_id: 'base-1'},
+          context: {
+            name: 'Base task',
+            type: 'training',
+            status: 'completed',
+            project_id: 'project-1',
+            project_name: 'Research',
+            updated_at: '2026-07-22T16:00:00Z',
+          },
+          parameters: [
+            {section: 'Args', name: 'epochs', type: 'int', default: '10'},
+            {section: 'Args', name: 'api_key', type: 'str', default: 'token-value'},
+          ],
+          artifacts: [{id: 'metrics', name: 'metrics', type: 'json', direction: 'output', uri: 'https://example.invalid?token=token-value'}],
+          configuration: {source: 'must-not-be-retained'},
+          script: {diff: 'must-not-be-retained'},
+        },
+      }),
+      of({
+        status: 'available',
+        snapshot: {
+          run_task_id: 'run-1',
+          definition_task_id: 'definition-1',
+          definition_revision: 4,
+          graph_digest: 'sha256:digest',
+          controller: {task_id: 'run-1', status: 'in_progress'},
+          nodes: [{
+            graph_node_id: 'node-1',
+            pipeline_step_name: 'step_1',
+            record_status: 'available',
+            task_id: 'child-1',
+            status: 'completed',
+            result: 'success',
+            log_task_id: 'child-1',
+            artifacts: [{id: 'result', name: 'result', direction: 'output', uri: 'https://example.invalid?token=token-value'}],
+            output_error: 'token-value',
+            source: 'must-not-be-retained',
+          }],
+          configuration: {ClearPipeRuntime: 'must-not-be-retained'},
+        },
+      }),
+    );
+
+    let descriptor: unknown;
+    let snapshot: unknown;
+    api.taskDescriptor('base-1', '2026-07-22T15:00:00Z').subscribe(result => descriptor = result);
+    api.executionSnapshot({
+      run: 'run-1',
+      definition_revision: 4,
+      graph_digest: 'sha256:digest',
+    }).subscribe(result => snapshot = result);
+
+    expect(requests.post.calls.argsFor(0)).toEqual([
+      '/service/1/api/v2.35/clearpipe.task_descriptor',
+      {task: 'base-1', known_updated_at: '2026-07-22T15:00:00Z'},
+    ]);
+    expect(requests.post.calls.argsFor(1)).toEqual([
+      '/service/1/api/v2.35/clearpipe.execution_snapshot',
+      {run: 'run-1', definition_revision: 4, graph_digest: 'sha256:digest'},
+    ]);
+    expect(descriptor).toEqual(jasmine.objectContaining({
+      status: 'stale',
+      descriptor: jasmine.objectContaining({
+        identity: {task_id: 'base-1'},
+        parameters: [
+          {section: 'Args', name: 'epochs', type: 'int', default: '10'},
+          {section: 'Args', name: 'api_key', type: 'str'},
+        ],
+      }),
+    }));
+    expect(snapshot).toEqual(jasmine.objectContaining({
+      status: 'available',
+      snapshot: jasmine.objectContaining({
+        run_task_id: 'run-1',
+        nodes: [jasmine.objectContaining({
+          graph_node_id: 'node-1',
+          task_id: 'child-1',
+          record_status: 'available',
+          result: 'success',
+        })],
+      }),
+    }));
+    const encoded = JSON.stringify({descriptor, snapshot});
+    expect(encoded).not.toContain('token-value');
+    expect(encoded).not.toContain('must-not-be-retained');
+    expect(encoded).not.toContain('output_error');
+    expect(encoded).not.toContain('uri');
+  });
 });

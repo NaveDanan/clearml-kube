@@ -1,5 +1,5 @@
 import {HttpErrorResponse} from '@angular/common/http';
-import {TestBed} from '@angular/core/testing';
+import {fakeAsync, TestBed, tick} from '@angular/core/testing';
 import {Router} from '@angular/router';
 import {Store} from '@ngrx/store';
 import {of, throwError} from 'rxjs';
@@ -219,6 +219,58 @@ describe('ClearpipeAdapterService', () => {
     expect(outcomes.map(outcome => outcome.status)).toEqual(['loading', 'failed']);
     expect((outcomes[1] as Extract<ClearpipeAdapterOutcome<unknown>, {problem: unknown}>).problem.retryable).toBeTrue();
   });
+
+  it('keeps explicit descriptor availability in typed data and stops cold snapshot polling on teardown', fakeAsync(() => {
+    requests.post.and.returnValues(
+      of({status: 'missing'}),
+      of({
+        status: 'available',
+        snapshot: {
+          run_task_id: 'run-1',
+          definition_task_id: 'pipe-1',
+          definition_revision: 3,
+          graph_digest: 'sha256:digest',
+          controller: {task_id: 'run-1', status: 'in_progress'},
+          nodes: [],
+        },
+      }),
+      of({
+        status: 'available',
+        snapshot: {
+          run_task_id: 'run-1',
+          definition_task_id: 'pipe-1',
+          definition_revision: 3,
+          graph_digest: 'sha256:digest',
+          controller: {task_id: 'run-1', status: 'completed'},
+          nodes: [],
+        },
+      }),
+    );
+
+    const descriptor = collect(adapter.taskDescriptor('missing-task'));
+    expect(descriptor.map(outcome => outcome.status)).toEqual(['loading', 'ready']);
+    expect((descriptor[1] as Extract<ClearpipeAdapterOutcome<unknown>, {status: 'ready'}>).data)
+      .toEqual({status: 'missing'});
+    expect(requests.post.calls.argsFor(0)).toEqual([
+      '/service/1/api/v2.35/clearpipe.task_descriptor',
+      {task: 'missing-task', known_updated_at: undefined},
+    ]);
+
+    const outcomes: ClearpipeAdapterOutcome<unknown>[] = [];
+    const subscription = adapter.pollExecutionSnapshot({run: 'run-1'}, 100).subscribe(outcome => outcomes.push(outcome));
+    expect(outcomes.map(outcome => outcome.status)).toEqual(['loading']);
+    tick(0);
+    expect(outcomes.map(outcome => outcome.status)).toEqual(['loading', 'ready']);
+    tick(1000);
+    expect(outcomes.map(outcome => outcome.status)).toEqual(['loading', 'ready', 'ready']);
+    subscription.unsubscribe();
+    tick(1000);
+    expect(requests.post.calls.count()).toBe(3);
+    expect(requests.post.calls.argsFor(1)).toEqual([
+      '/service/1/api/v2.35/clearpipe.execution_snapshot',
+      {run: 'run-1', definition_revision: undefined, graph_digest: undefined},
+    ]);
+  }));
 
   it('builds guarded ClearPipe and existing task/pipeline handoff routes without calling pipelines.start_pipeline', async () => {
     expect(adapter.routeFor({kind: 'clearpipe-definition', taskId: 'pipe-1'})).toEqual(['/clearpipe', 'pipe-1', 'edit']);

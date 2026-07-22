@@ -18,12 +18,16 @@ from apiserver.apimodels.clearpipe import (
     DefinitionRequest,
     DefinitionResponse,
     DeleteRequest,
+    ExecutionSnapshotRequest,
+    ExecutionSnapshotResponse,
     GetAllRequest,
     GetAllResponse,
     ParseScriptRequest,
     ParseScriptResponse,
     StartRequest,
     StartResponse,
+    TaskDescriptorRequest,
+    TaskDescriptorResponse,
     UpdateRequest,
     UpdateResponse,
     ValidateRequest,
@@ -77,6 +81,9 @@ PIPELINE_TAG = "pipeline"
 MAX_PAGE_SIZE = 500
 CLEARPIPE_RUNTIME_CONFIGURATION = "ClearPipeRuntime"
 CLEARPIPE_RUNTIME_SCHEMA_VERSION = 1
+CLEARPIPE_RUNTIME_DEFINITION_ID = "clearpipe_definition_id"
+CLEARPIPE_RUNTIME_KIND = "clearpipe_runtime_kind"
+CLEARPIPE_RUNTIME_RUN_KIND = "v2_controller_run"
 _SECRET_PARAMETER_VALUE = re.compile(
     r"(?i)(?:(?:^|[^a-z0-9])(?:password|passwd|secret|token|api[_-]?key|"
     r"access[_-]?key|private[_-]?key|credential)s?(?:$|[^a-z0-9])|"
@@ -284,6 +291,17 @@ def _stored_runtime_configuration(task: Task) -> Optional[ClearPipeRuntimeConfig
             "ClearPipe definition has malformed compiled runtime metadata",
             task=task.id,
         ) from ex
+
+
+def _safe_stored_runtime_configuration(
+    task: Task,
+) -> Optional[ClearPipeRuntimeConfiguration]:
+    """Return no runtime map rather than exposing malformed controller metadata."""
+
+    try:
+        return _stored_runtime_configuration(task)
+    except errors.bad_request.ValidationError:
+        return None
 
 
 def _v2_configurations(graph: Mapping, generated: GeneratedDefinition, revision: int) -> dict:
@@ -494,6 +512,244 @@ def _definition(
             else {"validation": security.to_dict()} if is_v2 else {}
         ),
     }
+
+
+def _timestamp(value) -> Optional[str]:
+    return value.isoformat() if value is not None and hasattr(value, "isoformat") else None
+
+
+def _authorized_task_state(company_id: str, task_id: str):
+    """
+    Resolve through TaskBLL first so task visibility matches existing native
+    task APIs. The explicit unavailable state is intentional for the typed
+    ClearPipe contracts and carries no task data.
+    """
+
+    try:
+        return "available", task_bll.get_by_id(
+            company_id, task_id, allow_public=True
+        )
+    except errors.bad_request.InvalidTaskId:
+        exists = Task.objects(id=task_id).only("id").first() is not None
+        return ("denied" if exists else "missing"), None
+
+
+def _safe_parameter_default(item) -> bool:
+    value = getattr(item, "value", None)
+    return (
+        isinstance(value, (str, int, float, bool))
+        and not _secret_parameter_material(value)
+    )
+
+
+def _safe_parameter_descriptors(task: Task) -> list:
+    descriptors = []
+    for section, parameters in (getattr(task, "hyperparams", None) or {}).items():
+        if not isinstance(section, str) or not isinstance(parameters, Mapping):
+            continue
+        for name, item in parameters.items():
+            item_name = getattr(item, "name", name)
+            item_section = getattr(item, "section", section)
+            if not isinstance(item_name, str) or not isinstance(item_section, str):
+                continue
+            descriptor = {"section": item_section, "name": item_name}
+            item_type = getattr(item, "type", None)
+            if isinstance(item_type, str) and item_type:
+                descriptor["type"] = item_type
+            if _safe_parameter_default(item):
+                descriptor["default"] = item.value
+            descriptors.append(descriptor)
+    return sorted(
+        descriptors,
+        key=lambda item: (item["section"].casefold(), item["name"].casefold()),
+    )
+
+
+def _safe_artifact_descriptors(task: Task) -> list:
+    artifacts = getattr(getattr(task, "execution", None), "artifacts", None) or {}
+    descriptors = []
+    for key, artifact in artifacts.items():
+        artifact_id = getattr(artifact, "key", key)
+        artifact_type = getattr(artifact, "type", None)
+        direction = getattr(artifact, "mode", None)
+        if not isinstance(artifact_id, str) or not artifact_id:
+            continue
+        descriptor = {"id": artifact_id, "name": artifact_id}
+        if isinstance(artifact_type, str) and artifact_type:
+            descriptor["type"] = artifact_type
+        if direction in {"input", "output"}:
+            descriptor["direction"] = direction
+        descriptors.append(descriptor)
+    return sorted(descriptors, key=lambda item: item["id"].casefold())
+
+
+def _task_descriptor(task: Task, company_id: str) -> dict:
+    project_name = None
+    if task.project:
+        project = Project.objects(
+            Q(id=task.project) & _visible_query(company_id, True)
+        ).only("name").first()
+        project_name = project.name if project else None
+    context = {
+        "name": task.name,
+        "type": task.type,
+        "status": task.status,
+    }
+    if task.project:
+        context["project_id"] = task.project
+    if project_name:
+        context["project_name"] = project_name
+    if updated_at := _timestamp(task.last_update):
+        context["updated_at"] = updated_at
+    return {
+        # Base identity is always the immutable task ID. Project/name are
+        # display context only and must never be substituted with a run ID.
+        "identity": {"task_id": task.id},
+        "context": context,
+        "parameters": _safe_parameter_descriptors(task),
+        "artifacts": _safe_artifact_descriptors(task),
+    }
+
+
+def _runtime_step_task_ids(task: Task) -> dict:
+    """
+    Read just the task IDs published by controller monitoring. The Pipeline
+    configuration itself is never returned and no arbitrary child fields are
+    trusted as a graph-to-runtime map.
+    """
+
+    try:
+        pipeline = _configuration_value(task, "Pipeline")
+    except errors.bad_request.ValidationError:
+        return {}
+    if not isinstance(pipeline, Mapping):
+        return {}
+    steps = pipeline.get("steps")
+    if not isinstance(steps, Mapping):
+        steps = pipeline
+    task_ids = {}
+    for name, step in steps.items():
+        if not isinstance(name, str) or not isinstance(step, Mapping):
+            continue
+        task_id = step.get("task_id") or step.get("job_id")
+        if isinstance(task_id, str) and task_id:
+            task_ids[name] = task_id
+    return task_ids
+
+
+def _safe_models(task: Task, company_id: str) -> dict:
+    result = {}
+    task_models = getattr(task, "models", None)
+    for direction in ("input", "output"):
+        descriptors = []
+        for item in getattr(task_models, direction, None) or ():
+            model_id = getattr(item, "model", None)
+            if not isinstance(model_id, str) or not model_id:
+                continue
+            model = Model.objects(
+                Q(id=model_id) & _visible_query(company_id, True)
+            ).only("id", "name").first()
+            if model is None:
+                continue
+            descriptor = {"id": model.id}
+            if isinstance(model.name, str) and model.name:
+                descriptor["name"] = model.name
+            descriptors.append(descriptor)
+        if descriptors:
+            result[direction] = descriptors
+    return result
+
+
+def _safe_node_snapshot(task: Task, company_id: str) -> dict:
+    result = {
+        "task_id": task.id,
+        "status": task.status,
+        "record_status": "available",
+        # This is an authorized task-detail/log handoff identifier, not log
+        # content or a URL.
+        "log_task_id": task.id,
+        "artifacts": _safe_artifact_descriptors(task),
+        "models": _safe_models(task, company_id),
+    }
+    for name, value in (
+        ("started_at", _timestamp(task.started)),
+        ("completed_at", _timestamp(task.completed)),
+        ("updated_at", _timestamp(task.last_update)),
+    ):
+        if value:
+            result[name] = value
+    output = getattr(task, "output", None)
+    output_result = getattr(output, "result", None)
+    if output_result in {"success", "failure"}:
+        result["result"] = output_result
+    if "dataset" in (getattr(task, "system_tags", None) or ()):
+        result["datasets"] = [{"task_id": task.id, "name": task.name}]
+    return result
+
+
+def _execution_snapshot(run: Task, company_id: str) -> Optional[dict]:
+    runtime = _safe_stored_runtime_configuration(run)
+    run_runtime = getattr(run, "runtime", None) or {}
+    definition_task_id = run_runtime.get(CLEARPIPE_RUNTIME_DEFINITION_ID)
+    marked_run = (
+        run_runtime.get(CLEARPIPE_RUNTIME_KIND) == CLEARPIPE_RUNTIME_RUN_KIND
+        and isinstance(definition_task_id, str)
+        and bool(definition_task_id)
+    )
+    if (
+        runtime is None
+        or not runtime.runtime_steps
+        or run.type != TaskType.controller
+        or run_runtime.get("clearpipe_revision") != runtime.definition_revision
+        or run_runtime.get("_pipeline_hash") != runtime.graph_digest
+        # Existing v2 bridge runs predate the explicit definition handoff ID
+        # but are still safe to read once their controller has been submitted.
+        or (not marked_run and getattr(run, "status", None) == TaskStatus.created)
+    ):
+        return None
+    step_task_ids = _runtime_step_task_ids(run)
+    nodes = []
+    for identity in runtime.runtime_steps:
+        node = {
+            "graph_node_id": identity.graph_node_id,
+            "pipeline_step_name": identity.pipeline_step_name,
+        }
+        step_task_id = step_task_ids.get(identity.pipeline_step_name)
+        if not step_task_id:
+            node["record_status"] = "unavailable"
+            nodes.append(node)
+            continue
+        record_state, child = _authorized_task_state(company_id, step_task_id)
+        if record_state != "available" or child is None:
+            node["record_status"] = record_state
+            nodes.append(node)
+            continue
+        # The controller must have recorded an actual child of this run before
+        # its status or outputs can be exposed.
+        if getattr(child, "parent", None) != run.id:
+            node["record_status"] = "unavailable"
+            nodes.append(node)
+            continue
+        node.update(_safe_node_snapshot(child, company_id))
+        nodes.append(node)
+    controller = {"task_id": run.id, "status": run.status}
+    for name, value in (
+        ("started_at", _timestamp(run.started)),
+        ("completed_at", _timestamp(run.completed)),
+        ("updated_at", _timestamp(run.last_update)),
+    ):
+        if value:
+            controller[name] = value
+    snapshot = {
+        "run_task_id": run.id,
+        "definition_revision": runtime.definition_revision,
+        "graph_digest": runtime.graph_digest,
+        "controller": controller,
+        "nodes": nodes,
+    }
+    if marked_run:
+        snapshot["definition_task_id"] = definition_task_id
+    return snapshot
 
 
 def _resource_checker(company_id: str):
@@ -923,8 +1179,19 @@ def start(call: APICall, company_id: str, request: StartRequest):
             configuration=configurations,
             script_overrides={"diff": controller_script, "entry_point": "clearpipe_controller.py"},
         )
+        run_runtime = {
+            "clearpipe_revision": revision,
+            "_pipeline_hash": pipeline_hash,
+        }
+        if v2_graph:
+            run_runtime.update(
+                {
+                    CLEARPIPE_RUNTIME_DEFINITION_ID: definition.id,
+                    CLEARPIPE_RUNTIME_KIND: CLEARPIPE_RUNTIME_RUN_KIND,
+                }
+            )
         Task.objects(id=run.id, company=company_id).update_one(
-            set__runtime={"clearpipe_revision": revision, "_pipeline_hash": pipeline_hash}
+            set__runtime=run_runtime
         )
         queued, enqueue_result = enqueue_task(
             task_id=run.id,
@@ -954,6 +1221,56 @@ def start(call: APICall, company_id: str, request: StartRequest):
             # turn a committed run into an ambiguous failed response.
             response["queue_watched"] = False
     call.result.data = response
+
+
+@endpoint(
+    "clearpipe.task_descriptor",
+    min_version="2.35",
+    request_data_model=TaskDescriptorRequest,
+    response_data_model=TaskDescriptorResponse,
+)
+def task_descriptor(
+    call: APICall, company_id: str, request: TaskDescriptorRequest
+):
+    status, task = _authorized_task_state(company_id, request.task)
+    if task is None:
+        call.result.data = {"status": status}
+        return
+    descriptor = _task_descriptor(task, company_id)
+    if (
+        request.known_updated_at is not None
+        and request.known_updated_at != descriptor["context"]["updated_at"]
+    ):
+        status = "stale"
+    call.result.data = {"status": status, "descriptor": descriptor}
+
+
+@endpoint(
+    "clearpipe.execution_snapshot",
+    min_version="2.35",
+    request_data_model=ExecutionSnapshotRequest,
+    response_data_model=ExecutionSnapshotResponse,
+)
+def execution_snapshot(
+    call: APICall, company_id: str, request: ExecutionSnapshotRequest
+):
+    status, run = _authorized_task_state(company_id, request.run)
+    if run is None:
+        call.result.data = {"status": status}
+        return
+    snapshot = _execution_snapshot(run, company_id)
+    if snapshot is None:
+        call.result.data = {"status": "unavailable"}
+        return
+    if (
+        request.definition_revision is not None
+        and request.definition_revision != snapshot["definition_revision"]
+    ) or (
+        request.graph_digest is not None
+        and request.graph_digest != snapshot["graph_digest"]
+    ):
+        status = "stale"
+    call.result.data = {"status": status, "snapshot": snapshot}
 
 
 @endpoint(

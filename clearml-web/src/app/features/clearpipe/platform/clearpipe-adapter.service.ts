@@ -3,8 +3,8 @@ import {HttpErrorResponse} from '@angular/common/http';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {Router} from '@angular/router';
 import {Store} from '@ngrx/store';
-import {concat, Observable, of} from 'rxjs';
-import {catchError, map} from 'rxjs/operators';
+import {concat, Observable, of, timer} from 'rxjs';
+import {catchError, map, switchMap} from 'rxjs/operators';
 import {selectCurrentUser} from '@common/core/reducers/users-reducer';
 import {ConfigurationService} from '@common/shared/services/configuration.service';
 import {
@@ -13,11 +13,14 @@ import {
   ClearpipeCapabilities,
   ClearpipeCreateRequest,
   ClearpipeDefinitionResponse,
+  ClearpipeExecutionSnapshotRequest,
+  ClearpipeExecutionSnapshotResponse,
   ClearpipeListRequest,
   ClearpipeListResponse,
   ClearpipeParseScriptResponse,
   ClearpipeStartRequest,
   ClearpipeStartResponse,
+  ClearpipeTaskDescriptorResponse,
   ClearpipeUpdateRequest,
   ClearpipeValidateRequest,
   ClearpipeValidationResponse,
@@ -229,6 +232,38 @@ export class ClearpipeAdapterService {
     ));
   }
 
+  /**
+   * Retrieves a server-authorized base-task descriptor. Its explicit data
+   * status differentiates a stale descriptor from missing or denied access;
+   * transport errors still use the shared adapter normalization below.
+   */
+  taskDescriptor(task: string, knownUpdatedAt?: string): Observable<ClearpipeAdapterOutcome<ClearpipeTaskDescriptorResponse>> {
+    return this.withLoading(this.api.taskDescriptor(task, knownUpdatedAt).pipe(
+      map(data => ({status: 'ready' as const, data})),
+      catchError(error => of(this.normalizeError<ClearpipeTaskDescriptorResponse>(error, 'task-descriptor')))
+    ));
+  }
+
+  executionSnapshot(request: ClearpipeExecutionSnapshotRequest): Observable<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>> {
+    return this.withLoading(this.snapshotRequest(request));
+  }
+
+  /**
+   * A cold stream with no root-scoped polling state. Consumers own the
+   * subscription and must unsubscribe on teardown; doing so cancels timer and
+   * in-flight HTTP work through RxJS.
+   */
+  pollExecutionSnapshot(
+    request: ClearpipeExecutionSnapshotRequest,
+    intervalMs = 5000
+  ): Observable<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>> {
+    const interval = Math.min(60000, Math.max(1000, Math.floor(intervalMs)));
+    return concat(
+      of({status: 'loading'} as const),
+      timer(0, interval).pipe(switchMap(() => this.snapshotRequest(request)))
+    );
+  }
+
   resources(type: ClearpipeResourceOption['type']): Observable<ClearpipeAdapterOutcome<ClearpipeResourceOption[]>> {
     if (type === 'endpoint' || type === 'storage') {
       return this.withLoading(of({
@@ -399,6 +434,15 @@ export class ClearpipeAdapterService {
 
   private withLoading<T>(operation: Observable<Exclude<ClearpipeAdapterOutcome<T>, {status: 'loading'}>>): Observable<ClearpipeAdapterOutcome<T>> {
     return concat(of({status: 'loading'} as const), operation);
+  }
+
+  private snapshotRequest(
+    request: ClearpipeExecutionSnapshotRequest
+  ): Observable<Exclude<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>, {status: 'loading'}>> {
+    return this.api.executionSnapshot(request).pipe(
+      map(data => ({status: 'ready' as const, data})),
+      catchError(error => of(this.normalizeError<ClearpipeExecutionSnapshotResponse>(error, 'execution-snapshot')))
+    );
   }
 
   private normalizeError<T>(error: unknown, operation: string): Exclude<ClearpipeAdapterOutcome<T>, {status: 'loading'} | {status: 'ready'; data: T}> {

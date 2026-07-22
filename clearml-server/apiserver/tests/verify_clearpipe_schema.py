@@ -9,6 +9,8 @@ EXPECTED = {
     "update",
     "validate",
     "start",
+    "task_descriptor",
+    "execution_snapshot",
     "archive",
     "delete",
     "parse_script",
@@ -24,6 +26,8 @@ assert {
     "diagnostic",
     "compiler_output",
     "definition",
+    "task_descriptor",
+    "execution_snapshot",
 }.issubset(service.definitions)
 
 for action in EXPECTED:

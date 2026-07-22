@@ -12,9 +12,11 @@ from apiserver.apimodels.clearpipe import (
     CreateResponse,
     DeleteResponse,
     DefinitionResponse,
+    ExecutionSnapshotResponse,
     GetAllResponse,
     ParseScriptResponse,
     StartResponse,
+    TaskDescriptorResponse,
     UpdateRequest,
     UpdateResponse,
     ValidationResponse,
@@ -98,6 +100,8 @@ class ClearPipeContractSchemaTests(unittest.TestCase):
             "clearpipe.update": UpdateResponse,
             "clearpipe.validate": ValidationResponse,
             "clearpipe.start": StartResponse,
+            "clearpipe.task_descriptor": TaskDescriptorResponse,
+            "clearpipe.execution_snapshot": ExecutionSnapshotResponse,
             "clearpipe.archive": ArchiveResponse,
             "clearpipe.delete": DeleteResponse,
             "clearpipe.parse_script": ParseScriptResponse,
@@ -116,13 +120,22 @@ class ClearPipeContractSchemaTests(unittest.TestCase):
             "update",
             "validate",
             "start",
+            "task_descriptor",
+            "execution_snapshot",
             "archive",
             "delete",
             "parse_script",
         }
         self.assertEqual(set(service.endpoint_groups), expected)
         self.assertTrue(
-            {"clearpipe_graph_v2", "diagnostic", "compiler_output", "definition"}
+            {
+                "clearpipe_graph_v2",
+                "diagnostic",
+                "compiler_output",
+                "definition",
+                "task_descriptor",
+                "execution_snapshot",
+            }
             .union({"runtime_metadata"})
             .issubset(service.definitions)
         )

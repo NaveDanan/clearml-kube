@@ -308,6 +308,8 @@ class V2StartTests(unittest.TestCase):
             set__runtime={
                 "clearpipe_revision": 7,
                 "_pipeline_hash": runtime["graph_digest"],
+                "clearpipe_definition_id": "definition",
+                "clearpipe_runtime_kind": "v2_controller_run",
             }
         )
         enqueue.assert_called_once_with(

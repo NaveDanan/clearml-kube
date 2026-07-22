@@ -104,6 +104,89 @@ export interface ClearpipeParseScriptResponse {
   line_count: number;
 }
 
+export type ClearpipeTaskDescriptorStatus = 'available' | 'missing' | 'denied' | 'stale';
+export type ClearpipeExecutionSnapshotStatus = ClearpipeTaskDescriptorStatus | 'unavailable';
+export type ClearpipeArtifactDirection = 'input' | 'output';
+export type ClearpipeRuntimeRecordStatus = 'available' | 'missing' | 'denied' | 'unavailable';
+
+export interface ClearpipeTaskParameterDescriptor {
+  section: string;
+  name: string;
+  type?: string;
+  default?: string | number | boolean;
+}
+
+export interface ClearpipeTaskArtifactDescriptor {
+  id: string;
+  name: string;
+  type?: string;
+  direction?: ClearpipeArtifactDirection;
+}
+
+export interface ClearpipeTaskDescriptor {
+  identity: {task_id: string};
+  context: {
+    name: string;
+    type: string;
+    status: string;
+    project_id?: string;
+    project_name?: string;
+    updated_at?: string;
+  };
+  parameters: ClearpipeTaskParameterDescriptor[];
+  artifacts: ClearpipeTaskArtifactDescriptor[];
+}
+
+export interface ClearpipeTaskDescriptorResponse {
+  status: ClearpipeTaskDescriptorStatus;
+  descriptor?: ClearpipeTaskDescriptor;
+}
+
+export interface ClearpipeExecutionNodeSnapshot {
+  graph_node_id: string;
+  pipeline_step_name: string;
+  record_status: ClearpipeRuntimeRecordStatus;
+  task_id?: string;
+  status?: string;
+  started_at?: string;
+  completed_at?: string;
+  updated_at?: string;
+  result?: 'success' | 'failure';
+  log_task_id?: string;
+  artifacts?: ClearpipeTaskArtifactDescriptor[];
+  models?: {
+    input?: {id: string; name?: string}[];
+    output?: {id: string; name?: string}[];
+  };
+  datasets?: {task_id: string; name: string}[];
+}
+
+export interface ClearpipeExecutionSnapshot {
+  run_task_id: string;
+  definition_task_id?: string;
+  definition_revision: number;
+  graph_digest: string;
+  controller: {
+    task_id: string;
+    status: string;
+    started_at?: string;
+    completed_at?: string;
+    updated_at?: string;
+  };
+  nodes: ClearpipeExecutionNodeSnapshot[];
+}
+
+export interface ClearpipeExecutionSnapshotRequest {
+  run: string;
+  definition_revision?: number;
+  graph_digest?: string;
+}
+
+export interface ClearpipeExecutionSnapshotResponse {
+  status: ClearpipeExecutionSnapshotStatus;
+  snapshot?: ClearpipeExecutionSnapshot;
+}
+
 @Injectable({providedIn: 'root'})
 export class ClearpipeApiService {
   private requests = inject(SmApiRequestsService);
@@ -264,6 +347,21 @@ export class ClearpipeApiService {
     })));
   }
 
+  taskDescriptor(task: string, knownUpdatedAt?: string): Observable<ClearpipeTaskDescriptorResponse> {
+    return this.requests.post<any>(this.endpoint('task_descriptor'), {
+      task,
+      known_updated_at: knownUpdatedAt,
+    }).pipe(map(response => this.taskDescriptorResponse(response)));
+  }
+
+  executionSnapshot(request: ClearpipeExecutionSnapshotRequest): Observable<ClearpipeExecutionSnapshotResponse> {
+    return this.requests.post<any>(this.endpoint('execution_snapshot'), {
+      run: request.run,
+      definition_revision: request.definition_revision,
+      graph_digest: request.graph_digest,
+    }).pipe(map(response => this.executionSnapshotResponse(response)));
+  }
+
   getResources(type: ClearpipeResourceOption['type']): Observable<ClearpipeResourceOption[]> {
     const requests: Record<ClearpipeResourceOption['type'], {endpoint: string; body: Record<string, unknown>; key: string}> = {
       project: {endpoint: 'projects.get_all', body: {page: 0, page_size: 500, only_fields: ['id', 'name']}, key: 'projects'},
@@ -355,5 +453,201 @@ export class ClearpipeApiService {
       representation: definition.representation,
       capabilities: definition.capabilities,
     };
+  }
+
+  private taskDescriptorResponse(response: any): ClearpipeTaskDescriptorResponse {
+    const status = this.taskDescriptorStatus(response?.status);
+    const descriptor = this.safeTaskDescriptor(response?.descriptor);
+    return {
+      status,
+      ...(descriptor && (status === 'available' || status === 'stale') ? {descriptor} : {}),
+    };
+  }
+
+  private executionSnapshotResponse(response: any): ClearpipeExecutionSnapshotResponse {
+    const status = this.executionSnapshotStatus(response?.status);
+    const snapshot = this.safeExecutionSnapshot(response?.snapshot);
+    return {
+      status,
+      ...(snapshot && (status === 'available' || status === 'stale') ? {snapshot} : {}),
+    };
+  }
+
+  private safeTaskDescriptor(value: unknown): ClearpipeTaskDescriptor | undefined {
+    const descriptor = this.record(value);
+    const identity = this.record(descriptor?.identity);
+    const context = this.record(descriptor?.context);
+    const taskId = this.text(identity?.task_id);
+    const name = this.text(context?.name);
+    const type = this.text(context?.type);
+    const status = this.text(context?.status);
+    if (!taskId || !name || !type || !status) return undefined;
+    return {
+      identity: {task_id: taskId},
+      context: {
+        name,
+        type,
+        status,
+        ...(this.text(context?.project_id) ? {project_id: this.text(context?.project_id)!} : {}),
+        ...(this.text(context?.project_name) ? {project_name: this.text(context?.project_name)!} : {}),
+        ...(this.text(context?.updated_at) ? {updated_at: this.text(context?.updated_at)!} : {}),
+      },
+      parameters: this.array(descriptor?.parameters).flatMap(item => this.safeParameterDescriptor(item)),
+      artifacts: this.array(descriptor?.artifacts).flatMap(item => this.safeArtifactDescriptor(item)),
+    };
+  }
+
+  private safeExecutionSnapshot(value: unknown): ClearpipeExecutionSnapshot | undefined {
+    const snapshot = this.record(value);
+    const controller = this.record(snapshot?.controller);
+    const runTaskId = this.text(snapshot?.run_task_id);
+    const definitionTaskId = this.text(snapshot?.definition_task_id);
+    const revision = this.integer(snapshot?.definition_revision);
+    const graphDigest = this.text(snapshot?.graph_digest);
+    const controllerTaskId = this.text(controller?.task_id);
+    const controllerStatus = this.text(controller?.status);
+    if (!runTaskId || revision === undefined || !graphDigest || !controllerTaskId || !controllerStatus) {
+      return undefined;
+    }
+    return {
+      run_task_id: runTaskId,
+      ...(definitionTaskId ? {definition_task_id: definitionTaskId} : {}),
+      definition_revision: revision,
+      graph_digest: graphDigest,
+      controller: {
+        task_id: controllerTaskId,
+        status: controllerStatus,
+        ...(this.text(controller?.started_at) ? {started_at: this.text(controller?.started_at)!} : {}),
+        ...(this.text(controller?.completed_at) ? {completed_at: this.text(controller?.completed_at)!} : {}),
+        ...(this.text(controller?.updated_at) ? {updated_at: this.text(controller?.updated_at)!} : {}),
+      },
+      nodes: this.array(snapshot?.nodes).flatMap(item => this.safeExecutionNode(item)),
+    };
+  }
+
+  private safeParameterDescriptor(value: unknown): ClearpipeTaskParameterDescriptor[] {
+    const parameter = this.record(value);
+    const section = this.text(parameter?.section);
+    const name = this.text(parameter?.name);
+    if (!section || !name) return [];
+    const defaultValue = this.safeParameterDefault(parameter?.default, section, name);
+    return [{
+      section,
+      name,
+      ...(this.text(parameter?.type) ? {type: this.text(parameter?.type)!} : {}),
+      ...(defaultValue !== undefined ? {default: defaultValue} : {}),
+    }];
+  }
+
+  private safeArtifactDescriptor(value: unknown): ClearpipeTaskArtifactDescriptor[] {
+    const artifact = this.record(value);
+    const id = this.text(artifact?.id);
+    const name = this.text(artifact?.name);
+    if (!id || !name) return [];
+    const direction = artifact?.direction === 'input' || artifact?.direction === 'output'
+      ? artifact.direction
+      : undefined;
+    return [{
+      id,
+      name,
+      ...(this.text(artifact?.type) ? {type: this.text(artifact?.type)!} : {}),
+      ...(direction ? {direction} : {}),
+    }];
+  }
+
+  private safeExecutionNode(value: unknown): ClearpipeExecutionNodeSnapshot[] {
+    const node = this.record(value);
+    const graphNodeId = this.text(node?.graph_node_id);
+    const pipelineStepName = this.text(node?.pipeline_step_name);
+    const recordStatus = this.runtimeRecordStatus(node?.record_status);
+    if (!graphNodeId || !pipelineStepName || !recordStatus) return [];
+    const models = this.safeModels(node?.models);
+    const result = node?.result === 'success' || node?.result === 'failure' ? node.result : undefined;
+    return [{
+      graph_node_id: graphNodeId,
+      pipeline_step_name: pipelineStepName,
+      record_status: recordStatus,
+      ...(this.text(node?.task_id) ? {task_id: this.text(node?.task_id)!} : {}),
+      ...(this.text(node?.status) ? {status: this.text(node?.status)!} : {}),
+      ...(this.text(node?.started_at) ? {started_at: this.text(node?.started_at)!} : {}),
+      ...(this.text(node?.completed_at) ? {completed_at: this.text(node?.completed_at)!} : {}),
+      ...(this.text(node?.updated_at) ? {updated_at: this.text(node?.updated_at)!} : {}),
+      ...(result ? {result} : {}),
+      ...(this.text(node?.log_task_id) ? {log_task_id: this.text(node?.log_task_id)!} : {}),
+      ...(this.array(node?.artifacts).length ? {artifacts: this.array(node?.artifacts).flatMap(item => this.safeArtifactDescriptor(item))} : {}),
+      ...(models ? {models} : {}),
+      ...(this.array(node?.datasets).length ? {datasets: this.array(node?.datasets).flatMap(item => this.safeDataset(item))} : {}),
+    }];
+  }
+
+  private safeModels(value: unknown): ClearpipeExecutionNodeSnapshot['models'] | undefined {
+    const models = this.record(value);
+    const input = this.safeModelList(models?.input);
+    const output = this.safeModelList(models?.output);
+    return input.length || output.length
+      ? {...(input.length ? {input} : {}), ...(output.length ? {output} : {})}
+      : undefined;
+  }
+
+  private safeModelList(value: unknown): {id: string; name?: string}[] {
+    return this.array(value).flatMap(item => {
+      const model = this.record(item);
+      const id = this.text(model?.id);
+      return id ? [{id, ...(this.text(model?.name) ? {name: this.text(model?.name)!} : {})}] : [];
+    });
+  }
+
+  private safeDataset(value: unknown): {task_id: string; name: string}[] {
+    const dataset = this.record(value);
+    const taskId = this.text(dataset?.task_id);
+    const name = this.text(dataset?.name);
+    return taskId && name ? [{task_id: taskId, name}] : [];
+  }
+
+  private safeParameterDefault(value: unknown, section: string, name: string): string | number | boolean | undefined {
+    if (/(password|passwd|secret|token|api[_ -]?key|access[_ -]?key|credential|private[_ -]?key)/i.test(`${section}/${name}`)) {
+      return undefined;
+    }
+    if (typeof value === 'string') {
+      if (value.length > 512 || /(?:password|passwd|secret|token|api[_ -]?key|access[_ -]?key|credential|private[_ -]?key|bearer)/i.test(value)) {
+        return undefined;
+      }
+      return value;
+    }
+    return typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ? value : undefined;
+  }
+
+  private taskDescriptorStatus(value: unknown): ClearpipeTaskDescriptorStatus {
+    return value === 'available' || value === 'missing' || value === 'denied' || value === 'stale'
+      ? value
+      : 'missing';
+  }
+
+  private executionSnapshotStatus(value: unknown): ClearpipeExecutionSnapshotStatus {
+    return value === 'available' || value === 'missing' || value === 'denied' || value === 'stale' || value === 'unavailable'
+      ? value
+      : 'unavailable';
+  }
+
+  private runtimeRecordStatus(value: unknown): ClearpipeRuntimeRecordStatus | undefined {
+    return value === 'available' || value === 'missing' || value === 'denied' || value === 'unavailable'
+      ? value
+      : undefined;
+  }
+
+  private record(value: unknown): Record<string, unknown> | undefined {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+  }
+
+  private array(value: unknown): unknown[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  private text(value: unknown): string | undefined {
+    return typeof value === 'string' && value.length <= 512 ? value : undefined;
+  }
+
+  private integer(value: unknown): number | undefined {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
   }
 }
