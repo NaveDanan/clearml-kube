@@ -191,6 +191,33 @@
             ]
           }
         },
+        "test-clearpipe": {
+          "builder": "@angular/build:karma",
+          "options": {
+            "main": "src/test.ts",
+            "karmaConfig": "./karma.clearpipe.conf.js",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "./tsconfig.clearpipe.spec.json",
+            "styles": [
+              "src/app/webapp-common/styles/style.scss"
+            ],
+            "stylePreprocessorOptions": {
+              "includePaths": [
+                "",
+                "src/app/webapp-common/styles/"
+              ]
+            },
+            "assets": [
+              "src/assets",
+              "src/favicon.ico",
+              "src/version.json",
+              "src/manifest.webmanifest",
+              "src/app/webapp-common/assets"
+            ]
+          }
+        },
         "lint": {
           "builder": "@angular-eslint/builder:lint",
           "options": {
