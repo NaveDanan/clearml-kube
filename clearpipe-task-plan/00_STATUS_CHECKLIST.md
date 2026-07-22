@@ -30,7 +30,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | Blocked | a1131ad | Authorized task metadata and generic extension host integrated; awaiting typed graph configuration parity and safe task-port descriptor. |
 | [x] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 | cp-25-function-authoring | Done | 715effc | Constrained function authoring is host-wired with typed persistence, explicit source fallback, and protected bound ports. |
 | [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | Blocked | d5d11f1 | V2 server compilation/start, runtime-step source maps, and definition-scoped result lifecycle are required before execution UI can be accepted. |
-| [ ] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Blocked | 87129c2 | Awaiting graph-scoped atomic restore; history invalidation, clipboard closure, and dimension-aware layout remediation returned to owner. |
+| [x] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Done | f9e579b | Advanced history, clipboard, keyboard, selection, and layout operations integrated with atomic restore safety. |
 | [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 |  | Not started |  |  |
 | [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 |  | Not started |  |  |
 | [ ] | [CP-30](./cp_30_accessibility-responsive-performance.md) | 8 | 8 |  | Not started |  |  |
