@@ -75,6 +75,11 @@ export enum StatusOption {
   preview = 'Preview',
 }
 
+export type ClearpipeExistingPipelineRoute = ['/clearpipe', string, 'edit'];
+
+export const clearpipeExistingPipelineEditRoute = (controllerId: unknown): ClearpipeExistingPipelineRoute | null =>
+  typeof controllerId === 'string' && controllerId ? ['/clearpipe', controllerId, 'edit'] : null;
+
 
 @Component({
   selector: 'sm-pipeline-controller-diagram',
@@ -129,6 +134,9 @@ export class PipelineControllerInfoComponent implements OnDestroy {
   public maximizeResults: boolean;
   protected selected$ = this.store.select(selectPipelineSelectedStepWithFallback);
   protected projectId$ = this.store.select(selectRouterProjectId);
+  private readonly controllerRouteParams = this.store.selectSignal(selectRouterParams);
+  protected readonly clearpipeEditRoute = computed(() =>
+    clearpipeExistingPipelineEditRoute(this.controllerRouteParams()?.['controllerId']));
 
   protected dagModel$ = this._dagManager.dagModel$
     .pipe(filter(model => model?.length > 0), tap(model =>
