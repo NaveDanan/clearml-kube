@@ -318,6 +318,16 @@ evidence, and record every blocked environment prerequisite.
   apiserver\tests\verify_clearpipe_schema.py` reported `clearpipe-schema: OK`;
   and `py -3 -m unittest apiserver.tests.test_clearpipe
   apiserver.tests.test_clearpipe_service` ran 29 tests.
+* **Windows Redis-backed rerun:** from `clearml-server\docker`, the repository
+  `compose-win10.yaml` Redis service was launched with an ephemeral
+  `127.0.0.1:6379:6379` compose override using `docker compose -p cp09-schema
+  -f compose-win10.yaml -f compose.cp09-redis.override.yaml up -d --no-deps
+  redis`; `docker exec clearml-redis redis-cli ping` returned `PONG`. With
+  `PYTHONPATH=.` from `clearml-server`, `py -3
+  apiserver\tests\verify_clearpipe_schema.py` returned `clearpipe-schema: OK`
+  and `py -3 -m unittest apiserver.tests.test_clearpipe
+  apiserver.tests.test_clearpipe_service` ran 29 tests successfully. The
+  compose service, override, and generated schema cache were removed afterward.
 * **Passed:** `npm run test-clearpipe` ran 3 focused test-support specs in
   ChromeHeadless. `npm run test-pipelines-regression` ran the existing
   pipeline-card-menu regression in ChromeHeadless (1 test).
