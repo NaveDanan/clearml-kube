@@ -82,5 +82,10 @@ buttons, and one intentional scrolling body.
 
 ```powershell
 Set-Location clearml-web
-npm test -- --include src/app/features/clearpipe/editor/framework/clearpipe-catalog.component.spec.ts --include src/app/features/clearpipe/editor/framework/clearpipe-node-card.component.spec.ts --include src/app/features/clearpipe/editor/framework/clearpipe-extension-registry.spec.ts --include src/app/features/clearpipe/editor/clearpipe-config-panel.component.spec.ts --watch=false
+npm exec ng -- test trains-webapp --watch=false --browsers=ChromeHeadless `
+  --ts-config=src/app/features/clearpipe/editor/framework/tsconfig.cp17-framework.spec.json `
+  --include=src/app/features/clearpipe/editor/framework/clearpipe-catalog.component.spec.ts `
+  --include=src/app/features/clearpipe/editor/framework/clearpipe-node-card.component.spec.ts `
+  --include=src/app/features/clearpipe/editor/framework/clearpipe-extension-registry.spec.ts `
+  --include=src/app/features/clearpipe/editor/clearpipe-config-panel.component.spec.ts
 ```

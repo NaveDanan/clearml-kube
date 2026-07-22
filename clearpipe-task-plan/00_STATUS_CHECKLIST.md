@@ -20,7 +20,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-14](./cp_14_service-adapters-route-integration.md) | 3 | 8 | cp-14-service-adapters | Done | 697f5d5 | Single typed platform adapter and guarded route handoffs integrated. |
 | [x] | [CP-15](./cp_15_workspace-shell-first-use.md) | 3 | 5 | cp-15-workspace-shell | Done | c87f234 | Slot-based three-region workspace shell integrated. |
 | [x] | [CP-16](./cp_16_canvas-foundation.md) | 4 | 8 | cp-16-canvas | Done | fab3dbb | Canonical canvas foundation integrated with zoom-safe drag, minimap mapping, and pointer-accessible keyboard controls. |
-| [ ] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | In progress | copilot/cp-17 | Generic catalog/card/port/inspector worktree active. |
+| [x] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | Done | 99744f9 | Generic catalog, cards, ports, registry, and inspector framework integrated with isolated focused coverage. |
 | [x] | [CP-18](./cp_18_shared-resource-query-layer.md) | 4 | 5 | cp-18-resource-queries | Done | b13bc8b | Authorized shared resource layer integrated with safe canonical inventory, local filtering, and retryable outage handling. |
 | [x] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 | cp-19-persistence-lifecycle | Done | 85f79f4 | Persistence lifecycle integrated with round-trip, CAS, read-only, and non-destructive Save As permission handling. |
 | [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 |  | Not started |  |  |
@@ -42,7 +42,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 - [x] **Discovery gate:** CP-01, CP-02, CP-03, and CP-04 are complete.
 - [x] **Architecture gate:** CP-05 is approved.
 - [x] **Contract gate:** CP-06, CP-07, CP-08, and CP-09 expose stable interfaces.
-- [ ] **Foundation gate:** CP-10 through CP-19 pass focused checks.
+- [x] **Foundation gate:** CP-10 through CP-19 pass focused checks.
 - [ ] **Feature gate:** CP-20 through CP-27 satisfy their supported subsets.
 - [ ] **Integration gate:** CP-28 and CP-29 pass.
 - [ ] **Hardening gate:** CP-30 and CP-31 pass.

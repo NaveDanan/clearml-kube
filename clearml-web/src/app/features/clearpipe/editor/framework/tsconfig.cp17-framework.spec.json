@@ -1,0 +1,13 @@
+{
+  "extends": "../../../../../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../../../../../out-tsc/cp17-framework-spec",
+    "types": ["jasmine", "node"]
+  },
+  "files": ["../../../../../test.ts", "../../../../../polyfills.ts"],
+  "include": [
+    "./*.spec.ts",
+    "../clearpipe-config-panel.component.spec.ts",
+    "../../../../../**/*.d.ts"
+  ]
+}
