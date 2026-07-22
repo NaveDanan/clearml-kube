@@ -1,0 +1,121 @@
+import {inject, Injectable} from '@angular/core';
+import {FunctionNode, GraphPort, JsonValue} from '../../domain/graph-v2.types';
+import {GraphCommandResult, GraphStoreService} from '../../domain/graph-store.service';
+import {FunctionAuthoringDefinition, FunctionAuthoringOutput, FunctionAuthoringPort} from './function-authoring.models';
+import {validateFunctionAuthoringDefinition} from './function-authoring.validation';
+
+const port = (
+  definition: FunctionAuthoringPort | FunctionAuthoringOutput,
+  direction: 'input' | 'output',
+  order: number,
+): GraphPort => ({
+  id: definition.id,
+  kind: 'port',
+  name: definition.name,
+  direction,
+  role: definition.type,
+  required: direction === 'input' && (definition as FunctionAuthoringPort).required,
+  multiplicity: direction === 'output' ? 'many' : 'single',
+  accepted_binding_kinds: definition.type === 'parameter' ? ['parameter'] : [definition.type],
+  order,
+  ...(
+    direction === 'input' && typeof (definition as FunctionAuthoringPort).default !== 'undefined'
+      ? {default: (definition as FunctionAuthoringPort).default as JsonValue}
+      : {}
+  ),
+});
+
+const graphError = (command: string, code: string, message: string): GraphCommandResult => ({
+  ok: false,
+  changed: false,
+  command,
+  errors: [{code, path: 'function-authoring', message}],
+});
+
+/**
+ * Adapts explicit definitions to CP-10 commands only. It never creates edges:
+ * CP-20 remains the sole semantic connection controller.
+ */
+@Injectable({providedIn: 'root'})
+export class ClearpipeFunctionAuthoringService {
+  private readonly graphStore = inject(GraphStoreService);
+
+  create(definition: FunctionAuthoringDefinition): GraphCommandResult & {id?: string} {
+    const validation = validateFunctionAuthoringDefinition(definition);
+    if (!validation.valid) {
+      const first = validation.diagnostics[0];
+      return graphError('create-function-node', first.code, first.message);
+    }
+    return this.graphStore.createFunctionNode({
+      name: definition.name,
+      label: definition.label.trim(),
+      signature: definition.signature,
+      source: definition.source,
+      ports: [
+        ...definition.inputs.map((input, index) => port(input, 'input', index)),
+        ...definition.outputs.map((output, index) => port(output, 'output', index)),
+      ],
+      configuration: {
+        task_type: definition.taskType,
+        cache: definition.cache,
+        ...(definition.queueResourceId ? {queue_resource_id: definition.queueResourceId} : {}),
+      },
+      visual: {position: {x: 0, y: 0}},
+    });
+  }
+
+  /**
+   * CP-10 does not expose source/signature mutation. Existing function source
+   * therefore stays immutable; this updates only fields with graph commands.
+   */
+  updateConfiguration(node: FunctionNode, definition: Pick<FunctionAuthoringDefinition, 'label' | 'taskType' | 'queueResourceId' | 'cache'>): GraphCommandResult {
+    if (node.kind !== 'function') return graphError('update-function-node', 'CPSEM003', 'A function node is required.');
+    const metadata = this.graphStore.updateNodeMetadata(node.id, {label: definition.label.trim()});
+    if (!metadata.ok) return metadata;
+    return this.graphStore.updateNodeConfiguration(node.id, {
+      task_type: definition.taskType,
+      cache: definition.cache,
+      queue_resource_id: definition.queueResourceId,
+    });
+  }
+
+  update(node: FunctionNode, definition: FunctionAuthoringDefinition): GraphCommandResult {
+    const validation = validateFunctionAuthoringDefinition(definition);
+    if (!validation.valid) {
+      const first = validation.diagnostics[0];
+      return graphError('update-function-node', first.code, first.message);
+    }
+    if (node.signature !== definition.signature || node.source !== definition.source) {
+      return graphError(
+        'update-function-node',
+        'CP25CONTRACT002',
+        'CP-10 does not expose source or signature mutation; create a new explicit function definition instead.',
+      );
+    }
+    const desiredPorts = [
+      ...definition.inputs.map((input, index) => port(input, 'input', index)),
+      ...definition.outputs.map((output, index) => port(output, 'output', index)),
+    ];
+    return this.graphStore.transaction('update function authoring definition', () => {
+      this.graphStore.updateNodeMetadata(node.id, {label: definition.label.trim()});
+      this.graphStore.updateNodeConfiguration(node.id, {
+        task_type: definition.taskType,
+        cache: definition.cache,
+        queue_resource_id: definition.queueResourceId,
+      });
+      const knownPortIds = new Set(node.ports.map(port => port.id));
+      desiredPorts.forEach(next => {
+        if (knownPortIds.has(next.id)) {
+          const patch: Omit<GraphPort, 'id'> = {...next};
+          delete (patch as Partial<GraphPort>).id;
+          this.graphStore.updatePort(node.id, next.id, patch);
+        } else {
+          this.graphStore.createPort(node.id, next);
+        }
+      });
+      const desiredPortIds = new Set(desiredPorts.map(port => port.id));
+      node.ports.filter(existing => !desiredPortIds.has(existing.id))
+        .forEach(existing => this.graphStore.removePort(node.id, existing.id));
+    });
+  }
+}

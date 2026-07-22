@@ -1,0 +1,12 @@
+.clearpipe-function-form {
+  display: grid;
+  gap: 12px;
+
+  fieldset {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+  &__notice { color: var(--color-text-secondary, #667); }
+  &__error { color: var(--color-error, #b00020); }
+}
