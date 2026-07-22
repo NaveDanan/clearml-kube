@@ -51,6 +51,7 @@ const opaqueSecretReferenceKeys = new Set([
 ]);
 const secretAssignmentPattern = /\b(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)\b\s*=/im;
 const secretUrlInSourcePattern = /https?:\/\/[^\s/@:]+(?::[^\s/@]+)?@|https?:\/\/[^\s?#]+[^\s]*[?&](?:password|secret|token|api[_-]?key|access[_-]?key)=/i;
+const sensitiveUrlSchemePattern = /^(?:(?:git|hg|svn|bzr)\+)?(?:https?|ssh|git|file):\/\//i;
 
 class CodecError extends Error {
   constructor(readonly code: string, readonly path: string, message: string) {
@@ -84,7 +85,7 @@ const isSecretKey = (key: string): boolean => {
 };
 
 const isSensitiveUrl = (value: string): boolean => {
-  if (!/^https?:\/\//i.test(value)) return false;
+  if (!sensitiveUrlSchemePattern.test(value)) return false;
   try {
     const url = new URL(value);
     let sensitiveQuery = false;

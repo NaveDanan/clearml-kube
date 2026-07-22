@@ -109,15 +109,23 @@ describe('ClearPipe canonical graph v2 codec', () => {
       })],
     }));
 
-    const secretPackage = clone(functionFixture);
-    (secretPackage.nodes[0].configuration as Record<string, unknown>).packages = [
+    [
       'https://packages.example.invalid/private?api_key=must-not-persist',
-    ];
-    const secretResult = decodeGraphV2(secretPackage);
-    expect(secretResult.status).toBe('invalid');
-    if (secretResult.status !== 'invalid') throw new Error('secret package must be invalid');
-    expect(secretResult.errors[0].code).toBe('secret_not_allowed');
-    expect(JSON.stringify(secretResult.errors)).not.toContain('must-not-persist');
+      'git+https://user:pass@example.invalid/repository.git',
+      'git+https://example.invalid/repository.git?%61pi_key=must-not-persist',
+    ].forEach((packageUrl) => {
+      const secretPackage = clone(functionFixture);
+      (secretPackage.nodes[0].configuration as Record<string, unknown>).packages = [packageUrl];
+      const secretResult = decodeGraphV2(secretPackage);
+      expect(secretResult.status).toBe('invalid');
+      if (secretResult.status !== 'invalid') throw new Error('secret package must be invalid');
+      expect(secretResult.errors[0]).toEqual(jasmine.objectContaining({
+        code: 'secret_not_allowed',
+        path: 'graph.nodes[0].configuration.packages[0]',
+      }));
+      expect(JSON.stringify(secretResult.errors)).not.toContain('must-not-persist');
+      expect(JSON.stringify(secretResult.errors)).not.toContain('user:pass');
+    });
 
     const unknown = clone(functionFixture);
     (unknown.nodes[0].configuration as Record<string, unknown>).unsupported_option = true;
