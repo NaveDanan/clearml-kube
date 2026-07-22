@@ -27,12 +27,12 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 | cp-21-dataset-browser | Done | fb42e53 | CP-18-backed dataset browser and safe artifact-binding handoff integrated. |
 | [x] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 | cp-22-import-export | Done | 99377c9 | Versioned safe transfer and unsaved-change guards integrated; unsupported generated source fails closed. |
 | [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
-| [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | In progress | copilot/cp-24-final | CP-14 task eligibility/retry/secret/pagination contract integrated; rebasing the local authoring and stale-state follow-up. |
+| [x] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | Done | cc7f5c2 | Task-backed authoring consumes authorized paged inventory, protects bound ports, validates safe overrides, and reconciles descriptor changes atomically. |
 | [x] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 | cp-25-function-authoring | Done | 715effc | Constrained function authoring is host-wired with typed persistence, explicit source fallback, and protected bound ports. |
-| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | In progress | copilot/cp-26-final | CP-14 recoverable idempotent submission integrated; rebasing route, polling, and reconciliation follow-up. |
+| [x] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | Done | 2755cb0 | Server-backed execution uses scoped lifecycle, idempotent reconciliation, bounded polling, and authenticated runtime snapshots. |
 | [x] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Done | f9e579b | Advanced history, clipboard, keyboard, selection, and layout operations integrated with atomic restore safety. |
-| [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 |  | Not started |  |  |
-| [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 |  | Not started |  |  |
+| [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 | cp-28-task-vertical-slice | In progress | copilot/cp-28 | Converging the complete task-backed authoring, save, preflight, run, and results journey. |
+| [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 | cp-29-existing-pipeline-editing | In progress | copilot/cp-29 | Converging safe existing-pipeline visual editing and unsupported fallback behavior. |
 | [ ] | [CP-30](./cp_30_accessibility-responsive-performance.md) | 8 | 8 |  | Not started |  |  |
 | [ ] | [CP-31](./cp_31_automated-coverage-regression.md) | 8 | 8 |  | Not started |  |  |
 | [ ] | [CP-32](./cp_32_final-integration-quality-report.md) | 9 | 5 |  | Not started |  |  |
@@ -43,7 +43,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 - [x] **Architecture gate:** CP-05 is approved.
 - [x] **Contract gate:** CP-06, CP-07, CP-08, and CP-09 expose stable interfaces.
 - [x] **Foundation gate:** CP-10 through CP-19 pass focused checks.
-- [ ] **Feature gate:** CP-20 through CP-27 satisfy their supported subsets.
+- [x] **Feature gate:** CP-20 through CP-27 satisfy their supported subsets.
 - [ ] **Integration gate:** CP-28 and CP-29 pass.
 - [ ] **Hardening gate:** CP-30 and CP-31 pass.
 - [ ] **Release gate:** CP-32 passes all required checks and publishes the final report.
