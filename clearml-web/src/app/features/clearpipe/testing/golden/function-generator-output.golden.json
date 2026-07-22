@@ -1,0 +1,3 @@
+{
+  "source": "from clearml.automation.controller import PipelineController\npipeline = PipelineController(name=\"Function \\\"golden\\\" pipeline\")\npipeline.add_parameter(name=\"prefix\", default=\"a\\\\b\\\"c\")\npipeline.add_function_step(name=\"split_data\", signature=\"def split_data(value, prefix=\\\"\\\") -> tuple[int, int]\", source=\"def split_data(value, prefix=\\\"\\\"):\\n    return value, value\\n\", execution_queue=\"cpu-a\", cache=True, packages=[\"pandas==2.2.3\"], retry_on_failure=3, outputs=[\"left\", \"right\"])\npipeline.bind(kind=\"parameter\", source=\"parameter:prefix\", target=\"split_data.prefix\")\npipeline.publish_output(name=\"left_result\", source=\"split_data.left\")\n"
+}
