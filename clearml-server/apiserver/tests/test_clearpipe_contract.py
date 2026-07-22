@@ -1,7 +1,10 @@
 import json
 import unittest
+from contextlib import nullcontext
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from apiserver.apimodels.clearpipe import (
     ArchiveResponse,
@@ -16,6 +19,8 @@ from apiserver.apimodels.clearpipe import (
     UpdateResponse,
     ValidationResponse,
 )
+from apiserver.apierrors import errors
+from apiserver.bll.clearpipe.graph_v2 import canonical_graph_dict, read_graph_v2
 from apiserver.schema import SchemaReader
 from apiserver.service_repo import ServiceRepo
 from apiserver.services import clearpipe
@@ -23,6 +28,16 @@ from apiserver.utilities.partial_version import PartialVersion
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "clearpipe_contract"
+CP06_FIXTURES = (
+    Path(__file__).resolve().parents[3]
+    / "clearml-web"
+    / "src"
+    / "app"
+    / "features"
+    / "clearpipe"
+    / "domain"
+    / "fixtures"
+)
 
 
 def fixture(name):
@@ -30,7 +45,17 @@ def fixture(name):
         return json.load(stream)
 
 
+def cp06_fixture(name):
+    with (CP06_FIXTURES / name).open(encoding="utf-8") as stream:
+        return json.load(stream)
+
+
 def stored_definition(company="company-a", origin=None, schema_version=2):
+    graph = (
+        cp06_fixture("function-graph.v2.json")
+        if schema_version == 2
+        else {"schema_version": schema_version, "revision": 7, "nodes": [], "edges": []}
+    )
     return SimpleNamespace(
         id="definition-1",
         company=company,
@@ -46,9 +71,7 @@ def stored_definition(company="company-a", origin=None, schema_version=2):
         runtime={"clearpipe_revision": 7},
         configuration={
             "ClearPipe": SimpleNamespace(
-                value=json.dumps(
-                    {"schema_version": schema_version, "revision": 7, "nodes": [], "edges": []}
-                )
+                value=json.dumps(graph)
             )
         },
     )
@@ -151,6 +174,14 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
         self.assertFalse(definition["capabilities"]["archive"])
         self.assertFalse(definition["capabilities"]["delete"])
 
+    def test_v2_definition_reports_compilation_and_execution_unavailable(self):
+        definition = clearpipe._definition(
+            stored_definition(), "company-a", project_name="Pipelines"
+        )
+        self.assertFalse(definition["capabilities"]["compilation"])
+        self.assertFalse(definition["capabilities"]["execution"])
+        self.assertFalse(definition["capabilities"]["run"])
+
     def test_legacy_contract_is_explicitly_classified_for_read_only_adapter_policy(self):
         legacy = clearpipe._definition(
             stored_definition(schema_version=1), "company-a", project_name="Pipelines"
@@ -166,6 +197,135 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
             stored_definition(schema_version=None), "company-a", project_name="Pipelines"
         )
         self.assertEqual(unsupported["representation"], "unsupported_clearpipe_graph")
+
+
+class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
+    def test_create_persists_cp06_v2_fixture_without_legacy_migration(self):
+        graph = cp06_fixture("function-graph.v2.json")
+        parsed = read_graph_v2(graph)
+        self.assertTrue(parsed.is_supported, parsed)
+        expected = canonical_graph_dict(parsed.graph)
+        created = []
+
+        class StoredTask:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+                created.append(self)
+
+            def save(self):
+                pass
+
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-1"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            name="CP-06 pipeline",
+            description="",
+            graph=deepcopy(graph),
+            tags=[],
+            public=False,
+        )
+        with patch.object(clearpipe, "Task", StoredTask), patch.object(
+            clearpipe, "distributed_lock", return_value=nullcontext()
+        ), patch.object(clearpipe, "_find_project", return_value="project-1"), patch.object(
+            clearpipe, "_assert_name_available"
+        ), patch.object(clearpipe.task_bll, "validate"), patch.object(
+            clearpipe, "update_project_time"
+        ), patch.object(
+            clearpipe, "_definition", return_value={"id": "definition-1"}
+        ):
+            clearpipe.create(call, "company-a", request)
+
+        self.assertEqual(len(created), 1)
+        configuration = created[0].configuration
+        persisted = json.loads(configuration["ClearPipe"].value)
+        self.assertEqual(persisted, expected)
+        self.assertEqual(persisted["schema_version"], 2)
+        self.assertIn("bindings", persisted)
+        self.assertNotIn("edges", persisted)
+        self.assertNotIn("Pipeline", configuration)
+        self.assertEqual(created[0].runtime["_pipeline_hash"], "clearpipe-v2-uncompiled")
+
+    def test_validate_v2_reports_typed_compilation_unavailable_diagnostic(self):
+        graph = cp06_fixture("function-graph.v2.json")
+        call = SimpleNamespace(data={"graph": graph}, result=SimpleNamespace(data=None))
+        request = SimpleNamespace(task=None, graph=graph)
+
+        clearpipe.validate(call, "company-a", request)
+
+        self.assertTrue(call.result.data["valid"])
+        self.assertEqual(
+            call.result.data["issues"][0]["code"],
+            clearpipe.V2_COMPILATION_UNAVAILABLE,
+        )
+        self.assertNotIn("pipeline", call.result.data)
+
+    def test_update_persists_v2_without_invoking_legacy_compilation(self):
+        graph = cp06_fixture("function-graph.v2.json")
+        stored = stored_definition()
+        call = SimpleNamespace(
+            data={"graph": graph},
+            identity=SimpleNamespace(user="user-1"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task=stored.id,
+            revision=7,
+            name=None,
+            description=None,
+            graph=deepcopy(graph),
+            tags=None,
+            public=None,
+        )
+        update = Mock(update_one=Mock(return_value=1))
+        task_model = Mock()
+        task_model.objects.return_value = update
+        with patch.object(clearpipe, "_get_task", return_value=stored), patch.object(
+            clearpipe, "_revision", return_value=7
+        ), patch.object(clearpipe, "Task", task_model), patch.object(
+            clearpipe, "update_project_time"
+        ), patch.object(
+            clearpipe, "_definition", return_value={"id": stored.id}
+        ):
+            clearpipe.update(call, "company-a", request)
+
+        updates = update.update_one.call_args.kwargs
+        persisted = json.loads(updates["set__configuration"]["ClearPipe"].value)
+        self.assertEqual(persisted, canonical_graph_dict(read_graph_v2(graph).graph))
+        self.assertNotIn("Pipeline", updates["set__configuration"])
+        self.assertEqual(
+            updates["set__script__diff"], clearpipe.V2_UNAVAILABLE_CONTROLLER_SCRIPT
+        )
+        self.assertEqual(updates["set__runtime"]["_pipeline_hash"], "clearpipe-v2-uncompiled")
+
+
+class ClearPipeStartParameterSafetyTests(unittest.TestCase):
+    def test_secret_parameter_keys_and_values_are_rejected_before_clone(self):
+        definition = SimpleNamespace(id="definition", system_tags=[])
+        for parameters, secret in (
+            ({"api_key": "not-a-secret"}, "not-a-secret"),
+            ({"label": "must-not-persist-secret"}, "must-not-persist-secret"),
+        ):
+            with self.subTest(parameters=list(parameters)):
+                call = SimpleNamespace(
+                    identity=SimpleNamespace(user="user-1"),
+                    result=SimpleNamespace(data=None),
+                )
+                request = SimpleNamespace(
+                    task="definition",
+                    revision=None,
+                    parameters=parameters,
+                )
+                clone = Mock()
+                with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+                    clearpipe, "_revision", return_value=1
+                ), patch.object(clearpipe.task_bll, "clone_task", clone):
+                    with self.assertRaises(errors.bad_request.ValidationError) as error:
+                        clearpipe.start(call, "company-a", request)
+                clone.assert_not_called()
+                self.assertNotIn(secret, str(error.exception))
+                self.assertIsNone(call.result.data)
 
 
 if __name__ == "__main__":

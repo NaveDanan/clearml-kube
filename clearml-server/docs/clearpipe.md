@@ -26,6 +26,19 @@ secret rejection remain authoritative. Unsupported or legacy graph
 representations must be shown read-only until their CP-06/CP-29 migration
 contract is available.
 
+## Graph v2 execution boundary
+
+The service validates and stores CP-06 graph v2 documents canonically in
+`configuration.ClearPipe`; it never routes their `kind`/`bindings` structure
+through the legacy `type`/`edges` compiler. The CP-12 compiler is not yet
+registered with the definition lifecycle or the CP-13 function lowerer, so v2
+definitions report `capabilities.compilation`,
+`capabilities.execution`, and `capabilities.run` as `false`. `validate`
+returns the typed `compilation_unavailable` warning, and `start` rejects with
+the same code before cloning a task. Controller parameter overrides use the
+same secret policy as graph validation and reject secret-shaped keys or values
+without returning their values.
+
 ## Packaging
 
 The standard, local, and air-gapped server Dockerfiles copy the complete

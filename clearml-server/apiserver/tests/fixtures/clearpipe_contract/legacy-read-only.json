@@ -14,6 +14,8 @@
         "save_as": true,
         "version": false,
         "run": true,
+        "compilation": true,
+        "execution": true,
         "import": true,
         "export": true,
         "source": false,
