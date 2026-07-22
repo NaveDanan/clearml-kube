@@ -6,57 +6,61 @@
                                     (resourceSelected)="selectTask($event)"></sm-clearpipe-resource-selector>
   </section>
 
-  @if (descriptor().status === 'loading') {
-    <p role="status">Loading the selected task’s safe parameter and artifact descriptor…</p>
-  } @else if (descriptor().status === 'unavailable') {
-    <p class="clearpipe-task-form__error" role="alert">{{ descriptor().message }}</p>
-    @if (descriptor().retryable) { <button mat-stroked-button type="button" (click)="retryDescriptor()">Retry descriptor</button> }
-  } @else if (descriptor().status === 'stale') {
-    <p role="alert">The selected task changed since the inventory was loaded. The refreshed descriptor is shown below.</p>
-    <button mat-stroked-button type="button" (click)="confirmStaleDescriptor()">Use refreshed descriptor</button>
+  @if (descriptor(); as descriptorState) {
+    @if (descriptorState.status === 'loading') {
+      <p role="status">Loading the selected task’s safe parameter and artifact descriptor…</p>
+    } @else if (descriptorState.status === 'unavailable') {
+      <p class="clearpipe-task-form__error" role="alert">{{ descriptorState.message }}</p>
+      @if (descriptorState.retryable) { <button mat-stroked-button type="button" (click)="retryDescriptor()">Retry descriptor</button> }
+    } @else if (descriptorState.status === 'stale') {
+      <p role="alert">The selected task changed since the inventory was loaded. The refreshed descriptor is shown below.</p>
+      <button mat-stroked-button type="button" (click)="confirmStaleDescriptor()">Use refreshed descriptor</button>
+    }
   }
 
-  @if (descriptor().status === 'available' || descriptor().status === 'stale') {
-    <p class="clearpipe-task-form__context">
-      {{ descriptor().descriptor.context.project_name ?? 'No project name supplied' }} ·
-      {{ descriptor().descriptor.context.name }} · {{ descriptor().descriptor.identity.task_id }} ·
-      {{ descriptor().descriptor.context.type }} · {{ descriptor().descriptor.context.status }}
-      @if (descriptor().descriptor.context.updated_at) { · updated {{ descriptor().descriptor.context.updated_at }} }
-    </p>
-    <mat-form-field appearance="outline"><mat-label>Step name</mat-label><input matInput formControlName="name" required></mat-form-field>
-    <mat-form-field appearance="outline"><mat-label>Card label</mat-label><input matInput formControlName="label" required></mat-form-field>
-    <mat-checkbox formControlName="cloneBaseTask">Clone base task before running</mat-checkbox>
-    <mat-checkbox formControlName="cache">Cache executed step</mat-checkbox>
-    <mat-form-field appearance="outline"><mat-label>Retry on failure</mat-label><input matInput formControlName="retryOnFailure" inputmode="numeric"></mat-form-field>
-    <section>
-      <h3>Queue override</h3>
-      <sm-clearpipe-resource-selector [controller]="queueController" [selectedId]="selectedQueue()?.id ?? null"
-                                      (resourceSelected)="selectQueue($event)"></sm-clearpipe-resource-selector>
-    </section>
-    <section formArrayName="parameters">
-      <h3>Task parameter overrides</h3>
-      <p>Defaults are JSON values. Pipeline parameters and artifact sources can be bound after the step is created.</p>
-      @for (parameter of createForm.controls.parameters.controls; track parameter.controls.portId.value; let index = $index) {
-        <mat-form-field appearance="outline" [formGroupName]="index">
-          <mat-label>{{ parameter.controls.name.value }}</mat-label>
-          <input matInput formControlName="defaultJson" placeholder="JSON override">
-        </mat-form-field>
-      } @empty {
-        <p>No safe task parameter metadata was supplied by this task.</p>
-      }
-    </section>
-    <section>
-      <h3>Artifact outputs</h3>
-      @for (artifact of descriptor().descriptor.artifacts; track artifact.id) {
-        @if (artifact.direction === 'output') {
-          <p>{{ artifact.name }} · {{ artifact.id }}@if (artifact.type) { · {{ artifact.type }} }</p>
-        } @else if (artifact.direction === 'input') {
-          <p>{{ artifact.name }} is an input artifact. ClearPipe does not infer an override port; use a declared task parameter instead.</p>
+  @if (descriptor(); as descriptorState) {
+    @if (descriptorState.status === 'available' || descriptorState.status === 'stale') {
+      <p class="clearpipe-task-form__context">
+        {{ descriptorState.descriptor.context.project_name ?? 'No project name supplied' }} ·
+        {{ descriptorState.descriptor.context.name }} · {{ descriptorState.descriptor.identity.task_id }} ·
+        {{ descriptorState.descriptor.context.type }} · {{ descriptorState.descriptor.context.status }}
+        @if (descriptorState.descriptor.context.updated_at) { · updated {{ descriptorState.descriptor.context.updated_at }} }
+      </p>
+      <mat-form-field appearance="outline"><mat-label>Step name</mat-label><input matInput formControlName="name" required></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Card label</mat-label><input matInput formControlName="label" required></mat-form-field>
+      <mat-checkbox formControlName="cloneBaseTask">Clone base task before running</mat-checkbox>
+      <mat-checkbox formControlName="cache">Cache executed step</mat-checkbox>
+      <mat-form-field appearance="outline"><mat-label>Retry on failure</mat-label><input matInput formControlName="retryOnFailure" inputmode="numeric"></mat-form-field>
+      <section>
+        <h3>Queue override</h3>
+        <sm-clearpipe-resource-selector [controller]="queueController" [selectedId]="selectedQueue()?.id ?? null"
+                                        (resourceSelected)="selectQueue($event)"></sm-clearpipe-resource-selector>
+      </section>
+      <section formArrayName="parameters">
+        <h3>Task parameter overrides</h3>
+        <p>Defaults are JSON values. Pipeline parameters and artifact sources can be bound after the step is created.</p>
+        @for (parameter of createForm.controls.parameters.controls; track parameter.controls.portId.value; let index = $index) {
+          <mat-form-field appearance="outline" [formGroupName]="index">
+            <mat-label>{{ parameter.controls.name.value }}</mat-label>
+            <input matInput formControlName="defaultJson" placeholder="JSON override">
+          </mat-form-field>
+        } @empty {
+          <p>No safe task parameter metadata was supplied by this task.</p>
         }
-      } @empty {
-        <p>No artifact metadata was supplied by this task.</p>
-      }
-    </section>
+      </section>
+      <section>
+        <h3>Artifact outputs</h3>
+        @for (artifact of descriptorState.descriptor.artifacts; track artifact.id) {
+          @if (artifact.direction === 'output') {
+            <p>{{ artifact.name }} · {{ artifact.id }}@if (artifact.type) { · {{ artifact.type }} }</p>
+          } @else if (artifact.direction === 'input') {
+            <p>{{ artifact.name }} is an input artifact. ClearPipe does not infer an override port; use a declared task parameter instead.</p>
+          }
+        } @empty {
+          <p>No artifact metadata was supplied by this task.</p>
+        }
+      </section>
+    }
   }
   @if (error(); as message) { <p class="clearpipe-task-form__error" role="alert">{{ message }}</p> }
   <button mat-flat-button type="submit" [disabled]="descriptor().status !== 'available' && (descriptor().status !== 'stale' || !staleConfirmed())">Create task step</button>
