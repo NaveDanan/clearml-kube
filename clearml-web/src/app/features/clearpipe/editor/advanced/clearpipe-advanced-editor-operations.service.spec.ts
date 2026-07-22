@@ -67,6 +67,22 @@ describe('ClearpipeAdvancedEditorOperationsService', () => {
     expect(redone?.kind === 'function' && redone.configuration.task_type).toBe('training');
   });
 
+  it('clears advanced selection after atomic undo and redo restores', () => {
+    operations.perform('add-node', () => store.addNode(node('first')));
+    operations.perform('add-node', () => store.addNode(node('second')));
+    operations.select('second');
+
+    operations.undo();
+    expect(store.node('second')).toBeNull();
+    expect(operations.selectedNodeIds()).toEqual([]);
+    expect(store.selectedNodeId()).toBeNull();
+
+    operations.redo();
+    expect(store.node('second')).not.toBeNull();
+    expect(operations.selectedNodeIds()).toEqual([]);
+    expect(store.selectedNodeId()).toBeNull();
+  });
+
   it('duplicates with stable IDs and keeps only internal bindings', () => {
     store.addNode(node('source', 0, [port('out', 'output')]));
     store.addNode(node('target', 300, [port('in', 'input')]));
@@ -79,6 +95,17 @@ describe('ClearpipeAdvancedEditorOperationsService', () => {
     expect(store.bindings()).toHaveSize(1);
     expect(store.bindings()[0].source.kind).toBe('port');
     expect(store.bindings()[0].target.kind).toBe('port');
+  });
+
+  it('does not duplicate stale clipboard content when the selection is empty', () => {
+    store.addNode(node('source'));
+    operations.select('source');
+    expect(operations.copy()).not.toBeNull();
+    operations.clearSelection();
+
+    expect(operations.duplicate()).toEqual({ok: true, changed: false, command: 'duplicate', errors: []});
+    expect(store.nodes()).toHaveSize(1);
+    expect(operations.clipboard()).toBeNull();
   });
 
   it('drops parameter and resource edges from clipboard closure', () => {

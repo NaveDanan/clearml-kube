@@ -126,7 +126,10 @@ export class ClearpipeAdvancedEditorOperationsService {
     this.synchronizeGraphState();
     const selected = new Set(this.selectionState());
     const nodes = this.store.nodes().filter(node => selected.has(node.id)).map(scrubNode);
-    if (!nodes.length) return null;
+    if (!nodes.length) {
+      this.clipboardState.set(null);
+      return null;
+    }
     const bindings = this.store.bindings().filter(binding => {
       return isInternalBinding(binding, selected);
     }).map(clone);
@@ -136,7 +139,10 @@ export class ClearpipeAdvancedEditorOperationsService {
   }
 
   duplicate(): GraphCommandResult {
-    return this.paste(this.copy() ?? undefined, {x: 32, y: 32}, 'duplicate');
+    const payload = this.copy();
+    return payload
+      ? this.paste(payload, {x: 32, y: 32}, 'duplicate')
+      : {ok: true, changed: false, command: 'duplicate', errors: []};
   }
 
   paste(payload = this.clipboardState(), offset: Point = {x: 32, y: 32}, label = 'paste'): GraphCommandResult {
@@ -226,7 +232,10 @@ export class ClearpipeAdvancedEditorOperationsService {
 
   private restore(snapshot: GraphV2): GraphCommandResult {
     const restored = this.store.restoreGraphSnapshot(clone(snapshot));
-    this.observedGraph = this.store.graph();
+    if (restored.ok) {
+      this.observedGraph = this.store.graph();
+      this.setSelection([], null);
+    }
     return restored;
   }
 

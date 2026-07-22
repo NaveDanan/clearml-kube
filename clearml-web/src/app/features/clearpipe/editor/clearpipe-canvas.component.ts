@@ -301,7 +301,7 @@ export class ClearpipeCanvasComponent {
     event.stopPropagation();
     if (!this.commands.bindings().some((binding) => binding.id === bindingId)) return;
     this.selectedBindingId.set(bindingId);
-    this.commands.selectNode(null);
+    this.advanced.clearSelection();
     this.edgeFeedback.set(`Connection ${bindingId} selected. Use Delete to remove it or reconnect it.`);
   }
 

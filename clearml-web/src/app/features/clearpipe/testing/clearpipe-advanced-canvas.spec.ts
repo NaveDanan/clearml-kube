@@ -69,11 +69,18 @@ describe('CP-27 canvas keyboard workflow', () => {
     fixture.componentInstance.placeNode(sourcePlacement, {clientX: 20, clientY: 20});
     fixture.componentInstance.placeNode(targetPlacement, {clientX: 260, clientY: 20});
     const [source, target] = store.nodes();
-    const selectPort = fixture.componentInstance as unknown as {selectPortForEdge(nodeId: string, portId: string): void};
+    const canvas = fixture.componentInstance as unknown as {
+      selectPortForEdge(nodeId: string, portId: string): void;
+      selectBinding(event: Event, bindingId: string): void;
+    };
 
-    selectPort.selectPortForEdge(source.id, 'out');
-    selectPort.selectPortForEdge(target.id, 'in');
+    canvas.selectPortForEdge(source.id, 'out');
+    canvas.selectPortForEdge(target.id, 'in');
     expect(store.bindings()).toHaveSize(1);
+    advanced.select(source.id);
+    canvas.selectBinding({stopPropagation: () => undefined} as unknown as Event, store.bindings()[0].id);
+    expect(advanced.selectedNodeIds()).toEqual([]);
+    expect(store.selectedNodeId()).toBeNull();
 
     advanced.undo();
     expect(store.bindings()).toHaveSize(0);
