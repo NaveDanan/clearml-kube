@@ -81,7 +81,7 @@ export const clearpipeToolbarActions = (
   },
   {
     id: 'run',
-    label: 'Run',
+    label: runAction.label ?? 'Run',
     disabled: runAction.disabled,
     disabledReason: runAction.disabledReason,
   },

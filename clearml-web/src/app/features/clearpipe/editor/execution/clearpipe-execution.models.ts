@@ -63,6 +63,7 @@ export interface ClearpipeExecutionPreflight {
 }
 
 export interface ClearpipeExecutionAction {
+  readonly label?: string;
   readonly disabled: boolean;
   readonly disabledReason: string | null;
 }

@@ -329,6 +329,7 @@ export class ClearpipeEditorComponent {
       this.execution.setRouteContext(taskId, true);
       this.announce(this.readOnly() ? 'ClearPipe definition loaded read-only' : 'ClearPipe definition loaded');
       await this.execution.refresh();
+      return;
     } else if (status === 'read-only') {
       this.routeSurface.set('unsupported');
       this.routeError.set(this.lifecycle.problem()?.message ?? 'This definition is read-only.');

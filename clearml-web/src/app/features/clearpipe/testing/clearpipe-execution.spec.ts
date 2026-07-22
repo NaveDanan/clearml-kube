@@ -231,24 +231,53 @@ describe('ClearPipe execution integration', () => {
     expect(service.run().reason).toBe('request_failed');
   });
 
-  it('retains an idempotency key and blocks re-submission while a transport outcome is uncertain', async () => {
+  it('reconciles an uncertain submission with the same opaque idempotency key', async () => {
     const {adapter, service} = setup();
     await service.refresh();
-    adapter.submit.and.returnValue(of({
-      status: 'failed',
-      problem: {message: 'Connection was interrupted.', retryable: true},
-    }));
+    adapter.submit.and.returnValues(
+      of({
+        status: 'failed',
+        problem: {message: 'Connection was interrupted.', retryable: true},
+      }),
+      of({status: 'ready', data: {run_task_id: 'run-1', enqueued: true}}),
+    );
 
     await service.submit();
+    const idempotencyKey = adapter.submit.calls.mostRecent().args[0].idempotency_key;
+    expect(idempotencyKey).toEqual(jasmine.any(String));
+    expect(idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(service.toolbarAction()).toEqual(jasmine.objectContaining({
+      label: 'Reconcile run',
+      disabled: false,
+    }));
     await service.submit();
 
-    expect(service.run()).toEqual(jasmine.objectContaining({
-      state: 'reconciling',
-      reason: 'request_failed',
-      idempotencyKey: jasmine.any(String),
+    expect(adapter.submit).toHaveBeenCalledTimes(2);
+    expect(adapter.submit.calls.argsFor(1)[0]).toEqual(jasmine.objectContaining({
+      task: 'definition-1',
+      revision: 2,
+      idempotency_key: idempotencyKey,
     }));
-    expect(service.toolbarAction().disabled).toBeTrue();
+    expect(service.run()).toEqual({state: 'submitted', runTaskId: 'run-1', message: null});
+  });
+
+  it('discards a submission response after its canonical route and revision change', async () => {
+    const {adapter, lifecycle, service} = setup();
+    const submission = new Subject<ClearpipeAdapterOutcome<ClearpipeStartResponse>>();
+    adapter.submit.and.returnValue(submission);
+    await service.refresh();
+
+    const pendingSubmission = service.submit();
     expect(adapter.submit).toHaveBeenCalledTimes(1);
+    lifecycle.identity.set({taskId: 'definition-2', revision: 3, name: 'Replacement'});
+    service.setRouteContext('definition-2', true);
+    submission.next({status: 'ready', data: {run_task_id: 'run-1', enqueued: true}});
+    submission.complete();
+    await pendingSubmission;
+
+    expect(service.run()).toEqual({state: 'idle', runTaskId: null, message: null});
+    expect(service.tracking()).toEqual(jasmine.objectContaining({state: 'idle'}));
+    expect(adapter.executionSnapshot).not.toHaveBeenCalled();
   });
 
   it('does not preflight or submit an old identity after the requested route fails to load', async () => {
@@ -402,6 +431,52 @@ describe('ClearPipe execution integration', () => {
     flushMicrotasks();
     tick(0);
     expect(unavailable.service.tracking().state).toBe('unavailable');
+  }));
+
+  it('stops polling after bounded consecutive snapshot failures', fakeAsync(() => {
+    const {adapter, service} = setup();
+    adapter.executionSnapshot.and.returnValue(of({
+      status: 'failed',
+      problem: {message: 'Runtime status request failed.', retryable: true},
+    }));
+    void service.refresh();
+    flushMicrotasks();
+    void service.submit();
+    flushMicrotasks();
+
+    tick(0);
+    expect(adapter.executionSnapshot).toHaveBeenCalledTimes(1);
+    expect(service.tracking().message).toContain('1/3');
+    tick(5000);
+    expect(adapter.executionSnapshot).toHaveBeenCalledTimes(2);
+    tick(5000);
+    expect(adapter.executionSnapshot).toHaveBeenCalledTimes(3);
+    expect(service.tracking()).toEqual(jasmine.objectContaining({
+      state: 'failed',
+      message: jasmine.stringContaining('polling stopped after 3 consecutive failures'),
+    }));
+    tick(15000);
+    expect(adapter.executionSnapshot).toHaveBeenCalledTimes(3);
+  }));
+
+  it('stops active polling when the current route is replaced', fakeAsync(() => {
+    const {adapter, service} = setup();
+    adapter.executionSnapshot.and.returnValue(of({
+      status: 'ready',
+      data: {status: 'available', snapshot: snapshot()},
+    }));
+    void service.refresh();
+    flushMicrotasks();
+    void service.submit();
+    flushMicrotasks();
+    tick(0);
+    expect(adapter.executionSnapshot).toHaveBeenCalledTimes(1);
+
+    service.setRouteContext('definition-2', false);
+    tick(15000);
+
+    expect(service.tracking()).toEqual(jasmine.objectContaining({state: 'idle'}));
+    expect(adapter.executionSnapshot).toHaveBeenCalledTimes(1);
   }));
 
   it('cancels preflight and polling on identity reset and service teardown', async () => {

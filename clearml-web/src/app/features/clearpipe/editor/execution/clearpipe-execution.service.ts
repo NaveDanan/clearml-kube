@@ -33,6 +33,7 @@ import {ClearpipeStatusPresentation} from '../framework/clearpipe-ui.types';
 
 const POLL_INTERVAL_MS = 5000;
 const SNAPSHOT_PAGE_SIZE = 100;
+const MAX_CONSECUTIVE_SNAPSHOT_FAILURES = 3;
 const terminalControllerStatuses = new Set(['completed', 'failed', 'stopped', 'aborted', 'closed', 'published']);
 
 const idlePreflight = (): ClearpipeExecutionPreflight => ({
@@ -66,8 +67,11 @@ export class ClearpipeExecutionService {
   private readonly preflightCancelled = new Subject<void>();
   private pollSubscription: Subscription | null = null;
   private activeScopeKey: string | null = null;
+  private scopeVersion = 0;
   private preflightRequest = 0;
+  private consecutiveSnapshotFailures = 0;
   private snapshotRanges = new Map<number, number>();
+  private snapshotHasUnmatchedRecords = false;
   private nodeRecords = new Map<string, ClearpipeNodeExecution>();
   private readonly routeContext = signal<{taskId: string | null; ready: boolean}>({taskId: null, ready: false});
 
@@ -81,21 +85,33 @@ export class ClearpipeExecutionService {
     tracking: this.tracking(),
     nodes: this.nodes(),
   }));
-  readonly canRun = computed(() => {
+  private readonly preflightReady = computed(() => {
     const preflight = this.preflight();
     return preflight.state === 'ready'
       && preflight.scopeKey === this.scopeKey()
-      && !this.localReasons().length
-      && !['submitting', 'reconciling'].includes(this.run().state);
+      && !this.localReasons().length;
   });
-  readonly toolbarAction = computed<ClearpipeExecutionAction>(() => ({
-    disabled: !this.canRun(),
-    disabledReason: this.canRun()
-      ? null
-      : this.localReasons()[0]?.message
-        ?? this.preflight().reasons[0]?.message
-        ?? 'Run is unavailable.',
-  }));
+  readonly canRun = computed(() => this.preflightReady() && !['submitting', 'reconciling'].includes(this.run().state));
+  private readonly canReconcile = computed(() =>
+    this.preflightReady()
+    && this.run().state === 'reconciling'
+    && Boolean(this.run().idempotencyKey));
+  readonly toolbarAction = computed<ClearpipeExecutionAction>(() => {
+    const run = this.run();
+    const canReconcile = this.canReconcile();
+    const enabled = this.canRun() || canReconcile;
+    return {
+      label: canReconcile ? 'Reconcile run' : 'Run',
+      disabled: !enabled,
+      disabledReason: enabled
+        ? null
+        : run.state === 'submitting'
+          ? 'ClearPipe submission is in progress.'
+          : this.localReasons()[0]?.message
+            ?? this.preflight().reasons[0]?.message
+            ?? 'Run is unavailable.',
+    };
+  });
 
   constructor() {
     this.resetForScope(this.scopeKey());
@@ -104,6 +120,29 @@ export class ClearpipeExecutionService {
       if (scopeKey !== this.activeScopeKey) this.resetForScope(scopeKey);
     });
     this.destroyRef.onDestroy(() => this.cancelScope());
+  }
+
+  private setReconciliationRequired(idempotencyKey: string, message?: string): void {
+    this.run.set({
+      state: 'reconciling',
+      runTaskId: null,
+      message: message ?? 'The submission outcome is uncertain. Reconcile this run before starting another one.',
+      reason: 'request_failed',
+      idempotencyKey,
+    });
+  }
+
+  private recordSnapshotFailure(message: string): void {
+    const failures = ++this.consecutiveSnapshotFailures;
+    const stopped = failures >= MAX_CONSECUTIVE_SNAPSHOT_FAILURES;
+    this.tracking.set({
+      ...this.tracking(),
+      state: 'failed',
+      message: stopped
+        ? `${message} Live status polling stopped after ${MAX_CONSECUTIVE_SNAPSHOT_FAILURES} consecutive failures.`
+        : `${message} Retrying live status (${failures}/${MAX_CONSECUTIVE_SNAPSHOT_FAILURES}).`,
+    });
+    if (stopped) this.stopPolling();
   }
 
   reset(): void {
@@ -180,40 +219,40 @@ export class ClearpipeExecutionService {
   }
 
   async submit(): Promise<void> {
-    if (this.run().state === 'submitting' || this.run().state === 'reconciling') return;
-    if (!this.canRun()) {
+    if (this.run().state === 'submitting') return;
+    if (!this.canRun() && !this.canReconcile()) {
       await this.refresh();
-      if (!this.canRun()) return;
+      if (!this.canRun() && !this.canReconcile()) return;
     }
 
     const scopeKey = this.scopeKey();
+    const scopeVersion = this.scopeVersion;
     const identity = this.lifecycle.identity();
     if (!identity) return;
+    const previousRun = this.run();
+    const idempotencyKey = previousRun.state === 'reconciling' && previousRun.idempotencyKey
+      ? previousRun.idempotencyKey
+      : this.newIdempotencyKey();
     this.stopPolling();
     this.nodeRecords.clear();
     this.nodes.set([]);
     this.tracking.set(idleTracking());
-    const idempotencyKey = this.newIdempotencyKey();
     this.run.set({state: 'submitting', runTaskId: null, message: null, idempotencyKey});
     const outcome = await this.finalOutcome(
       this.adapter.submit({
         task: identity.taskId,
         revision: identity.revision,
         verify_watched_queue: true,
+        idempotency_key: idempotencyKey,
       }),
       this.scopeCancelled,
     );
-    if (!outcome || !this.current(scopeKey)) return;
+    if (!outcome || !this.current(scopeKey, undefined, scopeVersion)) return;
 
     if ((outcome.status === 'ready' || outcome.status === 'submission_succeeded_unwatched') && outcome.data.run_task_id) {
       const runTaskId = this.safeNavigationId(outcome.data.run_task_id);
       if (!runTaskId) {
-        this.run.set({
-          state: 'failed',
-          runTaskId: null,
-          message: 'Run submission was not confirmed with a safe pipeline run ID.',
-          reason: 'request_failed',
-        });
+        this.setReconciliationRequired(idempotencyKey, 'Run submission was not confirmed with a safe pipeline run ID.');
         return;
       }
       this.run.set({
@@ -222,18 +261,12 @@ export class ClearpipeExecutionService {
         message: outcome.status === 'submission_succeeded_unwatched' ? outcome.problem.message : null,
       });
       const evidence = this.preflight().evidence;
-      if (evidence) this.startPolling(scopeKey, runTaskId, identity.taskId, identity.revision, evidence.graphDigest);
+      if (evidence) this.startPolling(scopeKey, scopeVersion, runTaskId, identity.taskId, identity.revision, evidence.graphDigest);
       return;
     }
 
     if (outcome.status === 'failed') {
-      this.run.set({
-        state: 'reconciling',
-        runTaskId: null,
-        message: 'The submission outcome is uncertain. Reconciliation is required before another run can be submitted.',
-        reason: 'request_failed',
-        idempotencyKey,
-      });
+      this.setReconciliationRequired(idempotencyKey);
       return;
     }
 
@@ -268,6 +301,7 @@ export class ClearpipeExecutionService {
 
   private startPolling(
     scopeKey: string,
+    scopeVersion: number,
     runTaskId: string,
     definitionTaskId: string,
     revision: number,
@@ -287,6 +321,7 @@ export class ClearpipeExecutionService {
       takeUntil(this.scopeCancelled),
     ).subscribe(outcome => this.consumeSnapshotOutcome(
       scopeKey,
+      scopeVersion,
       runTaskId,
       definitionTaskId,
       revision,
@@ -324,21 +359,26 @@ export class ClearpipeExecutionService {
 
   private consumeSnapshotOutcome(
     scopeKey: string,
+    scopeVersion: number,
     runTaskId: string,
     definitionTaskId: string,
     revision: number,
     graphDigest: string,
     outcome: Exclude<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>, {status: 'loading'}>,
   ): void {
-    if (!this.current(scopeKey) || this.run().runTaskId !== runTaskId) return;
+    if (!this.current(scopeKey, undefined, scopeVersion) || this.run().runTaskId !== runTaskId) return;
     if (outcome.status !== 'ready') {
       const reason = this.outcomeReasons(outcome)[0];
       const state = outcome.status === 'denied_or_missing' ? 'denied'
         : outcome.status === 'execution_unavailable' ? 'unavailable'
           : outcome.status === 'stale_revision' ? 'stale'
             : 'failed';
-      this.tracking.set({...this.tracking(), state, message: reason?.message ?? 'Live execution data is unavailable.'});
-      if (state === 'denied' || state === 'unavailable' || state === 'stale') this.stopPolling();
+      if (state === 'denied' || state === 'unavailable' || state === 'stale') {
+        this.tracking.set({...this.tracking(), state, message: reason?.message ?? 'Live execution data is unavailable.'});
+        this.stopPolling();
+      } else {
+        this.recordSnapshotFailure(reason?.message ?? 'Live execution data could not be refreshed.');
+      }
       return;
     }
 
@@ -360,22 +400,31 @@ export class ClearpipeExecutionService {
       return;
     }
 
-    if (this.consumeSnapshot(response.snapshot)) {
+    const consumption = this.consumeSnapshot(response.snapshot);
+    if (consumption === 'terminal') {
+      this.consecutiveSnapshotFailures = 0;
       this.tracking.update(tracking => ({...tracking, state: 'completed'}));
       this.stopPolling();
+    } else if (consumption === 'invalid') {
+      this.recordSnapshotFailure('Live execution data could not be safely correlated to this definition.');
+    } else {
+      this.consecutiveSnapshotFailures = 0;
     }
   }
 
-  private consumeSnapshot(snapshot: ClearpipeExecutionSnapshot): boolean {
+  private consumeSnapshot(snapshot: ClearpipeExecutionSnapshot): 'active' | 'terminal' | 'invalid' {
     const evidence = this.preflight().evidence;
-    if (!evidence) return false;
-    if (snapshot.node_offset === 0) this.snapshotRanges.clear();
+    if (!evidence) return 'invalid';
+    if (snapshot.node_offset === 0) {
+      this.snapshotRanges.clear();
+      this.snapshotHasUnmatchedRecords = false;
+    }
     const pageEnd = snapshot.truncated
       ? snapshot.next_node_offset
       : snapshot.node_offset + snapshot.nodes.length;
     if (pageEnd === undefined || pageEnd < snapshot.node_offset || pageEnd > snapshot.total_nodes) {
       this.tracking.set({...this.tracking(), state: 'partial', message: 'Live execution data has an incomplete page boundary.'});
-      return false;
+      return 'invalid';
     }
     this.snapshotRanges.set(snapshot.node_offset, pageEnd);
 
@@ -388,12 +437,13 @@ export class ClearpipeExecutionService {
       }
       this.nodeRecords.set(mapped.graphNodeId, mergeNodeExecution(this.nodeRecords.get(mapped.graphNodeId), mapped));
     });
+    this.snapshotHasUnmatchedRecords ||= unmatched;
     this.nodes.set([...this.nodeRecords.values()].sort((left, right) => left.graphNodeId.localeCompare(right.graphNodeId)));
 
     const complete = this.pagesCoverSnapshot(snapshot.total_nodes);
     this.tracking.set({
-      state: complete && !unmatched ? 'polling' : 'partial',
-      message: unmatched
+      state: complete && !this.snapshotHasUnmatchedRecords ? 'polling' : 'partial',
+      message: this.snapshotHasUnmatchedRecords
         ? 'Some runtime records did not match the server compiler mapping and were not applied.'
         : complete
           ? null
@@ -402,7 +452,8 @@ export class ClearpipeExecutionService {
       receivedNodes: [...this.snapshotRanges.entries()].reduce((sum, [offset, end]) => sum + end - offset, 0),
       totalNodes: snapshot.total_nodes,
     });
-    return complete && !unmatched && terminalControllerStatuses.has(snapshot.controller.status.toLowerCase());
+    if (complete && terminalControllerStatuses.has(snapshot.controller.status.toLowerCase())) return 'terminal';
+    return this.snapshotHasUnmatchedRecords ? 'invalid' : 'active';
   }
 
   private pagesCoverSnapshot(totalNodes: number): boolean {
@@ -507,8 +558,11 @@ export class ClearpipeExecutionService {
       : null;
   }
 
-  private current(scopeKey: string | null, request?: number): boolean {
-    return this.activeScopeKey === scopeKey && (request === undefined || request === this.preflightRequest);
+  private current(scopeKey: string | null, request?: number, scopeVersion?: number): boolean {
+    return this.activeScopeKey === scopeKey
+      && this.scopeKey() === scopeKey
+      && (request === undefined || request === this.preflightRequest)
+      && (scopeVersion === undefined || scopeVersion === this.scopeVersion);
   }
 
   private setPreflight(
@@ -522,13 +576,16 @@ export class ClearpipeExecutionService {
   private resetForScope(scopeKey: string | null): void {
     this.cancelScope();
     this.activeScopeKey = scopeKey;
+    this.scopeVersion++;
     this.preflightRequest++;
+    this.consecutiveSnapshotFailures = 0;
     this.preflight.set({...idlePreflight(), scopeKey});
     this.run.set(idleRun());
     this.tracking.set(idleTracking());
     this.nodeRecords.clear();
     this.nodes.set([]);
     this.snapshotRanges.clear();
+    this.snapshotHasUnmatchedRecords = false;
   }
 
   private cancelScope(): void {
@@ -549,6 +606,19 @@ export class ClearpipeExecutionService {
   private newIdempotencyKey(): string {
     return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
-      : `clearpipe-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      : this.uuidV4();
+  }
+
+  private uuidV4(): string {
+    const bytes = new Uint8Array(16);
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      crypto.getRandomValues(bytes);
+    } else {
+      for (let index = 0; index < bytes.length; index++) bytes[index] = Math.floor(Math.random() * 256);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   }
 }
