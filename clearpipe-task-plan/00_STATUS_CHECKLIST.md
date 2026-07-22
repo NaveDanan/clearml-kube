@@ -9,19 +9,19 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-03](./cp_03_analyze-clearml-pipeline-semantics.md) | 0 | 5 | cp-03-semantics | Done | ee0864c | Evidence pack and deterministic fixtures: CP-03_CLEARML_PIPELINE_SEMANTICS.md |
 | [x] | [CP-04](./cp_04_analyze-reference-ux.md) | 0 | 5 | cp-04-reference | Done | copilot/cp-04 | Merged 41a688a; evidence pack: CP-04_REFERENCE_UX.md |
 | [x] | [CP-05](./cp_05_architecture-decision-record.md) | 1 | 5 | cp-05-architecture | Done | eaf65cc | Approved ADR: CP-05_ARCHITECTURE_DECISION_RECORD.md |
-| [ ] | [CP-06](./cp_06_canonical-graph-schema.md) | 2 | 8 |  | Not started |  |  |
-| [ ] | [CP-07](./cp_07_backend-integration-contracts.md) | 2 | 5 |  | Not started |  |  |
-| [ ] | [CP-08](./cp_08_ux-architecture-contract.md) | 2 | 5 |  | Not started |  |  |
-| [ ] | [CP-09](./cp_09_test-architecture-harness.md) | 2 | 5 |  | Not started |  |  |
-| [ ] | [CP-10](./cp_10_graph-state-engine.md) | 3 | 8 |  | Not started |  |  |
-| [ ] | [CP-11](./cp_11_validation-engine.md) | 3 | 8 |  | Not started |  |  |
-| [ ] | [CP-12](./cp_12_task-code-generator.md) | 3 | 5 |  | Not started |  |  |
-| [ ] | [CP-13](./cp_13_function-code-generator.md) | 3 | 5 |  | Not started |  |  |
-| [ ] | [CP-14](./cp_14_service-adapters-route-integration.md) | 3 | 8 |  | Not started |  |  |
-| [ ] | [CP-15](./cp_15_workspace-shell-first-use.md) | 3 | 5 |  | Not started |  |  |
-| [ ] | [CP-16](./cp_16_canvas-foundation.md) | 4 | 8 |  | Not started |  |  |
-| [ ] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 |  | Not started |  |  |
-| [ ] | [CP-18](./cp_18_shared-resource-query-layer.md) | 4 | 5 |  | Not started |  |  |
+| [x] | [CP-06](./cp_06_canonical-graph-schema.md) | 2 | 8 | cp-06-graph-contract | Done | d6f7d2e | Canonical v2 graph contract; focused parity and security fixes integrated. |
+| [x] | [CP-07](./cp_07_backend-integration-contracts.md) | 2 | 5 | cp-07-backend-contract | Done | 0fdefec | Typed existing-service contract; safe v2 persistence and secret override rejection integrated. |
+| [x] | [CP-08](./cp_08_ux-architecture-contract.md) | 2 | 5 | cp-08-ux-contract | Done | b8a2449 | UX architecture and slot/accessibility contract integrated. |
+| [x] | [CP-09](./cp_09_test-architecture-harness.md) | 2 | 5 | cp-09-harness-resume | Done | 2efd5d7 | Dedicated harness; ClearPipe, `/pipelines`, server, and Redis-backed schema checks pass. |
+| [ ] | [CP-10](./cp_10_graph-state-engine.md) | 3 | 8 | cp-10-state-engine | In progress | copilot/cp-10 | Review correction in progress: selected-port freshness and transaction transient rollback. |
+| [x] | [CP-11](./cp_11_validation-engine.md) | 3 | 8 | cp-11-validation-engine | Done | b92afe9 | Deterministic validation/preflight engine with authorization and legacy-secret fixes integrated. |
+| [x] | [CP-12](./cp_12_task-code-generator.md) | 3 | 5 | cp-12-task-generator | Done | 0994507 | Deterministic task compiler and resource source-map coverage integrated. |
+| [x] | [CP-13](./cp_13_function-code-generator.md) | 3 | 5 | cp-13-function-generator | Done | 546746b | Deterministic function-step lowerer integrated. |
+| [x] | [CP-14](./cp_14_service-adapters-route-integration.md) | 3 | 8 | cp-14-service-adapters | Done | 697f5d5 | Single typed platform adapter and guarded route handoffs integrated. |
+| [x] | [CP-15](./cp_15_workspace-shell-first-use.md) | 3 | 5 | cp-15-workspace-shell | Done | c87f234 | Slot-based three-region workspace shell integrated. |
+| [ ] | [CP-16](./cp_16_canvas-foundation.md) | 4 | 8 | cp-16-canvas | In progress | copilot/cp-16 | Canvas adapter worktree active. |
+| [ ] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | In progress | copilot/cp-17 | Generic catalog/card/port/inspector worktree active. |
+| [ ] | [CP-18](./cp_18_shared-resource-query-layer.md) | 4 | 5 | cp-18-resource-queries | In progress | copilot/cp-18 | Shared authorized resource query worktree active. |
 | [ ] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 |  | Not started |  |  |
 | [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 |  | Not started |  |  |
 | [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 |  | Not started |  |  |
@@ -41,7 +41,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 
 - [x] **Discovery gate:** CP-01, CP-02, CP-03, and CP-04 are complete.
 - [x] **Architecture gate:** CP-05 is approved.
-- [ ] **Contract gate:** CP-06, CP-07, CP-08, and CP-09 expose stable interfaces.
+- [x] **Contract gate:** CP-06, CP-07, CP-08, and CP-09 expose stable interfaces.
 - [ ] **Foundation gate:** CP-10 through CP-19 pass focused checks.
 - [ ] **Feature gate:** CP-20 through CP-27 satisfy their supported subsets.
 - [ ] **Integration gate:** CP-28 and CP-29 pass.
