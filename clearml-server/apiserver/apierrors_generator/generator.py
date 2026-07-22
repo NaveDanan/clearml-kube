@@ -9,6 +9,11 @@ try:
     import fcntl
 except ImportError:
     import winfcntl as fcntl
+    import msvcrt
+
+    _winfcntl = True
+else:
+    _winfcntl = False
 
 env = jinja2.Environment(
     loader=jinja2.FileSystemLoader(str(Path(__file__).parent)),
@@ -22,6 +27,20 @@ env = jinja2.Environment(
 
 def env_filter(name=None):
     return lambda func: env.filters.setdefault(name or func.__name__, func)
+
+
+def _flock(file, operation):
+    fd = file.fileno()
+    try:
+        fcntl.flock(fd, operation)
+    except OSError as ex:
+        if not (_winfcntl and str(ex).startswith("exception: access violation reading")):
+            raise
+        msvcrt.locking(
+            fd,
+            msvcrt.LK_UNLCK if operation == fcntl.LOCK_UN else msvcrt.LK_LOCK,
+            1,
+        )
 
 
 @env_filter()
@@ -91,7 +110,7 @@ class Generator(object):
         # Use file locking to prevent race condition when multiple workers
         # try to generate files simultaneously during gunicorn startup
         with lock_file.open("a") as lock_fd:
-            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            _flock(lock_fd, fcntl.LOCK_EX)
             try:
                 if self._use_md5:
                     digest = self._calc_digest(errors)
@@ -107,4 +126,4 @@ class Generator(object):
                     digest_file.write_text(digest)
 
             finally:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                _flock(lock_fd, fcntl.LOCK_UN)
