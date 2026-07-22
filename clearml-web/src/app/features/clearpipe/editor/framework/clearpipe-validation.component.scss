@@ -1,0 +1,11 @@
+:host {display:block;}
+.clearpipe-validation {display:flex; align-items:start; width:100%; gap:5px; margin:0; border:0; padding:4px 0; color:var(--color-on-surface); background:transparent; font:inherit; font-size:11px; text-align:left;}
+button.clearpipe-validation {cursor:pointer;}
+.clearpipe-validation mat-icon {width:15px; height:15px; font-size:15px;}
+.clearpipe-validation span {display:flex; flex-wrap:wrap; gap:3px;}
+.clearpipe-validation strong {font-size:inherit; text-transform:capitalize;}
+.clearpipe-validation small {color:var(--color-on-surface-variant); font-size:inherit;}
+.clearpipe-validation--error mat-icon {color:var(--color-error);}
+.clearpipe-validation--warning mat-icon {color:var(--color-warning);}
+.clearpipe-validation--info mat-icon {color:var(--color-primary);}
+button.clearpipe-validation:focus-visible {outline:2px solid var(--color-primary); outline-offset:2px;}

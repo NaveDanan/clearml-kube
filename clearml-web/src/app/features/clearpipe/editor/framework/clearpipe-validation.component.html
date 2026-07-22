@@ -1,0 +1,14 @@
+@if (validation().targetId) {
+  <button type="button"
+          class="clearpipe-validation"
+          [class]="'clearpipe-validation clearpipe-validation--' + validation().severity"
+          (click)="focus()">
+    <mat-icon aria-hidden="true">{{ icons[validation().severity] }}</mat-icon>
+    <span><strong>{{ validation().severity }}</strong>{{ validation().message }}@if (validation().code) { <small>{{ validation().code }}</small> }</span>
+  </button>
+} @else {
+  <p class="clearpipe-validation" [class]="'clearpipe-validation clearpipe-validation--' + validation().severity">
+    <mat-icon aria-hidden="true">{{ icons[validation().severity] }}</mat-icon>
+    <span><strong>{{ validation().severity }}</strong>{{ validation().message }}@if (validation().code) { <small>{{ validation().code }}</small> }</span>
+  </p>
+}

@@ -1,0 +1,12 @@
+<span class="clearpipe-node-action">
+  <button type="button"
+          [disabled]="action().disabled"
+          [attr.aria-describedby]="action().disabledReason ? reasonId() : null"
+          (click)="invoke()">
+    @if (action().icon) { <mat-icon aria-hidden="true">{{ action().icon }}</mat-icon> }
+    {{ action().label }}
+  </button>
+  @if (action().disabledReason) {
+    <small [id]="reasonId()"><mat-icon aria-hidden="true">info</mat-icon>{{ action().disabledReason }}</small>
+  }
+</span>

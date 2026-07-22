@@ -1,0 +1,16 @@
+:host {display:block;}
+.clearpipe-port {display:grid; gap:3px;}
+.clearpipe-port > button {display:grid; grid-template-columns:auto minmax(0, 1fr) auto; align-items:center; width:100%; gap:5px; border:0; border-inline-start:3px solid var(--color-outline-variant); padding:5px 6px; color:var(--color-on-surface); background:transparent; text-align:left; font:inherit; cursor:pointer;}
+.clearpipe-port--input > button {border-inline-start-color:var(--color-primary);}
+.clearpipe-port--output > button {border-inline-end:3px solid var(--color-primary);}
+.clearpipe-port--connected > button {background:var(--color-surface-container-lowest);}
+.clearpipe-port--selected > button {outline:2px solid var(--color-primary); outline-offset:1px;}
+.clearpipe-port--disabled > button {cursor:not-allowed; opacity:.65;}
+.clearpipe-port button mat-icon, .clearpipe-port__reason mat-icon {width:15px; height:15px; font-size:15px;}
+.clearpipe-port__copy {display:grid; min-width:0; gap:1px;}
+.clearpipe-port__copy strong {overflow:hidden; font-size:11px; text-overflow:ellipsis; white-space:nowrap;}
+.clearpipe-port__copy small, .clearpipe-port__state, .clearpipe-port__reason {font-size:10px; color:var(--color-on-surface-variant);}
+.clearpipe-port__state {display:grid; justify-items:end; text-align:end;}
+.clearpipe-port__state span {font-weight:600;}
+.clearpipe-port__reason {display:flex; align-items:start; gap:3px; margin:0;}
+.clearpipe-port button:focus-visible {outline:2px solid var(--color-primary); outline-offset:2px;}
