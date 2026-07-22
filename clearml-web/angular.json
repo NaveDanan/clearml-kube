@@ -197,7 +197,8 @@
             "main": "src/test.ts",
             "karmaConfig": "./karma.clearpipe.conf.js",
             "include": [
-              "src/app/features/clearpipe/testing/**/*.spec.ts"
+              "src/app/features/clearpipe/testing/**/*.spec.ts",
+              "src/app/features/clearpipe/domain/graph-v2-codec.spec.ts"
             ],
             "watch": false,
             "browsers": "ChromeHeadless",

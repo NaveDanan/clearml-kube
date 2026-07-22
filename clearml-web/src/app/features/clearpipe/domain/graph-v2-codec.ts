@@ -316,13 +316,16 @@ const taskReference = (value: JsonValue | undefined, path: string): TaskReferenc
 
 const taskConfiguration = (value: JsonValue | undefined, path: string): TaskConfiguration => {
   const raw = record(value, path);
-  assertAllowed(raw, ['clone_base_task', 'cache', 'queue_resource_id'], path);
+  assertAllowed(raw, ['clone_base_task', 'cache', 'queue_resource_id', 'retry_on_failure'], path);
   const result: TaskConfiguration = {
     clone_base_task: optionalBoolean(raw, 'clone_base_task', path, true),
     cache: optionalBoolean(raw, 'cache', path, false),
   };
   const queue = optionalString(raw, 'queue_resource_id', path);
   if (queue !== undefined) result.queue_resource_id = stableId(queue, `${path}.queue_resource_id`);
+  if (has(raw, 'retry_on_failure')) {
+    result.retry_on_failure = requiredInteger(raw, 'retry_on_failure', path);
+  }
   return result;
 };
 

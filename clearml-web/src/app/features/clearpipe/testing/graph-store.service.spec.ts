@@ -1,6 +1,11 @@
 import graphStoreFixture from '../domain/fixtures/graph-store.v2.json';
 import {decodeGraphV2} from '../domain/graph-v2-codec';
-import {createEmptyGraphV2, GraphStoreService, graphV2LogicallyEquals} from '../domain/graph-store.service';
+import {
+  createEmptyGraphV2,
+  GraphStoreService,
+  graphV2LogicallyEquals,
+  TaskConfigurationPatch,
+} from '../domain/graph-store.service';
 
 describe('GraphStoreService', () => {
   let store: GraphStoreService;
@@ -160,6 +165,101 @@ describe('GraphStoreService', () => {
       node_id: 'format',
       port: jasmine.objectContaining({id: 'out-text'}),
     });
+  });
+
+  it('replaces a task base reference and updates only typed task configuration fields', () => {
+    const empty = createEmptyGraphV2({name: 'task_configuration', project: 'examples'});
+    expect(store.load(empty).status).toBe('ok');
+    const created = store.createTaskNode({
+      label: 'Task',
+      base_task: {kind: 'task-id', task_id: 'base-task'},
+      ports: [],
+      configuration: {clone_base_task: true},
+      visual: {position: {x: 0, y: 0}},
+    });
+    const taskId = created.id;
+    if (!taskId) throw new Error('task must be created');
+    expect(store.markSaved()).toEqual(jasmine.objectContaining({ok: true}));
+    store.selectNode(taskId);
+
+    expect(store.replaceTaskBaseTask(taskId, {
+      kind: 'task-name',
+      project: 'examples',
+      name: 'Replacement task',
+    })).toEqual(jasmine.objectContaining({ok: true, changed: true}));
+    expect(store.updateTaskConfiguration(taskId, {
+      cache: true,
+      retry_on_failure: 2,
+    })).toEqual(jasmine.objectContaining({ok: true, changed: true}));
+
+    const task = store.node(taskId);
+    if (!task || task.kind !== 'task') throw new Error('task must be available');
+    expect(task.base_task).toEqual({kind: 'task-name', project: 'examples', name: 'Replacement task'});
+    expect(task.configuration).toEqual(jasmine.objectContaining({cache: true, retry_on_failure: 2}));
+    expect(store.selectedNode()?.id).toBe(taskId);
+    expect(store.dirty()).toBeTrue();
+    expect(decodeGraphV2(JSON.parse(store.serialize()!))).toEqual(jasmine.objectContaining({status: 'ok'}));
+
+    const beforeInvalidUpdate = store.serialize();
+    expect(store.updateTaskConfiguration(taskId, {retry_on_failure: -1})).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'invalid_integer'})],
+    }));
+    expect(store.serialize()).toBe(beforeInvalidUpdate);
+    expect(store.updateTaskConfiguration(taskId, {
+      unsupported_option: true,
+    } as unknown as TaskConfigurationPatch)).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'unsupported_task_configuration_field'})],
+    }));
+    expect(store.serialize()).toBe(beforeInvalidUpdate);
+  });
+
+  it('enforces task-only task commands and rolls their changes back with the transaction', () => {
+    const before = store.serialize();
+    expect(store.replaceTaskBaseTask('normalize', {kind: 'task-id', task_id: 'base-task'})).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'node_not_task'})],
+    }));
+    expect(store.updateTaskConfiguration('normalize', {retry_on_failure: 1})).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'node_not_task'})],
+    }));
+    expect(store.replaceTaskBaseTask('missing', {kind: 'task-id', task_id: 'base-task'})).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'unknown_node'})],
+    }));
+    expect(store.serialize()).toBe(before);
+    expect(store.dirty()).toBeFalse();
+
+    const created = store.createTaskNode({
+      label: 'Task',
+      base_task: {kind: 'task-id', task_id: 'base-task'},
+      ports: [],
+      configuration: {},
+      visual: {position: {x: 0, y: 0}},
+    });
+    const taskId = created.id;
+    if (!taskId) throw new Error('task must be created');
+    expect(store.markSaved()).toEqual(jasmine.objectContaining({ok: true}));
+    store.selectNode(taskId);
+    const beforeTransaction = store.serialize();
+
+    const result = store.transaction('rollback task changes', () => {
+      store.replaceTaskBaseTask(taskId, {kind: 'task-id', task_id: 'replacement-task'});
+      store.updateTaskConfiguration(taskId, {retry_on_failure: 3});
+      store.addBinding({
+        id: 'bad-binding',
+        kind: 'execution-only',
+        source: {kind: 'node', node_id: taskId},
+        target: {kind: 'node', node_id: 'missing'},
+      });
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(store.serialize()).toBe(beforeTransaction);
+    expect(store.selectedNode()?.id).toBe(taskId);
+    expect(store.dirty()).toBeFalse();
   });
 
   it('creates stable generated IDs and names through a single transaction command boundary', () => {

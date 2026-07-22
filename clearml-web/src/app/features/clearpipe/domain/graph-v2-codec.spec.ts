@@ -8,6 +8,8 @@ import invalidSecretFixture from './fixtures/invalid-secret-graph.v2.json';
 import taskFixture from './fixtures/task-graph.v2.json';
 import {decodeGraphV2, deriveGraphV2Dependencies, serializeGraphV2} from './graph-v2-codec';
 
+const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
 describe('ClearPipe canonical graph v2 codec', () => {
   const decodeFixture = (fixture: unknown) => {
     const result = decodeGraphV2(fixture);
@@ -33,14 +35,61 @@ describe('ClearPipe canonical graph v2 codec', () => {
 
   it('round-trips deterministically regardless of collection ordering', () => {
     const graph = decodeFixture(taskFixture);
-    const reordered = structuredClone(taskFixture);
+    const reordered = clone(taskFixture);
     reordered.document.tags.reverse();
     reordered.nodes.reverse();
     reordered.bindings.reverse();
     const reorderedGraph = decodeFixture(reordered);
 
     expect(serializeGraphV2(graph)).toBe(serializeGraphV2(reorderedGraph));
-    expect(decodeGraphV2(serializeGraphV2(graph)).status).toBe('ok');
+    expect(decodeGraphV2(JSON.parse(serializeGraphV2(graph))).status).toBe('ok');
+  });
+
+  it('round-trips a non-negative task retry setting', () => {
+    const retrying = clone(taskFixture);
+    (retrying.nodes[0].configuration as Record<string, unknown>).retry_on_failure = 2;
+
+    const graph = decodeFixture(retrying);
+    const firstNode = graph.nodes[0];
+    if (firstNode.kind !== 'task') throw new Error('fixture must contain a task node');
+    expect(firstNode.configuration.retry_on_failure).toBe(2);
+
+    const roundTripped = decodeFixture(JSON.parse(serializeGraphV2(graph)));
+    const roundTrippedNode = roundTripped.nodes[0];
+    if (roundTrippedNode.kind !== 'task') throw new Error('fixture must contain a task node');
+    expect(roundTrippedNode.configuration.retry_on_failure).toBe(2);
+  });
+
+  it('rejects invalid, unknown, and secret task configuration fields', () => {
+    [-1, 1.5, true, '2'].forEach((retry) => {
+      const invalid = clone(taskFixture);
+      (invalid.nodes[0].configuration as Record<string, unknown>).retry_on_failure = retry;
+      const result = decodeGraphV2(invalid);
+      expect(result.status).toBe('invalid');
+      if (result.status !== 'invalid') throw new Error('retry setting must be invalid');
+      expect(result.errors[0]).toEqual(jasmine.objectContaining({
+        code: 'invalid_integer',
+        path: 'graph.nodes[0].configuration.retry_on_failure',
+      }));
+    });
+
+    const unknown = clone(taskFixture);
+    (unknown.nodes[0].configuration as Record<string, unknown>).unsupported_option = true;
+    expect(decodeGraphV2(unknown)).toEqual(jasmine.objectContaining({
+      status: 'unsupported',
+      unsupported: jasmine.objectContaining({
+        reason: 'unsupported_field',
+        path: 'graph.nodes[0].configuration.unsupported_option',
+      }),
+    }));
+
+    const secret = clone(taskFixture);
+    (secret.nodes[0].configuration as Record<string, unknown>).api_key = 'must-not-persist';
+    const secretResult = decodeGraphV2(secret);
+    expect(secretResult.status).toBe('invalid');
+    if (secretResult.status !== 'invalid') throw new Error('secret field must be invalid');
+    expect(secretResult.errors[0].code).toBe('secret_not_allowed');
+    expect(JSON.stringify(secretResult.errors)).not.toContain('must-not-persist');
   });
 
   it('rejects secrets without returning their values', () => {
@@ -50,7 +99,7 @@ describe('ClearPipe canonical graph v2 codec', () => {
     expect(result.errors[0].code).toBe('secret_not_allowed');
     expect(JSON.stringify(result.errors)).not.toContain('must-not-persist');
 
-    const sourceSecret = structuredClone(functionFixture);
+    const sourceSecret = clone(functionFixture);
     sourceSecret.nodes[0].source = 'def normalize():\n    api_key = \'must-not-persist\'\n';
     expect(decodeGraphV2(sourceSecret).status).toBe('invalid');
 
@@ -84,14 +133,14 @@ describe('ClearPipe canonical graph v2 codec', () => {
     expect(legacyResult.unsupported.reason).toBe('legacy_v1_not_losslessly_representable');
     expect(JSON.stringify(legacyResult.unsupported.raw)).toBe(JSON.stringify(legacy));
 
-    const unknown = structuredClone(taskFixture);
+    const unknown = clone(taskFixture);
     unknown.nodes[0].kind = 'component';
     const unknownResult = decodeGraphV2(unknown);
     expect(unknownResult.status).toBe('unsupported');
     if (unknownResult.status !== 'unsupported') throw new Error('unknown graph must be unsupported');
     expect(unknownResult.unsupported.reason).toBe('unsupported_node_kind');
 
-    const unknownPort = structuredClone(taskFixture);
+    const unknownPort = clone(taskFixture);
     unknownPort.nodes[0].ports[0].kind = 'future-port';
     const unknownPortResult = decodeGraphV2(unknownPort);
     expect(unknownPortResult.status).toBe('unsupported');
@@ -100,7 +149,7 @@ describe('ClearPipe canonical graph v2 codec', () => {
   });
 
   it('reports dangling ports as invalid instead of dropping their binding', () => {
-    const dangling = structuredClone(functionFixture);
+    const dangling = clone(functionFixture);
     dangling.bindings[0].target.port_id = 'missing-port';
     const result = decodeGraphV2(dangling);
     expect(result.status).toBe('invalid');

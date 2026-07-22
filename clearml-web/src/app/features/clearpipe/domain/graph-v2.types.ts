@@ -98,6 +98,7 @@ export interface TaskConfiguration {
   clone_base_task?: boolean;
   cache?: boolean;
   queue_resource_id?: string;
+  retry_on_failure?: number;
 }
 
 export interface FunctionConfiguration {
