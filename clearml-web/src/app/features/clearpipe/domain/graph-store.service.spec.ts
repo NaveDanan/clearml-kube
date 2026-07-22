@@ -52,6 +52,22 @@ describe('GraphStoreService', () => {
     expect(store.dirty()).toBeTrue();
   });
 
+  it('derives the selected port from the current canonical graph after a port update', () => {
+    store.selectPort('format', 'in-prefix');
+    const previous = store.selectedPort()?.port;
+
+    expect(store.updatePort('format', 'in-prefix', {default: 'updated='}).ok).toBeTrue();
+
+    expect(store.selectedPort()).toEqual({
+      node_id: 'format',
+      port: jasmine.objectContaining({id: 'in-prefix', default: 'updated='}),
+    });
+    expect(store.selectedPort()?.port).toBe(store.port('format', 'in-prefix'));
+    expect(store.selectedPort()?.port).not.toBe(previous);
+    const transientDefault: unknown = store.transient().selected_port?.port.default;
+    expect(transientDefault).toBe('updated=');
+  });
+
   it('cleans bindings and outputs when ports and nodes are removed', () => {
     expect(store.generatedInputsForNode('format')).toEqual([
       {node_id: 'format', port_id: 'in-prefix', binding_ids: ['bind-parameter']},
@@ -96,6 +112,54 @@ describe('GraphStoreService', () => {
     expect(store.serialize()).toBe(before);
     expect(store.graph()?.document.description).toBeUndefined();
     expect(store.dirty()).toBeFalse();
+  });
+
+  it('restores selected ports when a failed transaction rolls back a port removal', () => {
+    store.selectNode('format');
+    store.selectPort('format', 'in-prefix');
+    const before = store.serialize();
+
+    const result = store.transaction('remove port then fail', () => {
+      store.removePort('format', 'in-prefix');
+      store.addBinding({
+        id: 'bad-binding',
+        kind: 'execution-only',
+        source: {kind: 'node', node_id: 'normalize'},
+        target: {kind: 'node', node_id: 'missing'},
+      });
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(store.serialize()).toBe(before);
+    expect(store.selectedNode()?.id).toBe('format');
+    expect(store.selectedPort()).toEqual({
+      node_id: 'format',
+      port: jasmine.objectContaining({id: 'in-prefix'}),
+    });
+  });
+
+  it('restores node and port selection when a failed transaction rolls back a node removal', () => {
+    store.selectNode('format');
+    store.selectPort('format', 'out-text');
+    const before = store.serialize();
+
+    const result = store.transaction('remove node then fail', () => {
+      store.removeNode('format');
+      store.addBinding({
+        id: 'bad-binding',
+        kind: 'execution-only',
+        source: {kind: 'node', node_id: 'normalize'},
+        target: {kind: 'node', node_id: 'missing'},
+      });
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(store.serialize()).toBe(before);
+    expect(store.selectedNode()?.id).toBe('format');
+    expect(store.selectedPort()).toEqual({
+      node_id: 'format',
+      port: jasmine.objectContaining({id: 'out-text'}),
+    });
   });
 
   it('creates stable generated IDs and names through a single transaction command boundary', () => {
