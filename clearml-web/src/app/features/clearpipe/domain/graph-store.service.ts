@@ -83,6 +83,16 @@ interface ActiveTransaction {
   failed: GraphCommandResult | null;
 }
 
+interface TransientSnapshot {
+  selectedNodeId: string | null;
+  selectedPort: {node_id: string; port_id: string} | null;
+  hoveredNodeId: string | null;
+  draggingNodeId: string | null;
+  activeMenu: string | null;
+  polling: boolean;
+  requests: Record<string, 'idle' | 'pending' | 'success' | 'error'>;
+}
+
 const emptyResult = (command: string, changed = false): GraphCommandResult => ({ok: true, changed, command, errors: []});
 
 const errorResult = (command: string, code: string, path = 'graph', message = code): GraphCommandResult => ({
@@ -188,7 +198,12 @@ export class GraphStoreService {
   readonly lastCommand = signal<GraphCommandMetadata | null>(null);
 
   readonly selectedNodeId = signal<string | null>(null);
-  readonly selectedPort = signal<GraphPortReference | null>(null);
+  private readonly selectedPortLocation = signal<{node_id: string; port_id: string} | null>(null);
+  readonly selectedPort = computed<GraphPortReference | null>(() => {
+    const location = this.selectedPortLocation();
+    const port = location ? this.port(location.node_id, location.port_id) : null;
+    return port && location ? {node_id: location.node_id, port} : null;
+  });
   readonly hoveredNodeId = signal<string | null>(null);
   readonly draggingNodeId = signal<string | null>(null);
   readonly activeMenu = signal<string | null>(null);
@@ -300,6 +315,7 @@ export class GraphStoreService {
     const graph = this.editableGraph(label);
     if ('result' in graph) return graph.result;
 
+    const transientBefore = this.captureTransient();
     const transaction: ActiveTransaction = {
       label,
       graph: clone(graph.value),
@@ -314,10 +330,16 @@ export class GraphStoreService {
     } finally {
       this.activeTransactionState.set(null);
     }
-    if (transaction.failed) return transaction.failed;
+    if (transaction.failed) {
+      this.restoreTransient(transientBefore);
+      return transaction.failed;
+    }
 
     const decoded = decodeGraphV2(transaction.graph);
-    if (decoded.status !== 'ok') return asResult(label, decoded);
+    if (decoded.status !== 'ok') {
+      this.restoreTransient(transientBefore);
+      return asResult(label, decoded);
+    }
     const canonical = canonicalGraphV2(decoded.graph);
     const changed = transaction.before !== serializeGraphV2(canonical);
     if (changed) this.graphState.set(freeze(clone(canonical)));
@@ -438,7 +460,9 @@ export class GraphStoreService {
       graph.bindings = graph.bindings.filter((binding) => !endpointReferencesPort(binding, nodeId, portId));
       graph.outputs = graph.outputs.filter((output) =>
         output.source.node_id !== nodeId || output.source.port_id !== portId);
-      if (this.selectedPort()?.node_id === nodeId && this.selectedPort()?.port.id === portId) this.selectedPort.set(null);
+      if (this.selectedPortLocation()?.node_id === nodeId && this.selectedPortLocation()?.port_id === portId) {
+        this.selectedPortLocation.set(null);
+      }
     });
   }
 
@@ -592,12 +616,12 @@ export class GraphStoreService {
 
   selectNode(nodeId: string | null): void {
     this.selectedNodeId.set(nodeId && this.node(nodeId) ? nodeId : null);
-    if (nodeId === null || !this.node(nodeId)) this.selectedPort.set(null);
+    if (nodeId === null || !this.node(nodeId)) this.selectedPortLocation.set(null);
   }
 
   selectPort(nodeId: string | null, portId?: string): void {
     const port = nodeId && portId ? this.port(nodeId, portId) : null;
-    this.selectedPort.set(port && nodeId ? {node_id: nodeId, port} : null);
+    this.selectedPortLocation.set(port && nodeId && portId ? {node_id: nodeId, port_id: portId} : null);
     if (port && nodeId) this.selectedNodeId.set(nodeId);
   }
 
@@ -623,7 +647,7 @@ export class GraphStoreService {
 
   resetTransient(): void {
     this.selectedNodeId.set(null);
-    this.selectedPort.set(null);
+    this.selectedPortLocation.set(null);
     this.hoveredNodeId.set(null);
     this.draggingNodeId.set(null);
     this.activeMenu.set(null);
@@ -699,9 +723,32 @@ export class GraphStoreService {
 
   private clearTransientReferences(nodeId: string): void {
     if (this.selectedNodeId() === nodeId) this.selectedNodeId.set(null);
-    if (this.selectedPort()?.node_id === nodeId) this.selectedPort.set(null);
+    if (this.selectedPortLocation()?.node_id === nodeId) this.selectedPortLocation.set(null);
     if (this.hoveredNodeId() === nodeId) this.hoveredNodeId.set(null);
     if (this.draggingNodeId() === nodeId) this.draggingNodeId.set(null);
+  }
+
+  private captureTransient(): TransientSnapshot {
+    const selectedPort = this.selectedPortLocation();
+    return {
+      selectedNodeId: this.selectedNodeId(),
+      selectedPort: selectedPort ? {...selectedPort} : null,
+      hoveredNodeId: this.hoveredNodeId(),
+      draggingNodeId: this.draggingNodeId(),
+      activeMenu: this.activeMenu(),
+      polling: this.polling(),
+      requests: {...this.requests()},
+    };
+  }
+
+  private restoreTransient(snapshot: TransientSnapshot): void {
+    this.selectedNodeId.set(snapshot.selectedNodeId);
+    this.selectedPortLocation.set(snapshot.selectedPort);
+    this.hoveredNodeId.set(snapshot.hoveredNodeId);
+    this.draggingNodeId.set(snapshot.draggingNodeId);
+    this.activeMenu.set(snapshot.activeMenu);
+    this.polling.set(snapshot.polling);
+    this.requests.set(snapshot.requests);
   }
 
   private currentGraph(): GraphV2 | null {

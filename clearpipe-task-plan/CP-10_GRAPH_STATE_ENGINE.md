@@ -46,7 +46,7 @@ graphStore.transaction('connect task output', () => {
 
 Commands validate the entire candidate with CP-06 before commit and return
 `GraphCommandResult`. A failed command in a transaction rolls back every edit
-in that transaction. `removeNode`, `removePort`, `removeParameter`, and
+and restores the pre-transaction transient state. `removeNode`, `removePort`, `removeParameter`, and
 `removeResource` remove their dependent bindings and related outputs/settings
 before validation; callers must not manually leave dangling references.
 Generated IDs and generated-safe names are allocated by create commands.
@@ -58,6 +58,8 @@ Use `selectNode`, `selectPort`, `setHoveredNode`, `setDraggingNode`,
 Those signals live in `transient`, are excluded from serialization, and cannot
 make the graph dirty. Position, dimensions, and viewport are explicit
 persisted visual commands and do make the document dirty when changed.
+`selectedPort` resolves its node/port identity from the current canonical graph,
+so a port update cannot leave inspector or submit consumers with stale data.
 
 ## Downstream handoff
 
