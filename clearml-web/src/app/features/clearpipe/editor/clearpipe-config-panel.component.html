@@ -1,83 +1,92 @@
-@if (node(); as selected) {
-  <header>
-    <div><span>Node configuration</span><strong>{{ selected.type }}</strong></div>
-    <button mat-icon-button class="sm" (click)="state.selectedNodeId.set(null)" aria-label="Close configuration"><mat-icon>close</mat-icon></button>
-  </header>
-  <div class="form" [class.readonly]="readonly()">
-    <mat-form-field>
-      <mat-label>Name</mat-label>
-      <input matInput [ngModel]="selected.label" (ngModelChange)="updateLabel($event)" [disabled]="readonly()">
-    </mat-form-field>
+@if (presentation(); as inspector) {
+  <section class="clearpipe-inspector" [attr.aria-label]="'Inspector for ' + inspector.title">
+    <header class="clearpipe-inspector__header">
+      <div>
+        <span class="clearpipe-inspector__eyebrow">Inspector · {{ inspector.typeLabel }}</span>
+        <h2 #inspectorHeading tabindex="-1">{{ inspector.title }}</h2>
+        @if (inspector.summary) { <p>{{ inspector.summary }}</p> }
+      </div>
+      <div class="clearpipe-inspector__header-actions">
+        <button type="button" (click)="collapseRequested.emit()" aria-label="Collapse inspector"><mat-icon aria-hidden="true">chevron_right</mat-icon></button>
+        <button type="button" (click)="closeRequested.emit()" aria-label="Close inspector"><mat-icon aria-hidden="true">close</mat-icon></button>
+      </div>
+    </header>
 
-    @switch (selected.type) {
-      @case ('dataset') {
-        <mat-form-field><mat-label>Source</mat-label><mat-select [ngModel]="configValue('source')" (ngModelChange)="updateConfig('source',$event)" [disabled]="readonly()"><mat-option value="clearml">ClearML Dataset</mat-option><mat-option value="artifact">Task artifact</mat-option><mat-option value="upload">Browser upload</mat-option><mat-option value="url">URL / configured storage</mat-option></mat-select></mat-form-field>
-        @if (configValue('source') === 'clearml') {
-          <mat-form-field><mat-label>Dataset</mat-label><mat-select [ngModel]="configValue('datasetId')" (ngModelChange)="updateConfig('datasetId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('dataset');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
-        } @else if (configValue('source') === 'artifact') {
-          <mat-form-field><mat-label>Task</mat-label><mat-select [ngModel]="configValue('taskId')" (ngModelChange)="updateConfig('taskId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('task');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
-          <mat-form-field><mat-label>Artifact name</mat-label><input matInput [ngModel]="configValue('artifactName')" (ngModelChange)="updateConfig('artifactName',$event)" [disabled]="readonly()"></mat-form-field>
-        } @else {
-          <mat-form-field><mat-label>URL or uploaded-file URI</mat-label><input matInput [ngModel]="configValue('uri')" (ngModelChange)="updateConfig('uri',$event)" [disabled]="readonly()"></mat-form-field>
-        }
+    <dl class="clearpipe-inspector__identity">
+      <div><dt>Stable ID</dt><dd><code>{{ inspector.node.id }}</code></dd></div>
+      <div><dt>Type</dt><dd>{{ inspector.node.kind }}</dd></div>
+      <div><dt>Source</dt><dd>{{ baseReference() }}</dd></div>
+      @if (inspector.source) {
+        <div><dt>Source link</dt><dd><a [href]="inspector.source.href" rel="noopener" (click)="sourceRequested.emit(inspector.source)">{{ inspector.source.label }}</a></dd></div>
       }
-      @case ('versioning') {
-        <mat-form-field><mat-label>Versioning tool</mat-label><mat-select [ngModel]="configValue('tool')" (ngModelChange)="updateConfig('tool',$event)" [disabled]="readonly()"><mat-option value="clearml-data">ClearML Data</mat-option><mat-option value="dvc">DVC</mat-option><mat-option value="git-lfs">Git LFS</mat-option><mat-option value="mlflow-artifacts">MLflow artifacts</mat-option><mat-option value="custom">Custom agent command</mat-option></mat-select></mat-form-field>
-        <mat-form-field><mat-label>Action</mat-label><mat-select [ngModel]="configValue('action')" (ngModelChange)="updateConfig('action',$event)" [disabled]="readonly()"><mat-option value="create">Create</mat-option><mat-option value="version">Version</mat-option><mat-option value="download">Download</mat-option></mat-select></mat-form-field>
-        <mat-form-field><mat-label>Dataset</mat-label><mat-select [ngModel]="configValue('datasetId')" (ngModelChange)="updateConfig('datasetId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('dataset');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
-      }
-      @case ('execute') {
-        <mat-form-field><mat-label>Script source</mat-label><mat-select [ngModel]="configValue('scriptSource')" (ngModelChange)="updateConfig('scriptSource',$event)" [disabled]="readonly()"><mat-option value="inline">Inline</mat-option><mat-option value="repository">Repository</mat-option><mat-option value="upload">Browser upload</mat-option></mat-select></mat-form-field>
-        @if (configValue('scriptSource') === 'repository') {
-          <mat-form-field><mat-label>Repository URL</mat-label><input matInput [ngModel]="configValue('repository')" (ngModelChange)="updateConfig('repository',$event)" [disabled]="readonly()"></mat-form-field>
-          <mat-form-field><mat-label>Entry point</mat-label><input matInput [ngModel]="configValue('entry_point')" (ngModelChange)="updateConfig('entry_point',$event)" [disabled]="readonly()"></mat-form-field>
-        } @else {
-          <mat-form-field><mat-label>Python script</mat-label><textarea matInput rows="10" [ngModel]="inlineScript()" (ngModelChange)="updateInlineScript($event)" [disabled]="readonly()"></textarea></mat-form-field>
-        }
-      }
-      @case ('training') {
-        <mat-form-field><mat-label>Source</mat-label><mat-select [ngModel]="configValue('source')" (ngModelChange)="updateSource($event)" [disabled]="readonly()"><mat-option value="task">Existing task</mat-option><mat-option value="repository">Repository</mat-option><mat-option value="upload">Uploaded script</mat-option><mat-option value="model">Model configuration</mat-option></mat-select></mat-form-field>
-        @if (configValue('source') === 'task') {
-          <mat-form-field><mat-label>Training task</mat-label><mat-select [ngModel]="configValue('taskId')" (ngModelChange)="updateConfig('taskId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('task');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
-        } @else if (configValue('source') === 'model') {
-          <mat-form-field><mat-label>Model</mat-label><mat-select [ngModel]="configValue('modelId')" (ngModelChange)="updateConfig('modelId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('model');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
-        } @else {
-          <mat-form-field><mat-label>Repository / uploaded-file URI</mat-label><input matInput [ngModel]="configValue('repository')" (ngModelChange)="updateConfig('repository',$event)" [disabled]="readonly()"></mat-form-field>
-        }
-      }
-      @case ('experiment') {
-        <mat-form-field><mat-label>Tracker</mat-label><mat-select [ngModel]="configValue('tracker')" (ngModelChange)="updateConfig('tracker',$event)" [disabled]="readonly()"><mat-option value="clearml">ClearML native</mat-option><mat-option value="mlflow">MLflow sync</mat-option><mat-option value="wandb">Weights & Biases sync</mat-option><mat-option value="comet">Comet sync</mat-option></mat-select></mat-form-field>
-        <mat-form-field><mat-label>Project</mat-label><mat-select [ngModel]="configValue('projectId')" (ngModelChange)="updateProject($event)" [disabled]="readonly() || resourceLoading()">@for(option of options('project');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
-        <p class="help">External tracker credentials are read from the Agent environment and are never stored in the graph.</p>
-      }
-      @case ('report') {
-        <mat-form-field><mat-label>Title</mat-label><input matInput [ngModel]="configValue('title')" (ngModelChange)="updateConfig('title',$event)" [disabled]="readonly()"></mat-form-field>
-        <mat-form-field><mat-label>Format</mat-label><mat-select [ngModel]="configValue('outputFormat')" (ngModelChange)="updateConfig('outputFormat',$event)" [disabled]="readonly()"><mat-option value="html">HTML</mat-option><mat-option value="markdown">Markdown</mat-option><mat-option value="json">JSON</mat-option><mat-option value="pdf">PDF</mat-option></mat-select></mat-form-field>
-        <mat-checkbox [ngModel]="configValue('includeMetrics')" (ngModelChange)="updateConfig('includeMetrics',$event)" [disabled]="readonly()">Include metrics and plots</mat-checkbox>
-      }
+    </dl>
+
+    @if (inspector.readOnly) {
+      <p class="clearpipe-inspector__readonly" role="status"><mat-icon aria-hidden="true">lock</mat-icon>{{ inspector.readOnlyReason ?? 'This node is read-only.' }}</p>
     }
 
-    <mat-form-field><mat-label>Target queue</mat-label><mat-select [ngModel]="configValue('queueId')" (ngModelChange)="updateConfig('queueId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('queue');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
-
-    @if (configValue('datasetId') || configValue('taskId') || configValue('modelId') || configValue('queueId')) {
-      <section class="resource-links"><h3>ClearML resources</h3>
-        @for(type of ['dataset','task','model','queue'];track type) {
-          @for(option of options($any(type));track option.id) {
-            @if ([configValue('datasetId'),configValue('taskId'),configValue('modelId'),configValue('queueId')].includes(option.id)) {
-              <a [routerLink]="resourceLink(option)" target="_blank"><mat-icon fontSet="al" fontIcon="al-ico-link"></mat-icon>{{option.name}}</a>
-            }
-          }
+    @if (inspector.statuses?.length) {
+      <section class="clearpipe-inspector__statuses" aria-label="Node status">
+        @for (status of inspector.statuses ?? []; track status.label + status.detail) {
+          <sm-clearpipe-status [status]="status"/>
         }
       </section>
     }
 
-    @if (!readonly()) {
-      <div class="node-actions">
-        <button mat-stroked-button (click)="state.duplicateNode(selected.id)"><mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>DUPLICATE</button>
-        <button mat-stroked-button color="warn" (click)="state.removeNode(selected.id)"><mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>DELETE</button>
-      </div>
+    @if (inspector.validations?.length) {
+      <section class="clearpipe-inspector__validations" aria-label="Validation">
+        @for (validation of inspector.validations ?? []; track validation.code + validation.message) {
+          <sm-clearpipe-validation [validation]="validation" (focusRequested)="validationFocused.emit($event)"/>
+        }
+      </section>
     }
-  </div>
+
+    <div class="clearpipe-inspector__tabs" role="tablist" aria-label="Inspector sections">
+      @for (tab of tabs(); track tab.id; let index = $index) {
+        <button type="button"
+                role="tab"
+                data-clearpipe-inspector-tab
+                [id]="tabId(tab)"
+                [attr.aria-controls]="panelId(tab)"
+                [attr.aria-selected]="selectedTab() === tab.id"
+                [tabindex]="selectedTab() === tab.id ? 0 : -1"
+                (click)="selectTab(tab)"
+                (keydown)="moveTab($event, index)">
+          {{ tab.label }}
+        </button>
+      }
+    </div>
+
+    <section class="clearpipe-inspector__body"
+             role="tabpanel"
+             [id]="panelId(currentTab())"
+             [attr.aria-labelledby]="tabId(currentTab())">
+      @if (selectedTab() === 'configuration') {
+        <div #formOutlet></div>
+        @if (!form()) {
+          <p class="clearpipe-inspector__empty">No registered configuration form is available for this {{ inspector.typeLabel }} node.</p>
+        }
+      } @else if (selectedTab() === 'general') {
+        <dl class="clearpipe-inspector__general">
+          <div><dt>Name</dt><dd>{{ inspector.node.name }}</dd></div>
+          <div><dt>Label</dt><dd>{{ inspector.node.label }}</dd></div>
+          <div><dt>Port count</dt><dd>{{ inspector.node.ports.length }}</dd></div>
+          <div><dt>Read-only</dt><dd>{{ inspector.readOnly ? 'Yes' : 'No' }}</dd></div>
+        </dl>
+      } @else if (activeSlot(); as slot) {
+        <ng-container [ngTemplateOutlet]="slot.template" [ngTemplateOutletContext]="slotContext()"/>
+      }
+    </section>
+  </section>
 } @else {
-  <div class="empty"><mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon><strong>No node selected</strong><span>Select a node to configure its native ClearML resources.</span></div>
+  <section class="clearpipe-inspector clearpipe-inspector--empty" aria-labelledby="clearpipe-inspector-empty-title">
+    <header class="clearpipe-inspector__header">
+      <div>
+        <span class="clearpipe-inspector__eyebrow">Inspector</span>
+        <h2 #inspectorHeading id="clearpipe-inspector-empty-title" tabindex="-1">No node selected</h2>
+      </div>
+      <button type="button" (click)="closeRequested.emit()" aria-label="Close inspector"><mat-icon aria-hidden="true">close</mat-icon></button>
+    </header>
+    <p>Select a task or function node to review its safe configuration, identity, and validation.</p>
+  </section>
 }

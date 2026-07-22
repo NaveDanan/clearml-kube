@@ -1,0 +1,100 @@
+<section class="clearpipe-catalog" aria-labelledby="clearpipe-catalog-title">
+  <header class="clearpipe-catalog__header">
+    <div>
+      <h2 id="clearpipe-catalog-title">Authoring catalog</h2>
+      <p>Registered task and function capabilities</p>
+    </div>
+    <button type="button" class="clearpipe-catalog__focus-canvas" (click)="focusCanvasRequested.emit()">Focus canvas</button>
+  </header>
+
+  <label class="clearpipe-catalog__search" for="clearpipe-catalog-search">
+    <mat-icon aria-hidden="true">search</mat-icon>
+    <span>Search authoring capabilities</span>
+    <input id="clearpipe-catalog-search"
+           type="search"
+           [value]="query()"
+           [disabled]="presentation().state !== 'ready'"
+           (input)="setQuery($any($event.target).value)"
+           placeholder="Search tasks and functions">
+  </label>
+
+  <p class="clearpipe-catalog__result-count" aria-live="polite">{{ resultSummary() }}</p>
+
+  @switch (presentation().state) {
+    @case ('loading') {
+      <section class="clearpipe-catalog__state" aria-busy="true" aria-live="polite">
+        <mat-icon aria-hidden="true">progress_activity</mat-icon>
+        <h3>Loading authoring capabilities</h3>
+        <p>{{ presentation().message ?? 'Registered capabilities are loading.' }}</p>
+      </section>
+    }
+    @case ('error') {
+      <section class="clearpipe-catalog__state clearpipe-catalog__state--error" role="alert">
+        <mat-icon aria-hidden="true">error</mat-icon>
+        <h3>Authoring catalog unavailable</h3>
+        <p>{{ presentation().message ?? 'Registered capabilities could not be loaded.' }}</p>
+        <button type="button" (click)="retryRequested.emit()">Retry</button>
+      </section>
+    }
+    @case ('disabled') {
+      <section class="clearpipe-catalog__state clearpipe-catalog__state--disabled" aria-live="polite">
+        <mat-icon aria-hidden="true">block</mat-icon>
+        <h3>Authoring catalog unavailable</h3>
+        <p>{{ presentation().message ?? 'No authoring capability is available in this workspace.' }}</p>
+      </section>
+    }
+    @case ('empty') {
+      <section class="clearpipe-catalog__state" aria-live="polite">
+        <mat-icon aria-hidden="true">inventory_2</mat-icon>
+        <h3>No registered capabilities</h3>
+        <p>{{ presentation().message ?? 'Task and function capabilities appear here when they are available.' }}</p>
+      </section>
+    }
+    @default {
+      @if (categories().length) {
+        <div class="clearpipe-catalog__list">
+          @for (category of categories(); track category.label) {
+            <section class="clearpipe-catalog__category" [attr.aria-label]="category.label">
+              <h3>{{ category.label }}</h3>
+              @for (entry of category.entries; track entry.id) {
+                <div class="clearpipe-catalog__entry">
+                  <button type="button"
+                          class="clearpipe-catalog__entry-button"
+                          [class.clearpipe-catalog__entry-button--compact]="compact()"
+                          [class.clearpipe-catalog__entry-button--dragging]="draggingEntryId() === entry.id"
+                          [disabled]="addDisabled(entry)"
+                          [draggable]="!addDisabled(entry)"
+                          [attr.aria-describedby]="disabledReason(entry) ? 'catalog-reason-' + entry.id : null"
+                          (click)="requestAdd(entry, 'click')"
+                          (keydown)="onEntryKeydown($event, entry)"
+                          (dragstart)="onDragStart($event, entry)"
+                          (dragend)="onDragEnd(entry)">
+                    <mat-icon aria-hidden="true" [fontIcon]="entry.icon"></mat-icon>
+                    <span class="clearpipe-catalog__entry-copy">
+                      <strong>{{ entry.label }}</strong>
+                      @if (!compact()) {
+                        <small>{{ entry.description }}</small>
+                      }
+                    </span>
+                    <span class="clearpipe-catalog__entry-affordance" aria-hidden="true">Drag or add</span>
+                  </button>
+                  @if (disabledReason(entry); as reason) {
+                    <p class="clearpipe-catalog__entry-reason" [id]="'catalog-reason-' + entry.id">
+                      <mat-icon aria-hidden="true">info</mat-icon>{{ reason }}
+                    </p>
+                  }
+                </div>
+              }
+            </section>
+          }
+        </div>
+      } @else {
+        <section class="clearpipe-catalog__state" aria-live="polite">
+          <mat-icon aria-hidden="true">search_off</mat-icon>
+          <h3>No matching capabilities</h3>
+          <p>Try a different search term or clear the current search.</p>
+        </section>
+      }
+    }
+  }
+</section>

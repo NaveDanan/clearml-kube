@@ -1,0 +1,32 @@
+<div class="clearpipe-port"
+     [class.clearpipe-port--input]="presentation().port.direction === 'input'"
+     [class.clearpipe-port--output]="presentation().port.direction === 'output'"
+     [class.clearpipe-port--connected]="presentation().connected"
+     [class.clearpipe-port--selected]="presentation().selected"
+     [class.clearpipe-port--disabled]="presentation().interactionDisabled">
+  <button type="button"
+          [disabled]="presentation().interactionDisabled"
+          [attr.aria-pressed]="presentation().selected ?? false"
+          [attr.aria-label]="accessibleLabel()"
+          [attr.aria-describedby]="presentation().disabledReason ? 'clearpipe-port-reason-' + presentation().nodeId + '-' + presentation().port.id : null"
+          (click)="activate()">
+    <mat-icon aria-hidden="true">{{ presentation().port.direction === 'input' ? 'input' : 'output' }}</mat-icon>
+    <span class="clearpipe-port__copy">
+      <strong>{{ presentation().port.name }}</strong>
+      <small>{{ presentation().port.direction }} · {{ presentation().port.role }} · {{ presentation().port.multiplicity === 'single' ? 'one' : 'many' }}</small>
+      <small>Accepts: {{ presentation().port.accepted_binding_kinds.join(', ') }}</small>
+    </span>
+    <span class="clearpipe-port__state">
+      <span>{{ presentation().connected ? 'Connected' : 'Unconnected' }}</span>
+      @if (compatibilityText()) { <small>{{ compatibilityText() }}</small> }
+    </span>
+  </button>
+  @if (presentation().disabledReason) {
+    <p class="clearpipe-port__reason" [id]="'clearpipe-port-reason-' + presentation().nodeId + '-' + presentation().port.id">
+      <mat-icon aria-hidden="true">info</mat-icon>{{ presentation().disabledReason }}
+    </p>
+  }
+  @for (validation of presentation().validation ?? []; track validation.code + validation.message) {
+    <sm-clearpipe-validation [validation]="validation" (focusRequested)="validationFocused.emit($event)"/>
+  }
+</div>

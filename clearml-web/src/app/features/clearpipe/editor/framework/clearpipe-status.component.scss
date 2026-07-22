@@ -1,0 +1,9 @@
+:host {display:inline-flex;}
+.clearpipe-status {display:inline-flex; align-items:center; gap:4px; font-size:11px; color:var(--color-on-surface-variant);}
+.clearpipe-status mat-icon {width:15px; height:15px; font-size:15px;}
+.clearpipe-status span {display:inline-flex; gap:3px; align-items:baseline;}
+.clearpipe-status strong {font-weight:600;}
+.clearpipe-status small {font-size:inherit;}
+.clearpipe-status--success mat-icon, .clearpipe-status--info mat-icon, .clearpipe-status--running mat-icon {color:var(--color-primary);}
+.clearpipe-status--warning mat-icon {color:var(--color-warning);}
+.clearpipe-status--error mat-icon {color:var(--color-error);}

@@ -1,0 +1,7 @@
+:host {display:inline-flex;}
+.clearpipe-node-action {display:grid; gap:3px;}
+button {display:inline-flex; align-items:center; justify-content:center; gap:4px; border:1px solid var(--color-outline-variant); border-radius:4px; padding:4px 7px; color:var(--color-on-surface); background:var(--color-surface-container-lowest); font:inherit; font-size:11px; cursor:pointer;}
+button:disabled {cursor:not-allowed; opacity:.65;}
+button mat-icon, small mat-icon {width:14px; height:14px; font-size:14px;}
+small {display:flex; align-items:start; gap:3px; max-width:170px; color:var(--color-on-surface-variant); font-size:10px; line-height:1.25;}
+button:focus-visible {outline:2px solid var(--color-primary); outline-offset:2px;}
