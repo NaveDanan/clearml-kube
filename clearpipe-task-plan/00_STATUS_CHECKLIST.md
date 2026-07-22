@@ -32,9 +32,9 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | Done | 2755cb0 | Server-backed execution uses scoped lifecycle, idempotent reconciliation, bounded polling, and authenticated runtime snapshots. |
 | [x] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Done | f9e579b | Advanced history, clipboard, keyboard, selection, and layout operations integrated with atomic restore safety. |
 | [x] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 | cp-28-task-vertical-slice | Done | af39ed9 | Deterministic two-task vertical slice proves canonical save/reload, generated output, typed execution handoff, snapshot correlation, navigation, and denied-task fail-closed behavior. |
-| [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 | cp-29-existing-pipeline-editing | In progress | copilot/cp-29 | Converging safe existing-pipeline visual editing and unsupported fallback behavior. |
-| [ ] | [CP-30](./cp_30_accessibility-responsive-performance.md) | 8 | 8 |  | Not started |  |  |
-| [ ] | [CP-31](./cp_31_automated-coverage-regression.md) | 8 | 8 |  | Not started |  |  |
+| [x] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 | cp-29-existing-pipeline-editing | Done | a924507 | Authorized existing-pipeline entry, lossless supported conversion, explicit unsupported fallback, safe version behavior, and latest-only route loading integrated. |
+| [ ] | [CP-30](./cp_30_accessibility-responsive-performance.md) | 8 | 8 | cp-30-accessibility-performance | In progress | copilot/cp-30 | Hardening responsive accessibility and large-graph performance after Wave 7 convergence. |
+| [ ] | [CP-31](./cp_31_automated-coverage-regression.md) | 8 | 8 | cp-31-coverage-regression | In progress | copilot/cp-31 | Completing end-to-end coverage, quality automation, and `/pipelines` regression protection. |
 | [ ] | [CP-32](./cp_32_final-integration-quality-report.md) | 9 | 5 |  | Not started |  |  |
 
 ## Gate checklist
@@ -44,6 +44,6 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 - [x] **Contract gate:** CP-06, CP-07, CP-08, and CP-09 expose stable interfaces.
 - [x] **Foundation gate:** CP-10 through CP-19 pass focused checks.
 - [x] **Feature gate:** CP-20 through CP-27 satisfy their supported subsets.
-- [ ] **Integration gate:** CP-28 and CP-29 pass.
+- [x] **Integration gate:** CP-28 and CP-29 pass.
 - [ ] **Hardening gate:** CP-30 and CP-31 pass.
 - [ ] **Release gate:** CP-32 passes all required checks and publishes the final report.
