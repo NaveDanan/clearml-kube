@@ -22,7 +22,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-16](./cp_16_canvas-foundation.md) | 4 | 8 | cp-16-canvas | Done | fab3dbb | Canonical canvas foundation integrated with zoom-safe drag, minimap mapping, and pointer-accessible keyboard controls. |
 | [ ] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | In progress | copilot/cp-17 | Generic catalog/card/port/inspector worktree active. |
 | [ ] | [CP-18](./cp_18_shared-resource-query-layer.md) | 4 | 5 | cp-18-resource-queries | In progress | copilot/cp-18 | Shared authorized resource query worktree active. |
-| [ ] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 | cp-19-persistence-lifecycle | In progress | copilot/cp-19 | Lifecycle controller and persistence round-trip integration worktree active. |
+| [x] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 | cp-19-persistence-lifecycle | Done | 85f79f4 | Persistence lifecycle integrated with round-trip, CAS, read-only, and non-destructive Save As permission handling. |
 | [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 |  | Not started |  |  |
 | [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 |  | Not started |  |  |
 | [ ] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 |  | Not started |  |  |
