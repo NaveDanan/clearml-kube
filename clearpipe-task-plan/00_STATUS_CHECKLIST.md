@@ -19,7 +19,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-13](./cp_13_function-code-generator.md) | 3 | 5 | cp-13-function-generator | Done | 546746b | Deterministic function-step lowerer integrated. |
 | [x] | [CP-14](./cp_14_service-adapters-route-integration.md) | 3 | 8 | cp-14-service-adapters | Done | 697f5d5 | Single typed platform adapter and guarded route handoffs integrated. |
 | [x] | [CP-15](./cp_15_workspace-shell-first-use.md) | 3 | 5 | cp-15-workspace-shell | Done | c87f234 | Slot-based three-region workspace shell integrated. |
-| [ ] | [CP-16](./cp_16_canvas-foundation.md) | 4 | 8 | cp-16-canvas | In progress | copilot/cp-16 | Canvas adapter worktree active. |
+| [x] | [CP-16](./cp_16_canvas-foundation.md) | 4 | 8 | cp-16-canvas | Done | fab3dbb | Canonical canvas foundation integrated with zoom-safe drag, minimap mapping, and pointer-accessible keyboard controls. |
 | [ ] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | In progress | copilot/cp-17 | Generic catalog/card/port/inspector worktree active. |
 | [ ] | [CP-18](./cp_18_shared-resource-query-layer.md) | 4 | 5 | cp-18-resource-queries | In progress | copilot/cp-18 | Shared authorized resource query worktree active. |
 | [ ] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 | cp-19-persistence-lifecycle | In progress | copilot/cp-19 | Lifecycle controller and persistence round-trip integration worktree active. |
