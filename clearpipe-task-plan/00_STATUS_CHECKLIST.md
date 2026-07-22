@@ -25,8 +25,8 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 | cp-19-persistence-lifecycle | Done | 85f79f4 | Persistence lifecycle integrated with round-trip, CAS, read-only, and non-destructive Save As permission handling. |
 | [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 |  | Not started |  |  |
 | [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 |  | Not started |  |  |
-| [ ] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 |  | Not started |  |  |
-| [ ] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 |  | Not started |  |  |
+| [ ] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 | cp-22-import-export | In progress | copilot/cp-22 | Versioned document transfer and unsaved-change guard worktree active. |
+| [ ] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | In progress | copilot/cp-23 | Lifecycle toolbar and read-only code preview worktree active. |
 | [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
 | [ ] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
 | [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 |  | Not started |  |  |
