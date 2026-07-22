@@ -28,6 +28,8 @@ export class ClearpipeCodePreviewComponent {
   readonly diagnostics = signal<readonly ClearpipeCodeDiagnostic[]>([]);
   readonly copied = signal(false);
   private requestedFingerprint: string | null = null;
+  private activeFingerprint: string | null = null;
+  private queuedGeneration: {graph: GraphV2; fingerprint: string} | null = null;
 
   protected readonly source = computed(() => this.generated()?.source ?? '');
   protected readonly highlightedSource = computed(() => highlightClearpipePython(this.source()));
@@ -51,31 +53,68 @@ export class ClearpipeCodePreviewComponent {
   }
 
   regenerate(graph = this.graph(), fingerprint = graph ? clearpipeSemanticFingerprint(graph) : null): void {
-    if (!graph || !fingerprint || this.generating()) return;
+    if (!graph || !fingerprint) return;
     this.requestedFingerprint = fingerprint;
+    if (this.activeFingerprint) {
+      if (this.activeFingerprint !== fingerprint) {
+        this.queuedGeneration = {graph, fingerprint};
+        this.generated.set(null);
+        this.diagnostics.set([]);
+      }
+      return;
+    }
+    this.startGeneration(graph, fingerprint);
+  }
+
+  private startGeneration(graph: GraphV2, fingerprint: string): void {
+    this.activeFingerprint = fingerprint;
     this.generating.set(true);
     this.diagnostics.set([]);
-    this.adapter.validate({graph}).subscribe(outcome => {
-      if (outcome.status === 'loading') return;
-      this.generating.set(false);
-      if (outcome.status === 'ready' || outcome.status === 'validation_failed') {
-        const source = sourceFromCompilerOutput(outcome.data.pipeline);
-        if (source) {
-          this.generated.set({source, semanticFingerprint: fingerprint});
-          this.diagnostics.set(outcome.status === 'validation_failed' ? this.issues(outcome.problem) : []);
-        } else {
-          this.generated.set(null);
-          this.diagnostics.set(this.issues(outcome.status === 'validation_failed' ? outcome.problem : {
-            code: 'compilation_unavailable',
-            message: 'Generated source is unavailable until the approved ClearPipe compiler publishes source output.',
-            retryable: false,
-          }));
+    this.adapter.validate({graph}).subscribe({
+      next: outcome => {
+        if (outcome.status === 'loading' || this.activeFingerprint !== fingerprint) return;
+        if (this.requestedFingerprint === fingerprint) {
+          if (outcome.status === 'ready' || outcome.status === 'validation_failed') {
+            const source = sourceFromCompilerOutput(outcome.data.pipeline);
+            if (source) {
+              this.generated.set({source, semanticFingerprint: fingerprint});
+              this.diagnostics.set(outcome.status === 'validation_failed' ? this.issues(outcome.problem) : []);
+            } else {
+              this.generated.set(null);
+              this.diagnostics.set(this.issues(outcome.status === 'validation_failed' ? outcome.problem : {
+                code: 'compilation_unavailable',
+                message: 'Generated source is unavailable until the approved ClearPipe compiler publishes source output.',
+                retryable: false,
+              }));
+            }
+          } else {
+            this.generated.set(null);
+            this.diagnostics.set(this.issues(outcome.problem));
+          }
         }
-        return;
-      }
-      this.generated.set(null);
-      this.diagnostics.set(this.issues(outcome.problem));
+        this.finishGeneration(fingerprint);
+      },
+      error: () => {
+        if (this.activeFingerprint !== fingerprint) return;
+        if (this.requestedFingerprint === fingerprint) {
+          this.generated.set(null);
+          this.diagnostics.set([{code: 'generation_failed', severity: 'error', message: 'ClearPipe source generation could not be completed.'}]);
+        }
+        this.finishGeneration(fingerprint);
+      },
     });
+  }
+
+  private finishGeneration(fingerprint: string): void {
+    if (this.activeFingerprint !== fingerprint) return;
+    this.activeFingerprint = null;
+    const queued = this.queuedGeneration;
+    this.queuedGeneration = null;
+    if (queued && queued.fingerprint !== fingerprint) {
+      this.startGeneration(queued.graph, queued.fingerprint);
+    } else {
+      this.generating.set(false);
+    }
   }
 
   async copy(): Promise<void> {

@@ -1,6 +1,6 @@
 import {signal} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
-import {Observable, of} from 'rxjs';
+import {Observable, of, Subject} from 'rxjs';
 import {ClearpipeAdapterService} from '../platform/clearpipe-adapter.service';
 import {ClearpipeAdapterOutcome} from '../platform/clearpipe-adapter.service';
 import {ClearpipeValidationResponse} from '../clearpipe-api.service';
@@ -117,6 +117,44 @@ describe('ClearPipe toolbar and code preview', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('# function');
     expect(adapter.validate).toHaveBeenCalledTimes(2);
+  });
+
+  it('queues the latest domain graph while an older preview is in flight and ignores its stale source', () => {
+    const adapter = jasmine.createSpyObj<ClearpipeAdapterService>('ClearpipeAdapterService', ['validate']);
+    const requests: Subject<ClearpipeAdapterOutcome<ClearpipeValidationResponse>>[] = [];
+    adapter.validate.and.callFake(() => {
+      const request = new Subject<ClearpipeAdapterOutcome<ClearpipeValidationResponse>>();
+      requests.push(request);
+      return request;
+    });
+    TestBed.configureTestingModule({
+      imports: [ClearpipeCodePreviewComponent],
+      providers: [{provide: ClearpipeAdapterService, useValue: adapter}],
+    });
+    const fixture = TestBed.createComponent(ClearpipeCodePreviewComponent);
+    const graphA = taskGraph();
+    const graphB = structuredClone(graphA);
+    graphB.nodes[0].configuration.cache = true;
+    fixture.componentRef.setInput('graph', graphA);
+    fixture.componentRef.setInput('open', true);
+    fixture.detectChanges();
+    expect(requests.length).toBe(1);
+
+    fixture.componentRef.setInput('graph', graphB);
+    fixture.detectChanges();
+    expect(requests.length).toBe(1);
+    requests[0].next({status: 'ready', data: {valid: true, issues: [], pipeline: {source: '# graph A\n'}}});
+    fixture.detectChanges();
+
+    expect(requests.length).toBe(2);
+    expect(fixture.nativeElement.textContent).not.toContain('# graph A');
+    expect(fixture.componentInstance.generating()).toBeTrue();
+
+    requests[1].next({status: 'ready', data: {valid: true, issues: [], pipeline: {source: '# graph B\n'}}});
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('# graph B');
+    expect(fixture.componentInstance.generated()?.semanticFingerprint).toBe(clearpipeSemanticFingerprint(graphB));
+    expect(fixture.componentInstance.generating()).toBeFalse();
   });
 
   it('shows compiler diagnostics instead of inventing source when generation fails', () => {
