@@ -1,5 +1,5 @@
 import {Routes} from '@angular/router';
-import {generalLeavingBeforeSaveAlertGuard} from '@common/shared/guards/general-leaving-before-save-alert.guard';
+import {clearpipeUnsavedWorkGuard} from './editor/clearpipe-unsaved-work.guard';
 
 export const clearpipeRoutes: Routes = [
   {
@@ -9,17 +9,17 @@ export const clearpipeRoutes: Routes = [
   {
     path: 'new',
     loadComponent: () => import('./editor/clearpipe-editor.component').then(m => m.ClearpipeEditorComponent),
-    canDeactivate: [generalLeavingBeforeSaveAlertGuard],
+    canDeactivate: [clearpipeUnsavedWorkGuard],
   },
   {
     path: ':taskId/edit',
     loadComponent: () => import('./editor/clearpipe-editor.component').then(m => m.ClearpipeEditorComponent),
-    canDeactivate: [generalLeavingBeforeSaveAlertGuard],
+    canDeactivate: [clearpipeUnsavedWorkGuard],
     data: {clearpipeVisualEdit: true},
   },
   {
     path: ':taskId',
     loadComponent: () => import('./editor/clearpipe-editor.component').then(m => m.ClearpipeEditorComponent),
-    canDeactivate: [generalLeavingBeforeSaveAlertGuard],
+    canDeactivate: [clearpipeUnsavedWorkGuard],
   },
 ];
