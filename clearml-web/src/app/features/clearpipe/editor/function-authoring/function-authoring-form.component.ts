@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy, Component, computed, effect, inject, Signal} from '@angular/core';
+import {ChangeDetectionStrategy, Component, computed, effect, inject, signal, Signal} from '@angular/core';
 import {FormArray, FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {MatButtonModule} from '@angular/material/button';
 import {MatCheckboxModule} from '@angular/material/checkbox';
@@ -44,6 +44,7 @@ export class ClearpipeFunctionAuthoringFormComponent implements ClearpipeInspect
     outputs: new FormArray<OutputForm>([]),
   });
   protected readonly diagnostics = computed(() => validateFunctionAuthoringDefinition(this.definition()).diagnostics);
+  protected readonly saveMessage = signal<string | null>(null);
 
   constructor() {
     effect(() => this.load(this.clearpipeInspectorContext().node));
@@ -58,17 +59,32 @@ export class ClearpipeFunctionAuthoringFormComponent implements ClearpipeInspect
   }
 
   protected removeInput(index: number): void {
+    const port = this.form.controls.inputs.at(index);
+    if (this.isBound(port.controls.id.value)) {
+      this.saveMessage.set('Disconnect or remap this bound port through the edge controller before removing it.');
+      return;
+    }
     if (!this.clearpipeInspectorContext().readOnly) this.form.controls.inputs.removeAt(index);
   }
 
   protected removeOutput(index: number): void {
+    const port = this.form.controls.outputs.at(index);
+    if (this.isBound(port.controls.id.value)) {
+      this.saveMessage.set('Disconnect or remap this bound port through the edge controller before removing it.');
+      return;
+    }
     if (!this.clearpipeInspectorContext().readOnly) this.form.controls.outputs.removeAt(index);
   }
 
   protected save(): void {
     const node = this.clearpipeInspectorContext().node;
     if (this.clearpipeInspectorContext().readOnly || node.kind !== 'function') return;
-    this.authoring.update(node, this.definition());
+    const result = this.authoring.update(node, this.definition());
+    this.saveMessage.set(result.ok ? null : result.errors[0]?.message ?? 'The function definition could not be saved.');
+  }
+
+  protected isBound(portId: string): boolean {
+    return this.authoring.isPortBound(this.clearpipeInspectorContext().node.id, portId);
   }
 
   private load(node: FunctionNode): void {

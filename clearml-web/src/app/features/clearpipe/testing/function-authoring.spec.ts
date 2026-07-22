@@ -1,6 +1,10 @@
 import {ClearpipeExtensionRegistry} from '../editor/framework/clearpipe-extension-registry';
 import {TestBed} from '@angular/core/testing';
-import {clearpipeFunctionAuthoringExtension} from '../editor/function-authoring/function-authoring.extension';
+import {
+  clearpipeFunctionAuthoringCatalogAction,
+  clearpipeFunctionAuthoringExtension,
+} from '../editor/function-authoring/function-authoring.extension';
+import {ClearpipeFunctionAuthoringCreateComponent} from '../editor/function-authoring/function-authoring-create.component';
 import {FunctionAuthoringDefinition} from '../editor/function-authoring/function-authoring.models';
 import {ClearpipeFunctionAuthoringService} from '../editor/function-authoring/function-authoring.service';
 import {validateFunctionAuthoringDefinition} from '../editor/function-authoring/function-authoring.validation';
@@ -45,6 +49,39 @@ describe('CP-25 function authoring', () => {
       nodeKind: 'function',
     })]);
     expect(registry.get('function')?.form?.id).toBe('function-authoring');
+  });
+
+  it('prepares the catalog action for the forthcoming generic extension host without touching it', () => {
+    const open = jasmine.createSpy('open');
+    const action = clearpipeFunctionAuthoringCatalogAction(open);
+
+    action.execute();
+
+    expect(action.catalogEntryId).toBe('explicit-function');
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('collects explicit name, signature, and source in the constrained create flow', () => {
+    const fixture = TestBed.createComponent(ClearpipeFunctionAuthoringCreateComponent);
+    const created = jasmine.createSpy('created');
+    fixture.componentInstance.created.subscribe(created);
+    fixture.componentInstance.createForm.patchValue({
+      name: 'new_component',
+      label: 'New component',
+      signature: 'def new_component()',
+      source: 'def new_component():\n    return 1\n',
+      taskType: 'data_processing',
+      queueResourceId: 'queue-default',
+    });
+
+    fixture.componentInstance.create();
+
+    expect(created).toHaveBeenCalledWith(jasmine.any(String));
+    expect(store.nodes()).toEqual([jasmine.objectContaining({
+      name: 'new_component',
+      signature: 'def new_component()',
+      source: 'def new_component():\n    return 1\n',
+    })]);
   });
 
   it('creates single and multiple output components with stable typed port identities', () => {
@@ -174,5 +211,42 @@ describe('CP-25 function authoring', () => {
       configuration: {task_type: 'testing', cache: false},
       ports: jasmine.arrayContaining([jasmine.objectContaining({id: 'output-result', name: 'normalized'})]),
     }));
+  });
+
+  it('rejects a bound port removal or incompatible edit until CP-20 disconnects or remaps it', () => {
+    const producer = authoring.create(definition({
+      name: 'source_data',
+      label: 'Source data',
+      signature: 'def source_data()',
+      source: 'def source_data():\n    return 1\n',
+      inputs: [],
+    }));
+    const consumer = authoring.create(definition());
+    expect(store.addBinding({
+      id: 'bound-data',
+      kind: 'data',
+      source: {kind: 'port', node_id: producer.id!, port_id: 'output-result'},
+      target: {kind: 'port', node_id: consumer.id!, port_id: 'input-value'},
+    }).ok).toBeTrue();
+    const current = store.node(consumer.id!) as FunctionNode;
+    const result = authoring.update(current, definition({
+      inputs: [{id: 'input-prefix', name: 'prefix', type: 'parameter', required: false, default: ''}],
+    }));
+
+    expect(result).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'CP25BOUND001', message: jasmine.stringMatching(/Disconnect or remap/)})],
+    }));
+    expect(store.port(consumer.id!, 'input-value')).not.toBeNull();
+    expect(store.bindingsForPort(consumer.id!, 'input-value').map(binding => binding.id)).toEqual(['bound-data']);
+
+    const incompatible = authoring.update(current, definition({
+      inputs: [
+        {id: 'input-value', name: 'renamed_value', type: 'data', required: true},
+        {id: 'input-prefix', name: 'prefix', type: 'parameter', required: false, default: ''},
+      ],
+    }));
+    expect(incompatible.errors[0]?.code).toBe('CP25BOUND001');
+    expect(store.port(consumer.id!, 'input-value')?.name).toBe('value');
   });
 });

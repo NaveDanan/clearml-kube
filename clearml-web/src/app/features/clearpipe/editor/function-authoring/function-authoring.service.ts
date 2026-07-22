@@ -96,6 +96,18 @@ export class ClearpipeFunctionAuthoringService {
       ...definition.inputs.map((input, index) => port(input, 'input', index)),
       ...definition.outputs.map((output, index) => port(output, 'output', index)),
     ];
+    const boundPort = node.ports.find(existing => {
+      const desired = desiredPorts.find(candidate => candidate.id === existing.id);
+      return this.graphStore.bindingsForPort(node.id, existing.id).length
+        && (!desired || !this.samePort(existing, desired));
+    });
+    if (boundPort) {
+      return graphError(
+        'update-function-node',
+        'CP25BOUND001',
+        `Port "${boundPort.name}" is bound. Disconnect or remap it through the edge controller before editing or removing it.`,
+      );
+    }
     return this.graphStore.transaction('update function authoring definition', () => {
       this.graphStore.updateNodeMetadata(node.id, {label: definition.label.trim()});
       this.graphStore.updateNodeConfiguration(node.id, {
@@ -117,5 +129,20 @@ export class ClearpipeFunctionAuthoringService {
       node.ports.filter(existing => !desiredPortIds.has(existing.id))
         .forEach(existing => this.graphStore.removePort(node.id, existing.id));
     });
+  }
+
+  isPortBound(nodeId: string, portId: string): boolean {
+    return this.graphStore.bindingsForPort(nodeId, portId).length > 0;
+  }
+
+  private samePort(left: GraphPort, right: GraphPort): boolean {
+    return left.name === right.name
+      && left.direction === right.direction
+      && left.role === right.role
+      && left.required === right.required
+      && left.multiplicity === right.multiplicity
+      && left.order === right.order
+      && JSON.stringify(left.accepted_binding_kinds) === JSON.stringify(right.accepted_binding_kinds)
+      && JSON.stringify(left.default) === JSON.stringify(right.default);
   }
 }

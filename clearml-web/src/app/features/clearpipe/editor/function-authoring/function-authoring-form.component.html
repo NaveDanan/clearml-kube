@@ -9,15 +9,16 @@
     @for (input of form.controls.inputs.controls; track input.controls.id.value; let index = $index) {
       <fieldset [formGroupName]="index"><input aria-label="Input ID" formControlName="id"><input aria-label="Input name" formControlName="name">
         <select aria-label="Input type" formControlName="type"><option value="data">Data</option><option value="artifact">Artifact</option><option value="parameter">Parameter</option></select>
-        <label><input type="checkbox" formControlName="required"> Required</label><input aria-label="Default JSON" formControlName="defaultJson"><button type="button" (click)="removeInput(index)">Remove</button></fieldset>
+        <label><input type="checkbox" formControlName="required"> Required</label><input aria-label="Default JSON" formControlName="defaultJson"><button type="button" (click)="removeInput(index)" [disabled]="isBound(input.controls.id.value)" [attr.title]="isBound(input.controls.id.value) ? 'Disconnect or remap this port through the edge controller first.' : null">Remove</button></fieldset>
     } <button type="button" (click)="addInput()">Add input</button>
   </section>
   <section formArrayName="outputs"><h3>Typed outputs</h3>
     @for (output of form.controls.outputs.controls; track output.controls.id.value; let index = $index) {
       <fieldset [formGroupName]="index"><input aria-label="Output ID" formControlName="id"><input aria-label="Return name" formControlName="name">
-        <select aria-label="Output type" formControlName="type"><option value="data">Data</option><option value="artifact">Artifact</option></select><button type="button" (click)="removeOutput(index)">Remove</button></fieldset>
+        <select aria-label="Output type" formControlName="type"><option value="data">Data</option><option value="artifact">Artifact</option></select><button type="button" (click)="removeOutput(index)" [disabled]="isBound(output.controls.id.value)" [attr.title]="isBound(output.controls.id.value) ? 'Disconnect or remap this port through the edge controller first.' : null">Remove</button></fieldset>
     } <button type="button" (click)="addOutput()">Add output</button>
   </section>
   @for (issue of diagnostics(); track issue.code + issue.field) { <p class="clearpipe-function-form__error" role="alert">{{ issue.code }}: {{ issue.message }}</p> }
+  @if (saveMessage(); as message) { <p class="clearpipe-function-form__error" role="alert">{{ message }}</p> }
   <button mat-flat-button type="button" (click)="save()" [disabled]="clearpipeInspectorContext().readOnly || diagnostics().length">Save configuration</button>
 </form>
