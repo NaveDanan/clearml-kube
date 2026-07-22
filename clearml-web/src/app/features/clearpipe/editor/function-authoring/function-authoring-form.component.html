@@ -1,9 +1,12 @@
 <form class="clearpipe-function-form" [formGroup]="form">
   <p class="clearpipe-function-form__notice">Function source and signature are immutable after creation. Source is validated by the server compiler and is never executed here.</p>
   <mat-form-field appearance="outline"><mat-label>Component name</mat-label><input matInput formControlName="label"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Description</mat-label><textarea matInput formControlName="description" rows="2"></textarea></mat-form-field>
   <mat-form-field appearance="outline"><mat-label>Task type</mat-label><mat-select formControlName="taskType">@for (type of taskTypes; track type) { <mat-option [value]="type">{{ type }}</mat-option> }</mat-select></mat-form-field>
   <mat-form-field appearance="outline"><mat-label>Queue reference</mat-label><input matInput formControlName="queueResourceId"></mat-form-field>
   <mat-checkbox formControlName="cache">Cache executed step</mat-checkbox>
+  <mat-form-field appearance="outline"><mat-label>Package requirements (one per line)</mat-label><textarea matInput formControlName="packages" rows="3"></textarea></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Retry on failure</mat-label><input matInput formControlName="retryOnFailure" inputmode="numeric"></mat-form-field>
 
   <section formArrayName="inputs"><h3>Typed inputs</h3>
     @for (input of form.controls.inputs.controls; track input.controls.id.value; let index = $index) {

@@ -37,9 +37,12 @@ export class ClearpipeFunctionAuthoringFormComponent implements ClearpipeInspect
   protected readonly taskTypes = FUNCTION_AUTHORING_TASK_TYPES;
   protected readonly form = new FormGroup({
     label: new FormControl('', {nonNullable: true}),
+    description: new FormControl('', {nonNullable: true}),
     taskType: new FormControl('data_processing', {nonNullable: true}),
     queueResourceId: new FormControl('', {nonNullable: true}),
     cache: new FormControl(false, {nonNullable: true}),
+    packages: new FormControl('', {nonNullable: true}),
+    retryOnFailure: new FormControl('', {nonNullable: true}),
     inputs: new FormArray<PortForm>([]),
     outputs: new FormArray<OutputForm>([]),
   });
@@ -90,9 +93,12 @@ export class ClearpipeFunctionAuthoringFormComponent implements ClearpipeInspect
   private load(node: FunctionNode): void {
     this.form.patchValue({
       label: node.label,
+      description: node.description ?? '',
       taskType: node.configuration.task_type,
       queueResourceId: node.configuration.queue_resource_id ?? '',
       cache: !!node.configuration.cache,
+      packages: node.configuration.packages?.join('\n') ?? '',
+      retryOnFailure: node.configuration.retry_on_failure?.toString() ?? '',
     }, {emitEvent: false});
     this.form.controls.inputs.clear({emitEvent: false});
     this.form.controls.outputs.clear({emitEvent: false});
@@ -111,11 +117,14 @@ export class ClearpipeFunctionAuthoringFormComponent implements ClearpipeInspect
     return {
       name: node.name,
       label: this.form.controls.label.value,
+      description: this.form.controls.description.value || undefined,
       signature: node.signature,
       source: node.source,
       taskType: this.form.controls.taskType.value,
       queueResourceId: this.form.controls.queueResourceId.value || undefined,
       cache: this.form.controls.cache.value,
+      packages: this.packages(),
+      retryOnFailure: this.retryOnFailure(),
       inputs: this.form.controls.inputs.controls.map(control => ({
         id: control.controls.id.value,
         name: control.controls.name.value,
@@ -138,6 +147,16 @@ export class ClearpipeFunctionAuthoringFormComponent implements ClearpipeInspect
     } catch {
       return {default: value};
     }
+  }
+
+  private packages(): readonly string[] | undefined {
+    const values = this.form.controls.packages.value.split('\n').map(value => value.trim()).filter(Boolean);
+    return values.length ? values : undefined;
+  }
+
+  private retryOnFailure(): number | undefined {
+    const value = this.form.controls.retryOnFailure.value.trim();
+    return value ? Number(value) : undefined;
   }
 
   private inputForm(id: string, name: string, type: 'data' | 'artifact' | 'parameter' = 'data', required = false, defaultJson = ''): PortForm {

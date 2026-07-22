@@ -38,11 +38,14 @@ export class ClearpipeFunctionAuthoringCreateComponent {
   readonly createForm = new FormGroup({
     name: new FormControl('', {nonNullable: true}),
     label: new FormControl('', {nonNullable: true}),
+    description: new FormControl('', {nonNullable: true}),
     signature: new FormControl('', {nonNullable: true}),
     source: new FormControl('', {nonNullable: true}),
     taskType: new FormControl('data_processing', {nonNullable: true}),
     queueResourceId: new FormControl('', {nonNullable: true}),
     cache: new FormControl(false, {nonNullable: true}),
+    packages: new FormControl('', {nonNullable: true}),
+    retryOnFailure: new FormControl('', {nonNullable: true}),
     inputs: new FormArray<CreateInputForm>([]),
     outputs: new FormArray<CreateOutputForm>([
       new FormGroup({
@@ -97,11 +100,14 @@ export class ClearpipeFunctionAuthoringCreateComponent {
     return {
       name: this.createForm.controls.name.value,
       label: this.createForm.controls.label.value,
+      description: this.createForm.controls.description.value || undefined,
       signature: this.createForm.controls.signature.value,
       source: this.createForm.controls.source.value,
       taskType: this.createForm.controls.taskType.value,
       queueResourceId: this.createForm.controls.queueResourceId.value || undefined,
       cache: this.createForm.controls.cache.value,
+      packages: this.packages(),
+      retryOnFailure: this.retryOnFailure(),
       inputs: this.createForm.controls.inputs.controls.map(control => ({
         id: control.controls.id.value,
         name: control.controls.name.value,
@@ -124,5 +130,15 @@ export class ClearpipeFunctionAuthoringCreateComponent {
     } catch {
       return {default: value};
     }
+  }
+
+  private packages(): readonly string[] | undefined {
+    const values = this.createForm.controls.packages.value.split('\n').map(value => value.trim()).filter(Boolean);
+    return values.length ? values : undefined;
+  }
+
+  private retryOnFailure(): number | undefined {
+    const value = this.createForm.controls.retryOnFailure.value.trim();
+    return value ? Number(value) : undefined;
   }
 }

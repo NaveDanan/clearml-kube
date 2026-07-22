@@ -21,6 +21,7 @@ export interface FunctionAuthoringOutput {
 export interface FunctionAuthoringDefinition {
   readonly name: string;
   readonly label: string;
+  readonly description?: string;
   readonly signature: string;
   /**
    * Explicit constrained source. It is submitted unchanged to the canonical
@@ -32,7 +33,6 @@ export interface FunctionAuthoringDefinition {
   readonly cache: boolean;
   readonly inputs: readonly FunctionAuthoringPort[];
   readonly outputs: readonly FunctionAuthoringOutput[];
-  /** CP-06 v2 has no persistence field for these settings yet. */
   readonly packages?: readonly string[];
   readonly retryOnFailure?: number;
   /** CP-06 v2 has no safe function reference metadata field yet. */

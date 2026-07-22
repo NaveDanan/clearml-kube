@@ -49,6 +49,7 @@ export class ClearpipeFunctionAuthoringService {
     return this.graphStore.createFunctionNode({
       name: definition.name,
       label: definition.label.trim(),
+      ...(definition.description?.trim() ? {description: definition.description.trim()} : {}),
       signature: definition.signature,
       source: definition.source,
       ports: [
@@ -59,6 +60,8 @@ export class ClearpipeFunctionAuthoringService {
         task_type: definition.taskType,
         cache: definition.cache,
         ...(definition.queueResourceId ? {queue_resource_id: definition.queueResourceId} : {}),
+        ...(definition.packages?.length ? {packages: [...definition.packages]} : {}),
+        ...(definition.retryOnFailure !== undefined ? {retry_on_failure: definition.retryOnFailure} : {}),
       },
       visual: {position: {x: 0, y: 0}},
     });
@@ -68,14 +71,18 @@ export class ClearpipeFunctionAuthoringService {
    * CP-10 does not expose source/signature mutation. Existing function source
    * therefore stays immutable; this updates only fields with graph commands.
    */
-  updateConfiguration(node: FunctionNode, definition: Pick<FunctionAuthoringDefinition, 'label' | 'taskType' | 'queueResourceId' | 'cache'>): GraphCommandResult {
+  updateConfiguration(node: FunctionNode, definition: Pick<FunctionAuthoringDefinition, 'label' | 'description' | 'taskType' | 'queueResourceId' | 'cache' | 'packages' | 'retryOnFailure'>): GraphCommandResult {
     if (node.kind !== 'function') return graphError('update-function-node', 'CPSEM003', 'A function node is required.');
     const metadata = this.graphStore.updateNodeMetadata(node.id, {label: definition.label.trim()});
     if (!metadata.ok) return metadata;
-    return this.graphStore.updateNodeConfiguration(node.id, {
+    const description = this.graphStore.updateFunctionDescription(node.id, definition.description?.trim() || undefined);
+    if (!description.ok) return description;
+    return this.graphStore.updateFunctionConfiguration(node.id, {
       task_type: definition.taskType,
       cache: definition.cache,
       queue_resource_id: definition.queueResourceId,
+      packages: definition.packages?.length ? [...definition.packages] : undefined,
+      retry_on_failure: definition.retryOnFailure,
     });
   }
 
@@ -110,10 +117,13 @@ export class ClearpipeFunctionAuthoringService {
     }
     return this.graphStore.transaction('update function authoring definition', () => {
       this.graphStore.updateNodeMetadata(node.id, {label: definition.label.trim()});
-      this.graphStore.updateNodeConfiguration(node.id, {
+      this.graphStore.updateFunctionDescription(node.id, definition.description?.trim() || undefined);
+      this.graphStore.updateFunctionConfiguration(node.id, {
         task_type: definition.taskType,
         cache: definition.cache,
         queue_resource_id: definition.queueResourceId,
+        packages: definition.packages?.length ? [...definition.packages] : undefined,
+        retry_on_failure: definition.retryOnFailure,
       });
       const knownPortIds = new Set(node.ports.map(port => port.id));
       desiredPorts.forEach(next => {

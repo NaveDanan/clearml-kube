@@ -1,29 +1,18 @@
 import {EnvironmentProviders, inject, Injectable, makeEnvironmentProviders, provideEnvironmentInitializer} from '@angular/core';
+import {MatDialog} from '@angular/material/dialog';
 import {FunctionNode} from '../../domain/graph-v2.types';
+import {GraphStoreService} from '../../domain/graph-store.service';
 import {ClearpipeExtensionRegistry} from '../framework/clearpipe-extension-registry';
-import {defineClearpipeNodeExtension} from '../framework/clearpipe-ui.types';
+import {ClearpipeCatalogActionRegistration, ClearpipeCatalogActionRequest, defineClearpipeNodeExtension} from '../framework/clearpipe-ui.types';
 import {ClearpipeFunctionAuthoringFormComponent} from './function-authoring-form.component';
 import {ClearpipeFunctionAuthoringCreateComponent} from './function-authoring-create.component';
 
-/**
- * Structural match for CP-24's forthcoming catalog-action registration.
- * The host owns mounting the create component; CP-25 never reaches into its
- * framework, route, or editor implementation while that work is active.
- */
-export interface ClearpipeFunctionAuthoringCatalogAction {
-  readonly catalogEntryId: 'explicit-function';
-  readonly execute: () => void | Promise<void>;
-}
-
 export const clearpipeFunctionAuthoringCatalogAction = (
-  openCreateFlow: () => void | Promise<void>,
-): ClearpipeFunctionAuthoringCatalogAction => ({
+  openCreateFlow: (request: ClearpipeCatalogActionRequest) => void | Promise<void>,
+): ClearpipeCatalogActionRegistration => ({
   catalogEntryId: 'explicit-function',
   execute: openCreateFlow,
 });
-
-/** The generic extension host uses this public component after its action seam lands. */
-export const clearpipeFunctionAuthoringCreateComponent = ClearpipeFunctionAuthoringCreateComponent;
 
 export const clearpipeFunctionAuthoringExtension = defineClearpipeNodeExtension<FunctionNode>({
   nodeKind: 'function',
@@ -42,18 +31,36 @@ export const clearpipeFunctionAuthoringExtension = defineClearpipeNodeExtension<
 });
 
 @Injectable()
-class FunctionAuthoringExtensionRegistration {
+export class FunctionAuthoringExtensionRegistration {
   private registered = false;
   private readonly registry = inject(ClearpipeExtensionRegistry);
+  private readonly dialog = inject(MatDialog);
+  private readonly graphStore = inject(GraphStoreService);
 
   register(): void {
     if (this.registered || this.registry.get('function')) return;
     this.registry.register(clearpipeFunctionAuthoringExtension);
+    this.registry.registerCatalogAction(clearpipeFunctionAuthoringExtension,
+      clearpipeFunctionAuthoringCatalogAction(request => this.openCreateFlow(request)));
     this.registered = true;
+  }
+
+  private openCreateFlow(request: ClearpipeCatalogActionRequest): void {
+    void request;
+    const dialog = this.dialog.open(ClearpipeFunctionAuthoringCreateComponent, {
+      width: 'min(720px, calc(100vw - 32px))',
+      maxHeight: 'calc(100vh - 32px)',
+      autoFocus: 'dialog',
+    });
+    dialog.componentInstance.created.subscribe(nodeId => {
+      this.graphStore.selectNode(nodeId);
+      dialog.close();
+    });
   }
 }
 
 /** Register at the application feature-provider boundary; generic CP-17 stays domain-neutral. */
 export const provideClearpipeFunctionAuthoring = (): EnvironmentProviders => makeEnvironmentProviders([
+  FunctionAuthoringExtensionRegistration,
   provideEnvironmentInitializer(() => inject(FunctionAuthoringExtensionRegistration).register()),
 ]);

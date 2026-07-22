@@ -1,5 +1,6 @@
 import {ClearpipeExtensionRegistry} from '../editor/framework/clearpipe-extension-registry';
 import {TestBed} from '@angular/core/testing';
+import {clearpipeRoutes} from '../clearpipe.routes';
 import {
   clearpipeFunctionAuthoringCatalogAction,
   clearpipeFunctionAuthoringExtension,
@@ -15,11 +16,14 @@ import {FunctionNode} from '../domain/graph-v2.types';
 const definition = (overrides: Partial<FunctionAuthoringDefinition> = {}): FunctionAuthoringDefinition => ({
   name: 'transform_data',
   label: 'Transform data',
+  description: 'Normalizes input data.',
   signature: 'def transform_data(value, prefix="")',
   source: 'def transform_data(value, prefix=""):\n    return value\n',
   taskType: 'data_processing',
   queueResourceId: 'queue-default',
   cache: true,
+  packages: ['numpy==2.0'],
+  retryOnFailure: 2,
   inputs: [
     {id: 'input-value', name: 'value', type: 'data', required: true},
     {id: 'input-prefix', name: 'prefix', type: 'parameter', required: false, default: ''},
@@ -51,14 +55,23 @@ describe('CP-25 function authoring', () => {
     expect(registry.get('function')?.form?.id).toBe('function-authoring');
   });
 
-  it('prepares the catalog action for the forthcoming generic extension host without touching it', () => {
+  it('registers a typed catalog action for the generic extension host', async () => {
+    const registry = new ClearpipeExtensionRegistry();
+    registry.register(clearpipeFunctionAuthoringExtension);
     const open = jasmine.createSpy('open');
     const action = clearpipeFunctionAuthoringCatalogAction(open);
+    registry.registerCatalogAction(clearpipeFunctionAuthoringExtension, action);
+    const entry = registry.catalogEntry('explicit-function')!;
 
-    action.execute();
+    await registry.dispatchCatalogAction({entry, method: 'click'}, {readOnly: false});
 
-    expect(action.catalogEntryId).toBe('explicit-function');
+    expect(registry.catalogActionAvailability(entry.id)).toEqual({available: true});
     expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('composes the feature provider at every ClearPipe editor route', () => {
+    const editorRoutes = clearpipeRoutes.filter(route => ['new', ':taskId/edit', ':taskId'].includes(route.path ?? ''));
+    expect(editorRoutes.every(route => route.providers?.length)).toBeTrue();
   });
 
   it('collects explicit name, signature, and source in the constrained create flow', () => {
@@ -68,10 +81,13 @@ describe('CP-25 function authoring', () => {
     fixture.componentInstance.createForm.patchValue({
       name: 'new_component',
       label: 'New component',
+      description: 'Created through the catalog flow.',
       signature: 'def new_component()',
       source: 'def new_component():\n    return 1\n',
       taskType: 'data_processing',
       queueResourceId: 'queue-default',
+      packages: 'requests==2.32',
+      retryOnFailure: '1',
     });
 
     fixture.componentInstance.create();
@@ -81,6 +97,8 @@ describe('CP-25 function authoring', () => {
       name: 'new_component',
       signature: 'def new_component()',
       source: 'def new_component():\n    return 1\n',
+      description: 'Created through the catalog flow.',
+      configuration: jasmine.objectContaining({packages: ['requests==2.32'], retry_on_failure: 1}),
     })]);
   });
 
@@ -111,7 +129,11 @@ describe('CP-25 function authoring', () => {
     const node = store.node(result.id!);
 
     expect(node).toEqual(jasmine.objectContaining({
-      configuration: {task_type: 'data_processing', cache: true, queue_resource_id: 'queue-default'},
+      configuration: jasmine.objectContaining({task_type: 'data_processing', cache: true, queue_resource_id: 'queue-default'}),
+    }));
+    expect(node).toEqual(jasmine.objectContaining({
+      description: 'Normalizes input data.',
+      configuration: jasmine.objectContaining({packages: ['numpy==2.0'], retry_on_failure: 2}),
     }));
     expect(node?.ports.find(port => port.id === 'input-prefix')).toEqual(jasmine.objectContaining({
       accepted_binding_kinds: ['parameter'],
@@ -176,22 +198,20 @@ describe('CP-25 function authoring', () => {
     const validation = validateFunctionAuthoringDefinition(unsafe);
 
     expect(validation.valid).toBeFalse();
-    expect(validation.diagnostics.map(issue => issue.code)).toEqual(jasmine.arrayContaining(['CPSEM003', 'CP25CONTRACT001']));
+    expect(validation.diagnostics.map(issue => issue.code)).toEqual(jasmine.arrayContaining(['CPSEM003', 'CPSEM010']));
     expect(JSON.stringify(validation.diagnostics)).not.toContain(marker);
     expect(JSON.stringify(validation.diagnostics)).not.toContain('password');
     expect(authoring.create(unsafe)).toEqual(jasmine.objectContaining({ok: false}));
     expect(store.nodes()).toEqual([]);
   });
 
-  it('reports unavailable packages, retry, and reference metadata rather than writing unsupported CP-06 fields', () => {
+  it('persists packages and retry settings while rejecting unsupported reference metadata', () => {
     const validation = validateFunctionAuthoringDefinition(definition({
-      packages: ['numpy'],
-      retryOnFailure: 2,
       reference: 'components/normalize-v1',
     }));
 
     expect(validation.diagnostics).toContain(jasmine.objectContaining({code: 'CP25CONTRACT001'}));
-    expect(authoring.create(definition({packages: ['numpy']})).ok).toBeFalse();
+    expect(authoring.create(definition({reference: 'components/normalize-v1'})).ok).toBeFalse();
   });
 
   it('updates typed ports and configuration through CP-10 commands while retaining output IDs', () => {
@@ -202,14 +222,21 @@ describe('CP-25 function authoring', () => {
       taskType: 'testing',
       cache: false,
       queueResourceId: undefined,
+      description: 'Updated component',
+      packages: ['pandas==2.2'],
+      retryOnFailure: 3,
       outputs: [{id: 'output-result', name: 'normalized', type: 'data'}],
     }));
 
     expect(updated.ok).toBeTrue();
     expect(store.node(created.id!)).toEqual(jasmine.objectContaining({
       label: 'Transform data v2',
-      configuration: {task_type: 'testing', cache: false},
+      configuration: jasmine.objectContaining({task_type: 'testing', cache: false}),
       ports: jasmine.arrayContaining([jasmine.objectContaining({id: 'output-result', name: 'normalized'})]),
+    }));
+    expect(store.node(created.id!)).toEqual(jasmine.objectContaining({
+      description: 'Updated component',
+      configuration: jasmine.objectContaining({packages: ['pandas==2.2'], retry_on_failure: 3}),
     }));
   });
 

@@ -4,10 +4,10 @@
 
 `provideClearpipeFunctionAuthoring()` registers the `function` CP-17 extension.
 The extension supplies the explicit function catalog entry and constrained typed
-inspector form. `clearpipeFunctionAuthoringCatalogAction()` structurally
-prepares the CP-24 catalog-action registration; the active generic-host owner
-will mount `ClearpipeFunctionAuthoringCreateComponent` through that seam.
-CP-25 does not modify the generic framework or routes.
+inspector form. `clearpipeFunctionAuthoringCatalogAction()` is registered with
+the integrated CP-24 catalog-action seam at the ClearPipe route provider
+boundary; it opens `ClearpipeFunctionAuthoringCreateComponent`. CP-25 does not
+modify the generic framework.
 
 `ClearpipeFunctionAuthoringService.create(definition)` creates a function only
 through CP-10's `createFunctionNode`. `update(node, definition)` uses CP-10
@@ -30,14 +30,11 @@ fails CP-13 rather than infer a signature.
 
 ## Verified contract gaps
 
-CP-06 v2 currently only persists `task_type`, `cache`, and `queue_resource_id` on
-function configuration. It has no fields for packages, retry policy,
-description distinct from `label`, safe component reference metadata, or
-source/signature mutation commands. CP-25 therefore rejects packages, retry,
-and references with `CP25CONTRACT001`, and source/signature updates with
-`CP25CONTRACT002`, rather than create shadow state or modify CP-06/CP-10. The
-in-flight graph-contract correction owns those persisted fields; once it lands,
-the CP-25 form can expose them through the canonical commands.
+CP-06 v2 now persists `description`, packages, and retry policy. CP-25 uses
+`updateFunctionDescription` and `updateFunctionConfiguration` rather than
+shadow state. Safe component reference metadata and source/signature mutation
+remain unavailable, so CP-25 rejects references with `CP25CONTRACT001` and
+source/signature updates with `CP25CONTRACT002`.
 
 Bound ports are immutable in CP-25. A removal or semantic port change returns
 `CP25BOUND001` and the form directs the user to CP-20's disconnect/remap flow;
