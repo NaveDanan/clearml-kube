@@ -1,10 +1,11 @@
-import {ChangeDetectionStrategy, Component, computed, ElementRef, inject, output, signal, viewChild} from '@angular/core';
+import {ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, output, signal, viewChild} from '@angular/core';
 import {MatButtonModule} from '@angular/material/button';
 import {MatIconModule} from '@angular/material/icon';
 import {MatMenuModule} from '@angular/material/menu';
 import {ClearpipeLifecycleService} from './clearpipe-lifecycle.service';
 import {ClearpipeDocumentTransferService} from './clearpipe-document-transfer.service';
 import {clearpipeToolbarActions, ClearpipeToolbarAction, ClearpipeToolbarActionId} from './clearpipe-toolbar.model';
+import {ClearpipeExecutionAction} from './execution/clearpipe-execution.models';
 
 @Component({
   selector: 'sm-clearpipe-toolbar',
@@ -20,11 +21,17 @@ export class ClearpipeToolbarComponent {
   readonly openRequested = output<void>();
   readonly validateRequested = output<void>();
   readonly previewRequested = output<void>();
+  readonly runRequested = output<void>();
+  readonly saved = output<void>();
   readonly settingsRequested = output<void>();
+  readonly runAction = input<ClearpipeExecutionAction>({
+    disabled: true,
+    disabledReason: 'Run checks are not available for this ClearPipe definition.',
+  });
   protected readonly transferMessage = signal('');
 
   protected readonly actions = computed(() =>
-    clearpipeToolbarActions(this.lifecycle, this.lifecycle.graph() !== null && !this.lifecycle.readOnly()));
+    clearpipeToolbarActions(this.lifecycle, this.lifecycle.graph() !== null && !this.lifecycle.readOnly(), this.runAction()));
 
   protected action(id: ClearpipeToolbarActionId): ClearpipeToolbarAction {
     return this.actions().find(action => action.id === id)!;
@@ -39,6 +46,7 @@ export class ClearpipeToolbarComponent {
         return;
       case 'save':
         await this.lifecycle.save();
+        if (this.lifecycle.status() === 'saved') this.saved.emit();
         return;
       case 'open':
         this.openRequested.emit();
@@ -48,6 +56,9 @@ export class ClearpipeToolbarComponent {
         return;
       case 'preview':
         this.previewRequested.emit();
+        return;
+      case 'run':
+        this.runRequested.emit();
         return;
       case 'import':
         this.importInput()?.nativeElement.click();
