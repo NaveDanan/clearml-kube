@@ -1,6 +1,6 @@
-import graphStoreFixture from './fixtures/graph-store.v2.json';
-import {decodeGraphV2} from './graph-v2-codec';
-import {createEmptyGraphV2, GraphStoreService, graphV2LogicallyEquals} from './graph-store.service';
+import graphStoreFixture from '../domain/fixtures/graph-store.v2.json';
+import {decodeGraphV2} from '../domain/graph-v2-codec';
+import {createEmptyGraphV2, GraphStoreService, graphV2LogicallyEquals} from '../domain/graph-store.service';
 
 describe('GraphStoreService', () => {
   let store: GraphStoreService;
