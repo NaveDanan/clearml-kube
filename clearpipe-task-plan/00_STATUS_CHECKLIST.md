@@ -13,7 +13,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-07](./cp_07_backend-integration-contracts.md) | 2 | 5 | cp-07-backend-contract | Done | 0fdefec | Typed existing-service contract; safe v2 persistence and secret override rejection integrated. |
 | [x] | [CP-08](./cp_08_ux-architecture-contract.md) | 2 | 5 | cp-08-ux-contract | Done | b8a2449 | UX architecture and slot/accessibility contract integrated. |
 | [x] | [CP-09](./cp_09_test-architecture-harness.md) | 2 | 5 | cp-09-harness-resume | Done | 2efd5d7 | Dedicated harness; ClearPipe, `/pipelines`, server, and Redis-backed schema checks pass. |
-| [ ] | [CP-10](./cp_10_graph-state-engine.md) | 3 | 8 | cp-10-state-engine | In progress | copilot/cp-10 | Review correction in progress: selected-port freshness and transaction transient rollback. |
+| [x] | [CP-10](./cp_10_graph-state-engine.md) | 3 | 8 | cp-10-state-engine | Done | f64dcc1 | Canonical graph state engine with reviewed selected-port freshness and transactional transient rollback fixes integrated. |
 | [x] | [CP-11](./cp_11_validation-engine.md) | 3 | 8 | cp-11-validation-engine | Done | b92afe9 | Deterministic validation/preflight engine with authorization and legacy-secret fixes integrated. |
 | [x] | [CP-12](./cp_12_task-code-generator.md) | 3 | 5 | cp-12-task-generator | Done | 0994507 | Deterministic task compiler and resource source-map coverage integrated. |
 | [x] | [CP-13](./cp_13_function-code-generator.md) | 3 | 5 | cp-13-function-generator | Done | 546746b | Deterministic function-step lowerer integrated. |
@@ -22,7 +22,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [ ] | [CP-16](./cp_16_canvas-foundation.md) | 4 | 8 | cp-16-canvas | In progress | copilot/cp-16 | Canvas adapter worktree active. |
 | [ ] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | In progress | copilot/cp-17 | Generic catalog/card/port/inspector worktree active. |
 | [ ] | [CP-18](./cp_18_shared-resource-query-layer.md) | 4 | 5 | cp-18-resource-queries | In progress | copilot/cp-18 | Shared authorized resource query worktree active. |
-| [ ] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 |  | Not started |  |  |
+| [ ] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 | cp-19-persistence-lifecycle | In progress | copilot/cp-19 | Lifecycle controller and persistence round-trip integration worktree active. |
 | [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 |  | Not started |  |  |
 | [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 |  | Not started |  |  |
 | [ ] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 |  | Not started |  |  |
