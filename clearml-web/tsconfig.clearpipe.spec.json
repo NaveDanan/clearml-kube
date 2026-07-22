@@ -6,7 +6,7 @@
   },
   "files": ["src/test.ts", "src/polyfills.ts"],
   "include": [
-    "src/app/features/clearpipe/**/*.spec.ts",
+    "src/app/features/clearpipe/testing/**/*.spec.ts",
     "src/**/*.d.ts"
   ]
 }

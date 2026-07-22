@@ -191,6 +191,70 @@
             ]
           }
         },
+        "test-clearpipe": {
+          "builder": "@angular/build:karma",
+          "options": {
+            "main": "src/test.ts",
+            "karmaConfig": "./karma.clearpipe.conf.js",
+            "include": [
+              "src/app/features/clearpipe/testing/**/*.spec.ts"
+            ],
+            "watch": false,
+            "browsers": "ChromeHeadless",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "./tsconfig.clearpipe.spec.json",
+            "styles": [
+              "src/app/webapp-common/styles/style.scss"
+            ],
+            "stylePreprocessorOptions": {
+              "includePaths": [
+                "",
+                "src/app/webapp-common/styles/"
+              ]
+            },
+            "assets": [
+              "src/assets",
+              "src/favicon.ico",
+              "src/version.json",
+              "src/manifest.webmanifest",
+              "src/app/webapp-common/assets"
+            ]
+          }
+        },
+        "test-pipelines-regression": {
+          "builder": "@angular/build:karma",
+          "options": {
+            "main": "src/test.ts",
+            "karmaConfig": "./karma.conf.js",
+            "include": [
+              "src/app/webapp-common/pipelines/**/*.spec.ts"
+            ],
+            "watch": false,
+            "browsers": "ChromeHeadless",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "./src/app/features/clearpipe/testing/tsconfig.pipelines-regression.spec.json",
+            "styles": [
+              "src/app/webapp-common/styles/style.scss"
+            ],
+            "stylePreprocessorOptions": {
+              "includePaths": [
+                "",
+                "src/app/webapp-common/styles/"
+              ]
+            },
+            "assets": [
+              "src/assets",
+              "src/favicon.ico",
+              "src/version.json",
+              "src/manifest.webmanifest",
+              "src/app/webapp-common/assets"
+            ]
+          }
+        },
         "lint": {
           "builder": "@angular-eslint/builder:lint",
           "options": {

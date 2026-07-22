@@ -1,0 +1,12 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../../../../out-tsc/pipelines-regression-spec",
+    "types": ["jasmine", "node"]
+  },
+  "files": ["../../../../test.ts", "../../../../polyfills.ts"],
+  "include": [
+    "../../../../app/webapp-common/pipelines/**/*.spec.ts",
+    "../../../../**/*.d.ts"
+  ]
+}
