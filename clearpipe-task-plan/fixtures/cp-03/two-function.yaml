@@ -1,0 +1,45 @@
+id: cp03-two-function
+target: PipelineController.add_function_step
+controller:
+  name: function-pipeline
+  project: examples
+  version: 1.0.0
+  default_execution_queue: default
+nodes:
+  - id: normalize
+    kind: function
+    signature: "def normalize(value: int, increment: int = 1) -> int"
+    source: |
+      def normalize(value: int, increment: int = 1) -> int:
+          return value + increment
+    inputs:
+      value: 41
+      increment: 1
+    outputs: [normalized]
+    task_type: data_processing
+    cache: true
+  - id: format_result
+    kind: function
+    signature: "def format_result(value: int, prefix: str = 'result=') -> str"
+    source: |
+      def format_result(value: int, prefix: str = "result=") -> str:
+          return f"{prefix}{value}"
+    inputs:
+      value: ${normalize.normalized}
+      prefix: result=
+    outputs: [text]
+    task_type: qc
+    cache: true
+edges:
+  - kind: data
+    from: normalize.normalized
+    to: format_result.value
+  - kind: inferred
+    from: normalize
+    to: format_result
+    derived_from: normalize.normalized
+expected_source: two-function.expected.py
+expected_references:
+  - ${normalize.normalized}
+expected_parents:
+  format_result: [normalize]
