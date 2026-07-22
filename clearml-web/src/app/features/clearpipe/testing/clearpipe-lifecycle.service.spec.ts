@@ -215,6 +215,31 @@ describe('ClearpipeLifecycleService', () => {
     expect(lifecycle.saveDisabledReason()).toContain('permission');
   });
 
+  it('denies Save As without making an editable definition read-only or blocking its normal update', async () => {
+    const definition = fixtureDefinition({id: 'permission-task', document: functionGraph()});
+    adapter.currentCapabilities = capabilities({edit: true, save_as: false});
+    await lifecycle.open(definition.id);
+    store.setNodePosition('normalize', {x: 99, y: 1});
+
+    await lifecycle.saveAs('Forbidden copy');
+    expect(lifecycle.status()).toBe('operation-denied');
+    expect(lifecycle.problem()!.message).toContain('permission');
+    expect(store.editable()).toBeTrue();
+    expect(store.dirty()).toBeTrue();
+    expect(adapter.backend.calls.filter(call => call.operation === 'create').length).toBe(0);
+
+    await lifecycle.createVersion('Also forbidden');
+    expect(lifecycle.status()).toBe('operation-denied');
+    expect(store.editable()).toBeTrue();
+    expect(store.dirty()).toBeTrue();
+
+    await lifecycle.save();
+    expect(lifecycle.status()).toBe('saved');
+    expect(store.editable()).toBeTrue();
+    expect(store.dirty()).toBeFalse();
+    expect(adapter.backend.calls.filter(call => call.operation === 'update').length).toBe(1);
+  });
+
   it('keeps unsupported graphs read-only and rejects secret-bearing graphs before persistence', async () => {
     adapter.unsupported = true;
     await lifecycle.open('legacy-task');

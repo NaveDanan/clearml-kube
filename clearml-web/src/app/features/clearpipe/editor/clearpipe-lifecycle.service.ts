@@ -19,6 +19,7 @@ export type ClearpipeLifecycleStatus =
   | 'saved'
   | 'failed'
   | 'conflict'
+  | 'operation-denied'
   | 'permission-disabled'
   | 'read-only';
 
@@ -116,7 +117,7 @@ export class ClearpipeLifecycleService {
       await this.create('create', graph);
       return;
     }
-    if (!this.capability('edit', 'You do not have permission to update this ClearPipe definition.')) return;
+    if (!this.editCapability('You do not have permission to update this ClearPipe definition.')) return;
     await this.observe('update', this.adapter.update({
       task: identity.taskId,
       revision: identity.revision,
@@ -132,7 +133,10 @@ export class ClearpipeLifecycleService {
       this.fail(lifecycleProblem('A name is required to create a new ClearPipe definition.'));
       return;
     }
-    if (this.identity() && !this.capability('save_as', 'You do not have permission to save this ClearPipe graph as a new definition.')) return;
+    if (this.identity() && !this.capabilities()?.save_as) {
+      this.operationDenied('You do not have permission to save this ClearPipe graph as a new definition.');
+      return;
+    }
     const copy = structuredClone(graph);
     copy.document = {...copy.document, name: name.trim()};
     delete copy.document.id;
@@ -196,14 +200,19 @@ export class ClearpipeLifecycleService {
     return false;
   }
 
-  private capability(capability: keyof ClearpipeCapabilities, message: string): boolean {
-    if (!this.capabilities()?.[capability]) {
+  private editCapability(message: string): boolean {
+    if (!this.capabilities()?.edit) {
       this.graphStore.setEditable(false);
       this.status.set('permission-disabled');
       this.problem.set(lifecycleProblem(message));
       return false;
     }
     return true;
+  }
+
+  private operationDenied(message: string): void {
+    this.status.set('operation-denied');
+    this.problem.set(lifecycleProblem(message));
   }
 
   private async observe<T>(
