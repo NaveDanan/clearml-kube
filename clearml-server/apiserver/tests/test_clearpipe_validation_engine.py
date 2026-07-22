@@ -254,7 +254,7 @@ class ClearPipeValidationEngineTests(unittest.TestCase):
         resource_calls = []
         queue_calls = []
 
-        def resource_checker(kind, resource_id):
+        def resource_checker(kind, resource_id, lookup=()):
             resource_calls.append((kind, resource_id))
             return True
 
@@ -295,6 +295,42 @@ class ClearPipeValidationEngineTests(unittest.TestCase):
         ).validate(fixture("function-graph.v2.json"))
         self.assertFalse(callback_failure.valid)
         self.assertIn("CPRES006", codes(callback_failure))
+
+    def test_task_name_references_preserve_project_lookup_for_authorized_validation(self):
+        task_graph = fixture("task-graph.v2.json")
+        resource_calls = []
+
+        def resource_checker(kind, resource_id, lookup=()):
+            resource_calls.append((kind, resource_id, lookup))
+            return True
+
+        result = GraphValidator(
+            resource_checker=resource_checker,
+            queue_checker=lambda _: True,
+        ).validate(task_graph)
+
+        self.assertTrue(result.valid, result.to_dict())
+        self.assertEqual(
+            [item for item in resource_calls if item[2]],
+            [
+                (
+                    "task",
+                    "Pipeline step 1 dataset artifact",
+                    (
+                        ("name", "Pipeline step 1 dataset artifact"),
+                        ("project", "examples"),
+                    ),
+                ),
+                (
+                    "task",
+                    "Pipeline step 2 process dataset",
+                    (
+                        ("name", "Pipeline step 2 process dataset"),
+                        ("project", "examples"),
+                    ),
+                ),
+            ],
+        )
 
     def test_compatibility_validator_blocks_value_safe_unsupported_graph_secrets(self):
         legacy = {

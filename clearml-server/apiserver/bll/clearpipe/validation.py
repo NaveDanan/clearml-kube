@@ -1200,7 +1200,9 @@ class GraphValidator:
     Existing callers supply synchronous, authorized resource/queue callbacks.
     They are bridged without direct service imports and fail closed when absent,
     false, or exceptional. New callers should use ``ResourceResolver`` with
-    ``preflight_graph`` to retain missing/denied/stale distinctions.
+    ``preflight_graph`` to retain missing/denied/stale distinctions. A named
+    task lookup receives ``(kind, resource_id, lookup)`` so project/name
+    resolution cannot be mistaken for task-ID authorization.
     """
 
     def __init__(
@@ -1230,11 +1232,12 @@ class GraphValidator:
                 issues.append(_issue("CPRES006", request.target))
                 continue
             try:
-                allowed = (
-                    checker(request.resource_id)
-                    if request.kind == "queue"
-                    else checker(request.kind, request.resource_id)
-                )
+                if request.kind == "queue":
+                    allowed = checker(request.resource_id)
+                elif request.lookup:
+                    allowed = checker(request.kind, request.resource_id, request.lookup)
+                else:
+                    allowed = checker(request.kind, request.resource_id)
             except Exception:
                 issues.append(_issue("CPRES006", request.target))
                 continue

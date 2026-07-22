@@ -1,3 +1,4 @@
+import ast
 import json
 import unittest
 from contextlib import ExitStack
@@ -21,6 +22,7 @@ FUNCTION_GRAPH = (
     / "fixtures"
     / "function-graph.v2.json"
 )
+TASK_GRAPH = FUNCTION_GRAPH.with_name("task-graph.v2.json")
 
 
 class FakeQuerySet:
@@ -240,9 +242,9 @@ class ServiceFailurePolicyTests(unittest.TestCase):
 
 
 class V2StartTests(unittest.TestCase):
-    def test_start_clones_and_enqueues_compiled_controller_with_persisted_runtime_mapping(self):
-        graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
-        definition = SimpleNamespace(
+    @staticmethod
+    def _definition(graph, revision=7):
+        return SimpleNamespace(
             id="definition",
             company="company-a",
             company_origin=None,
@@ -250,9 +252,13 @@ class V2StartTests(unittest.TestCase):
             name="Pipeline A",
             comment="",
             system_tags=[],
-            runtime={"clearpipe_revision": 7},
+            runtime={"clearpipe_revision": revision},
             configuration={"ClearPipe": SimpleNamespace(value=json.dumps(graph))},
         )
+
+    def test_start_clones_and_enqueues_compiled_controller_with_persisted_runtime_mapping(self):
+        graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        definition = self._definition(graph)
         call = SimpleNamespace(
             identity=SimpleNamespace(user="user-a"),
             result=SimpleNamespace(data=None),
@@ -314,6 +320,103 @@ class V2StartTests(unittest.TestCase):
             validate=True,
         )
         get_queue.assert_called_once_with("company-a", "default", only=("id",))
+
+    def test_start_rehydrates_declared_pipeline_parameter_for_task_child_steps(self):
+        graph = json.loads(TASK_GRAPH.read_text(encoding="utf-8"))
+        definition = self._definition(graph)
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={"dataset_url": "override-url"},
+            node_queues={},
+            verify_watched_queue=False,
+        )
+        lookups = []
+
+        def resource_checker(kind, resource_id, lookup=()):
+            lookups.append((kind, resource_id, lookup))
+            return True
+
+        run = SimpleNamespace(id="run-1")
+        queue = SimpleNamespace(id="default")
+        task_model = Mock()
+        task_model.objects.return_value = Mock()
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_resource_checker", return_value=resource_checker
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
+        ), patch.object(
+            clearpipe.queue_bll, "get_default", return_value=queue
+        ), patch.object(
+            clearpipe, "Task", task_model
+        ), patch.object(
+            clearpipe.task_bll, "clone_task", return_value=(run, None)
+        ) as clone, patch.object(
+            clearpipe, "enqueue_task", return_value=(True, None)
+        ):
+            clearpipe.start(call, "company-a", request)
+
+        clone_kwargs = clone.call_args.kwargs
+        override = clone_kwargs["hyperparams"]["Args"]["dataset_url"]
+        self.assertEqual(
+            (override.section, override.name, override.value),
+            ("Args", "dataset_url", "override-url"),
+        )
+        script = clone_kwargs["script_overrides"]["diff"]
+        ast.parse(script)
+        self.assertIn(
+            'parameter_override={"General/dataset_url": "${pipeline.dataset_url}"}',
+            script,
+        )
+        self.assertIn("pipe.get_parameters()[_clearpipe_parameter_name]", script)
+        self.assertIn('"dataset_url"', script)
+        self.assertEqual(
+            [lookup for lookup in lookups if lookup[2]],
+            [
+                (
+                    "task",
+                    "Pipeline step 1 dataset artifact",
+                    (("name", "Pipeline step 1 dataset artifact"), ("project", "examples")),
+                ),
+                (
+                    "task",
+                    "Pipeline step 2 process dataset",
+                    (("name", "Pipeline step 2 process dataset"), ("project", "examples")),
+                ),
+            ],
+        )
+
+    def test_start_rejects_unknown_v2_parameter_before_clone(self):
+        definition = self._definition(
+            json.loads(TASK_GRAPH.read_text(encoding="utf-8"))
+        )
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={"unknown": "value"},
+            node_queues={},
+            verify_watched_queue=False,
+        )
+        clone = Mock()
+
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe.task_bll, "clone_task", clone
+        ):
+            with self.assertRaises(errors.bad_request.ValidationError):
+                clearpipe.start(call, "company-a", request)
+
+        clone.assert_not_called()
+        self.assertIsNone(call.result.data)
 
     def test_start_rejects_stale_v2_revision_before_creating_a_clone(self):
         definition = SimpleNamespace(id="definition", system_tags=[])

@@ -38,6 +38,18 @@ CP06_FIXTURES = (
     / "domain"
     / "fixtures"
 )
+TASK_NAME_LOOKUPS = [
+    (
+        "task",
+        "Pipeline step 1 dataset artifact",
+        (("name", "Pipeline step 1 dataset artifact"), ("project", "examples")),
+    ),
+    (
+        "task",
+        "Pipeline step 2 process dataset",
+        (("name", "Pipeline step 2 process dataset"), ("project", "examples")),
+    ),
+]
 
 
 def fixture(name):
@@ -166,9 +178,18 @@ class ClearPipeContractFixtureTests(unittest.TestCase):
 
 
 class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
+    @staticmethod
+    def _authorized_definition_checks():
+        return (
+            patch.object(clearpipe, "_resource_checker", return_value=lambda *_: True),
+            patch.object(clearpipe, "_queue_checker", return_value=lambda _: True),
+        )
+
     def test_server_capabilities_distinguish_public_read_from_origin_mutation(self):
         public = stored_definition(company="", origin="company-a")
-        definition = clearpipe._definition(public, "company-b", project_name="Pipelines")
+        resource_check, queue_check = self._authorized_definition_checks()
+        with resource_check, queue_check:
+            definition = clearpipe._definition(public, "company-b", project_name="Pipelines")
         self.assertEqual(definition["representation"], "clearpipe_graph_v2")
         self.assertTrue(definition["capabilities"]["view"])
         self.assertFalse(definition["capabilities"]["edit"])
@@ -183,7 +204,9 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
         stored.configuration["ClearPipeRuntime"] = SimpleNamespace(
             value=json.dumps(clearpipe._runtime_configuration(generated, 7).to_dict())
         )
-        definition = clearpipe._definition(stored, "company-a", project_name="Pipelines")
+        resource_check, queue_check = self._authorized_definition_checks()
+        with resource_check, queue_check:
+            definition = clearpipe._definition(stored, "company-a", project_name="Pipelines")
 
         self.assertTrue(definition["capabilities"]["compilation"])
         self.assertTrue(definition["capabilities"]["execution"])
@@ -205,12 +228,41 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
         ] = "unsectioned"
         definition.configuration["ClearPipe"].value = json.dumps(graph)
 
-        response = clearpipe._definition(definition, "company-a", project_name="Pipelines")
+        resource_check, queue_check = self._authorized_definition_checks()
+        with resource_check, queue_check:
+            response = clearpipe._definition(definition, "company-a", project_name="Pipelines")
 
         self.assertFalse(response["capabilities"]["compilation"])
         self.assertFalse(response["capabilities"]["execution"])
         self.assertFalse(response["capabilities"]["run"])
         self.assertIn("CPSEM007", {issue["code"] for issue in response["validation"]["issues"]})
+
+    def test_v2_execution_capability_fails_closed_for_missing_or_denied_resources_and_queues(self):
+        graph = cp06_fixture("task-graph.v2.json")
+        for name, resource_allowed, queue_allowed in (
+            ("missing-resource", False, True),
+            ("denied-resource", False, True),
+            ("missing-queue", True, False),
+            ("denied-queue", True, False),
+        ):
+            with self.subTest(name=name):
+                definition = stored_definition()
+                definition.configuration["ClearPipe"].value = json.dumps(graph)
+                with patch.object(
+                    clearpipe, "_resource_checker", return_value=lambda *_: resource_allowed
+                ), patch.object(
+                    clearpipe, "_queue_checker", return_value=lambda _: queue_allowed
+                ):
+                    response = clearpipe._definition(
+                        definition,
+                        "company-a",
+                        project_name="Pipelines",
+                    )
+
+                self.assertFalse(response["capabilities"]["compilation"])
+                self.assertFalse(response["capabilities"]["execution"])
+                self.assertFalse(response["capabilities"]["run"])
+                self.assertIn("CPRES002", {issue["code"] for issue in response["validation"]["issues"]})
 
     def test_legacy_contract_is_explicitly_classified_for_read_only_adapter_policy(self):
         legacy = clearpipe._definition(
@@ -230,12 +282,13 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
 
 
 class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
-    def test_create_persists_cp06_v2_fixture_without_legacy_migration(self):
-        graph = cp06_fixture("function-graph.v2.json")
+    def test_create_persists_named_task_reference_fixture_without_legacy_migration(self):
+        graph = cp06_fixture("task-graph.v2.json")
         parsed = read_graph_v2(graph)
         self.assertTrue(parsed.is_supported, parsed)
         expected = canonical_graph_dict(parsed.graph)
         created = []
+        resource_lookups = []
 
         class StoredTask:
             def __init__(self, **kwargs):
@@ -256,6 +309,11 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
             tags=[],
             public=False,
         )
+
+        def resource_checker(kind, resource_id, lookup=()):
+            resource_lookups.append((kind, resource_id, lookup))
+            return True
+
         with patch.object(clearpipe, "Task", StoredTask), patch.object(
             clearpipe, "distributed_lock", return_value=nullcontext()
         ), patch.object(clearpipe, "_find_project", return_value="project-1"), patch.object(
@@ -265,7 +323,9 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
         ), patch.object(
             clearpipe, "_definition", return_value={"id": "definition-1"}
         ), patch.object(
-            clearpipe.queue_bll, "get_by_id", return_value=SimpleNamespace(id="default")
+            clearpipe, "_resource_checker", return_value=resource_checker
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
         ):
             clearpipe.create(call, "company-a", request)
 
@@ -282,13 +342,17 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
         self.assertEqual(
             runtime["runtime_steps"],
             [
-                {"graph_node_id": "normalize", "pipeline_step_name": "normalize"},
-                {"graph_node_id": "format-result", "pipeline_step_name": "format_result"},
+                {"graph_node_id": "stage-data", "pipeline_step_name": "stage_data"},
+                {"graph_node_id": "stage-process", "pipeline_step_name": "stage_process"},
             ],
         )
         self.assertTrue(created[0].runtime["_pipeline_hash"].startswith("sha256:"))
-        self.assertIn("pipe.add_function_step", created[0].script["diff"])
+        self.assertIn("pipe.add_step", created[0].script["diff"])
         self.assertNotIn(".start(", created[0].script["diff"])
+        self.assertEqual(
+            [item for item in resource_lookups if item[2]],
+            TASK_NAME_LOOKUPS,
+        )
 
     def test_validate_v2_returns_server_generated_source_and_runtime_identity(self):
         graph = cp06_fixture("function-graph.v2.json")
@@ -313,8 +377,8 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(compiler["runtime"]["definition_revision"], 1)
 
-    def test_update_persists_v2_without_invoking_legacy_compilation(self):
-        graph = cp06_fixture("function-graph.v2.json")
+    def test_update_persists_v2_named_task_reference_without_legacy_compilation(self):
+        graph = cp06_fixture("task-graph.v2.json")
         stored = stored_definition()
         call = SimpleNamespace(
             data={"graph": graph},
@@ -333,6 +397,12 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
         update = Mock(update_one=Mock(return_value=1))
         task_model = Mock()
         task_model.objects.return_value = update
+        resource_lookups = []
+
+        def resource_checker(kind, resource_id, lookup=()):
+            resource_lookups.append((kind, resource_id, lookup))
+            return True
+
         with patch.object(clearpipe, "_get_task", return_value=stored), patch.object(
             clearpipe, "_revision", return_value=7
         ), patch.object(clearpipe, "Task", task_model), patch.object(
@@ -340,7 +410,9 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
         ), patch.object(
             clearpipe, "_definition", return_value={"id": stored.id}
         ), patch.object(
-            clearpipe.queue_bll, "get_by_id", return_value=SimpleNamespace(id="default")
+            clearpipe, "_resource_checker", return_value=resource_checker
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
         ):
             clearpipe.update(call, "company-a", request)
 
@@ -351,10 +423,14 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
         runtime = json.loads(updates["set__configuration"]["ClearPipeRuntime"].value)
         self.assertEqual(runtime["definition_revision"], 8)
         self.assertIn(
-            "pipe.add_function_step", updates["set__script__diff"]
+            "pipe.add_step", updates["set__script__diff"]
         )
         self.assertNotIn(".start(", updates["set__script__diff"])
         self.assertTrue(updates["set__runtime"]["_pipeline_hash"].startswith("sha256:"))
+        self.assertEqual(
+            [item for item in resource_lookups if item[2]],
+            TASK_NAME_LOOKUPS,
+        )
 
 
 class ClearPipeStartParameterSafetyTests(unittest.TestCase):

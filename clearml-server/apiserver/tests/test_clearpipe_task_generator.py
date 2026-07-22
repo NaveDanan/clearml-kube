@@ -265,6 +265,33 @@ class ClearPipeTaskGeneratorTests(unittest.TestCase):
         )
         self.assertEqual(generated.manifest.node_ids, ("normalize", "format-result"))
 
+    def test_generator_owned_identifiers_are_rejected_before_source_is_rendered(self):
+        fixture = graph_fixture("function-graph.v2.json")
+        fixture["nodes"] = [fixture["nodes"][0]]
+        fixture["bindings"] = []
+        fixture["outputs"] = []
+
+        for reserved_name in ("PipelineController", "TaskTypes", "pipe"):
+            with self.subTest(reserved_name=reserved_name):
+                invalid = deepcopy(fixture)
+                invalid["nodes"][0]["name"] = reserved_name
+                invalid["nodes"][0]["signature"] = invalid["nodes"][0]["signature"].replace(
+                    "normalize", reserved_name
+                )
+                invalid["nodes"][0]["source"] = invalid["nodes"][0]["source"].replace(
+                    "normalize", reserved_name
+                )
+
+                with self.assertRaises(GenerationError) as error:
+                    compile_graph(
+                        read_graph_v2(invalid).graph,
+                        lowerers={"function": lower_function_node},
+                    )
+
+                self.assertTrue(
+                    any(item.code == "CPSEM001" for item in error.exception.diagnostics)
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

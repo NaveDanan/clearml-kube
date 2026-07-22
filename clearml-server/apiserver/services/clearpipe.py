@@ -322,10 +322,27 @@ def _compiler_output(generated: GeneratedDefinition, revision: int) -> dict:
     }
 
 
-def _controller_launch_script(source: str) -> str:
+def _controller_launch_script(source: str, parameter_names=()) -> str:
     """Keep the compiler no-launch while making the cloned Agent task executable."""
 
-    return '{}\nif __name__ == "__main__":\n    pipe.start()\n'.format(source.rstrip("\n"))
+    launch_preamble = ""
+    if parameter_names:
+        launch_preamble = (
+            "\n"
+            "from clearml import Task as _ClearPipeControllerTask\n"
+            "_clearpipe_parameter_values = "
+            "_ClearPipeControllerTask.current_task().get_parameters_as_dict(cast=True).get(\"Args\", {})\n"
+            "for _clearpipe_parameter_name in "
+            + json.dumps(list(parameter_names), ensure_ascii=False)
+            + ":\n"
+            "    if _clearpipe_parameter_name in _clearpipe_parameter_values:\n"
+            "        pipe.get_parameters()[_clearpipe_parameter_name] = "
+            "_clearpipe_parameter_values[_clearpipe_parameter_name]\n"
+        )
+    return '{}{}\nif __name__ == "__main__":\n    pipe.start()\n'.format(
+        source.rstrip("\n"),
+        launch_preamble,
+    )
 
 
 def _secret_parameter_material(value) -> bool:
@@ -361,6 +378,18 @@ def _assert_safe_parameter_overrides(parameters):
         )
 
 
+def _v2_parameter_override_names(graph: Mapping, parameters: Mapping):
+    parsed = read_graph_v2(graph)
+    if not parsed.is_supported:
+        raise errors.bad_request.ValidationError("ClearPipe graph v2 could not be compiled")
+    declared_names = {parameter.name for parameter in parsed.graph.parameters}
+    if any(name not in declared_names for name in parameters):
+        raise errors.bad_request.ValidationError(
+            "ClearPipe parameter overrides include an unknown pipeline parameter"
+        )
+    return tuple(sorted(parameters))
+
+
 def _configurations(compiled: Mapping) -> dict:
     return {
         "ClearPipe": ConfigurationItem(
@@ -384,7 +413,7 @@ def _definition(
     graph = _graph(task)
     # Never return a graph that predates server-side secret enforcement.
     is_v2 = _is_v2_graph(graph)
-    security = _v2_validation_result(graph) if is_v2 else GraphValidator().validate(graph)
+    security = _validate_graph(company_id, graph) if is_v2 else GraphValidator().validate(graph)
     if any(issue.code in {"embedded_secret", "CPSEM010"} for issue in security.issues):
         raise errors.bad_request.ValidationError(
             "ClearPipe definition contains prohibited embedded credentials", task=task.id
@@ -470,8 +499,21 @@ def _definition(
 def _resource_checker(company_id: str):
     visible = _visible_query(company_id, True)
 
-    def check(kind: str, resource_id: str) -> bool:
+    def check(kind: str, resource_id: str, lookup=()) -> bool:
         if kind in {"task", "dataset", "report"}:
+            lookup_values = dict(lookup)
+            if kind == "task" and lookup_values:
+                project_name = lookup_values.get("project")
+                task_name = lookup_values.get("name")
+                if not isinstance(project_name, str) or not isinstance(task_name, str):
+                    return False
+                project = Project.objects(Q(name=project_name) & visible).only("id").first()
+                if project is None:
+                    return False
+                return (
+                    Task.objects(Q(project=project.id, name=task_name) & visible).only("id").first()
+                    is not None
+                )
             query = Q(id=resource_id) & visible
             if kind == "dataset":
                 query &= Q(system_tags="dataset")
@@ -820,6 +862,9 @@ def start(call: APICall, company_id: str, request: StartRequest):
         )
     if not v2_graph and request.node_queues:
         graph["default_queues"] = dict(request.node_queues)
+    v2_parameter_names = (
+        _v2_parameter_override_names(graph, request.parameters or {}) if v2_graph else ()
+    )
     result = _validate_graph(company_id, graph)
     _assert_valid(result)
     if v2_graph and not result.run_valid:
@@ -836,19 +881,33 @@ def start(call: APICall, company_id: str, request: StartRequest):
     if v2_graph:
         compiled = _compile_v2(graph)
         configurations = _v2_configurations(graph, compiled, revision)
-        controller_script = _controller_launch_script(compiled.source)
+        controller_script = _controller_launch_script(compiled.source, v2_parameter_names)
         pipeline_hash = compiled.manifest.graph_digest
+        hyperparams = {
+            "Args": {
+                key: ParamsItem(
+                    section="Args",
+                    name=key,
+                    value=json.dumps(value) if not isinstance(value, str) else value,
+                )
+                for key, value in (request.parameters or {}).items()
+            }
+        }
     else:
         compiled = _compile(graph, revision=revision, node_queues=request.node_queues)
         configurations = _configurations(compiled)
         controller_script = compiled["script"]
         pipeline_hash = "clearpipe-v1"
-    hyperparams = {
-        "ClearPipe": {
-            key: ParamsItem(section="ClearPipe", name=str(key), value=json.dumps(value) if not isinstance(value, str) else value)
-            for key, value in (request.parameters or {}).items()
+        hyperparams = {
+            "ClearPipe": {
+                key: ParamsItem(
+                    section="ClearPipe",
+                    name=str(key),
+                    value=json.dumps(value) if not isinstance(value, str) else value,
+                )
+                for key, value in (request.parameters or {}).items()
+            }
         }
-    }
     run = None
     try:
         run_project = _run_project_for_definition(

@@ -38,7 +38,7 @@ from .contracts import (
 
 
 _GENERATED_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
-_RESERVED_NODE_NAMES = {"pipeline"}
+_RESERVED_NODE_NAMES = {"pipeline", "pipe", "PipelineController", "TaskTypes"}
 _SECRET_KEY_PART = re.compile(
     r"(?:^|[_\-/])(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)"
     r"(?:$|[_\-/])",
@@ -259,7 +259,12 @@ def _compile_plan(graph: GraphV2, lowerers: Mapping[str, NodeLowerer]) -> _Compi
             )
         elif node.name in _RESERVED_NODE_NAMES:
             diagnostics.append(
-                GenerationDiagnostic("CPSEM001", path, "node name is reserved by PipelineController", node.id)
+                GenerationDiagnostic(
+                    "CPSEM001",
+                    path,
+                    "node name is reserved by the generated PipelineController program",
+                    node.id,
+                )
             )
         elif node.name in names:
             diagnostics.append(GenerationDiagnostic("CPSEM001", path, "node names must be unique", node.id))
