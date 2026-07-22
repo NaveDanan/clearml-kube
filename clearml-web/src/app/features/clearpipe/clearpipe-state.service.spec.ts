@@ -1,11 +1,13 @@
 import {ClearpipeStateService} from './clearpipe-state.service';
 import {emptyClearpipeDefinition} from './clearpipe.models';
+import {TestBed} from '@angular/core/testing';
 
 describe('ClearpipeStateService', () => {
   let state: ClearpipeStateService;
 
   beforeEach(() => {
-    state = new ClearpipeStateService();
+    TestBed.configureTestingModule({providers: [ClearpipeStateService]});
+    state = TestBed.inject(ClearpipeStateService);
     state.load(emptyClearpipeDefinition());
   });
 

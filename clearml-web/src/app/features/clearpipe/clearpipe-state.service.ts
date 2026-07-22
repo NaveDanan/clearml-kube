@@ -1,4 +1,4 @@
-import {computed, Injectable, signal} from '@angular/core';
+import {computed, inject, Injectable, signal} from '@angular/core';
 import {
   ClearpipeDefinition,
   ClearpipeEdge,
@@ -8,11 +8,27 @@ import {
   CLEARPIPE_NODE_TYPES,
   emptyClearpipeDefinition
 } from './clearpipe.models';
+import {GraphStoreService} from './domain/graph-store.service';
 
 interface GraphSnapshot { nodes: ClearpipeNode[]; edges: ClearpipeEdge[] }
 
 @Injectable()
 export class ClearpipeStateService {
+  /**
+   * Canonical v2 state for new ClearPipe consumers. The legacy signals below
+   * remain only as a compatibility boundary for the pre-v2 editor shell.
+   */
+  readonly graphStore = inject(GraphStoreService);
+  readonly graph = this.graphStore.graph;
+  readonly graphCommands = this.graphStore;
+  readonly graphNodes = this.graphStore.nodes;
+  readonly graphPorts = this.graphStore.ports;
+  readonly graphBindings = this.graphStore.bindings;
+  readonly graphDependencies = this.graphStore.dependencies;
+  readonly graphGeneratedInputs = this.graphStore.generatedInputs;
+  readonly graphDirty = this.graphStore.dirty;
+  readonly graphSelection = this.graphStore.selectedNode;
+
   readonly definition = signal<ClearpipeDefinition>(emptyClearpipeDefinition());
   readonly selectedNodeId = signal<string | null>(null);
   readonly connectionSource = signal<string | null>(null);
