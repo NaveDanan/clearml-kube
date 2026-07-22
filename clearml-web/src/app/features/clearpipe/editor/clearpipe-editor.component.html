@@ -1,0 +1,57 @@
+<section class="editor">
+  <header class="toolbar">
+    <div class="identity">
+      <a mat-icon-button routerLink="/clearpipe" aria-label="Back to ClearPipe library"><mat-icon>arrow_back</mat-icon></a>
+      <div><strong>{{ state.definition().name }}</strong><span>Revision {{ state.definition().revision }} @if (isDirty()) { · Unsaved changes }</span></div>
+      @if (readOnly()) {<span class="readonly-badge">READ ONLY</span>}
+    </div>
+    <div class="tools">
+      <button mat-icon-button (click)="state.undo()" [disabled]="!state.canUndo() || readOnly()" aria-label="Undo"><mat-icon>undo</mat-icon></button>
+      <button mat-icon-button (click)="state.redo()" [disabled]="!state.canRedo() || readOnly()" aria-label="Redo"><mat-icon>redo</mat-icon></button>
+      <span class="divider"></span>
+      <button mat-stroked-button (click)="validate()"><mat-icon fontSet="al" fontIcon="al-ico-check"></mat-icon>VALIDATE</button>
+      <button mat-stroked-button (click)="save()" [disabled]="readOnly() || saving()"><mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>{{ saving() ? 'SAVING…' : 'SAVE' }}</button>
+      <button mat-flat-button (click)="run()" [disabled]="running()"><mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>{{ running() ? 'STARTING…' : 'RUN' }}</button>
+      <button mat-icon-button [matMenuTriggerFor]="more" aria-label="More ClearPipe actions"><mat-icon fontSet="al" fontIcon="al-ico-more"></mat-icon></button>
+      <mat-menu #more="matMenu">
+        <button mat-menu-item (click)="saveAs()" [disabled]="readOnly()"><mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>Save as</button>
+        <button mat-menu-item (click)="importInput.click()" [disabled]="readOnly()"><mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>Import JSON</button>
+        <button mat-menu-item (click)="exportJson()"><mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>Export JSON</button>
+        @if (state.definition().id || state.definition().task_id) {
+          <button mat-menu-item (click)="archive()" [disabled]="readOnly()"><mat-icon fontSet="al" fontIcon="al-ico-archive"></mat-icon>Archive</button>
+          <button mat-menu-item (click)="delete()" [disabled]="readOnly()"><mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>Delete</button>
+        }
+      </mat-menu>
+      <input #importInput hidden type="file" accept="application/json,.json" (change)="importJson($event)">
+    </div>
+  </header>
+
+  @if (lastRunTask()) {
+    <div class="run-banner">
+      <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
+      Run queued successfully.
+      <a [routerLink]="['/pipelines','*','tasks',lastRunTask()]">OPEN RUN STATUS</a>
+      <button mat-icon-button class="sm" (click)="lastRunTask.set(null)" aria-label="Dismiss"><mat-icon>close</mat-icon></button>
+    </div>
+  }
+
+  <main [class.validation-visible]="validationOpen()">
+    @if (loading()) {
+      <div class="loading"><div></div><span>Loading ClearPipe definition…</span></div>
+    } @else {
+      <sm-clearpipe-canvas [readonly]="readOnly()"></sm-clearpipe-canvas>
+      <sm-clearpipe-config-panel [readonly]="readOnly()"></sm-clearpipe-config-panel>
+    }
+  </main>
+
+  @if (validationOpen() && validation(); as result) {
+    <aside class="validation-panel">
+      <header><div><strong>Validation</strong><span>{{ result.valid ? 'Graph is valid' : result.errors.length + ' error(s)' }}</span></div><button mat-icon-button class="sm" (click)="validationOpen.set(false)" aria-label="Close validation"><mat-icon>close</mat-icon></button></header>
+      <div class="issues">
+        @if (!result.errors.length && !result.warnings.length) {<p class="valid"><mat-icon>check_circle</mat-icon>No issues found.</p>}
+        @for (issue of result.errors; track $index) {<button (click)="issue.node_id && state.selectedNodeId.set(issue.node_id)" class="issue error"><mat-icon>error</mat-icon><span>{{ issue.message }} @if (issue.node_id) {<small>Node: {{ issue.node_id }}</small>}</span></button>}
+        @for (issue of result.warnings; track $index) {<button (click)="issue.node_id && state.selectedNodeId.set(issue.node_id)" class="issue warning"><mat-icon>warning</mat-icon><span>{{ issue.message }} @if (issue.node_id) {<small>Node: {{ issue.node_id }}</small>}</span></button>}
+      </div>
+    </aside>
+  }
+</section>

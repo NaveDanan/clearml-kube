@@ -1,0 +1,51 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "clearpipe.fullname" . }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                {{- if eq .service "app" }}
+                name: {{ $.Values.app.name }}
+                port:
+                  number: {{ $.Values.app.service.port }}
+                {{- else if eq .service "kong" }}
+                name: {{ $.Values.kong.name }}
+                port:
+                  number: {{ $.Values.kong.service.httpPort }}
+                {{- else if eq .service "nginx" }}
+                name: {{ $.Values.nginx.name }}
+                port:
+                  number: {{ $.Values.nginx.service.port }}
+                {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

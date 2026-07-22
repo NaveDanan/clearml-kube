@@ -1,5 +1,5 @@
 const targets = [
- 'http://localhost:8008',     // 1
+ process.env.CLEARML_API_TARGET || 'http://localhost:8008',     // 1
 ];
 
 const PROXY_CONFIG = {

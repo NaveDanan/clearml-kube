@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim as webapp_builder
+FROM node:20-bookworm-slim AS webapp_builder
 
 ARG CLEARML_WEB_GIT_URL=https://github.com/allegroai/clearml-web.git
 

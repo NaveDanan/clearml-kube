@@ -1,0 +1,91 @@
+{{- if .Values.auth.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.auth.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: auth
+spec:
+  replicas: {{ .Values.auth.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "clearpipe.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: auth
+  template:
+    metadata:
+      labels:
+        {{- include "clearpipe.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: auth
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "clearpipe.serviceAccountName" . }}
+      containers:
+        - name: auth
+          image: "{{ .Values.auth.image.repository }}:{{ .Values.auth.image.tag }}"
+          imagePullPolicy: {{ .Values.auth.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 9999
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.auth.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: GOTRUE_DB_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: database-url
+            - name: GOTRUE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: jwt-secret
+            - name: API_EXTERNAL_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-config
+                  key: api-external-url
+            - name: GOTRUE_SITE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-config
+                  key: site-url
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9999
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.auth.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.auth.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: auth
+spec:
+  type: {{ .Values.auth.service.type }}
+  ports:
+    - port: {{ .Values.auth.service.port }}
+      targetPort: 9999
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "clearpipe.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: auth
+{{- end }}

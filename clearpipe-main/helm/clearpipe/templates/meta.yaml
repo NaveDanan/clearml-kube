@@ -1,0 +1,82 @@
+{{- if .Values.meta.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.meta.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+spec:
+  replicas: {{ .Values.meta.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "clearpipe.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: meta
+  template:
+    metadata:
+      labels:
+        {{- include "clearpipe.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: meta
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "clearpipe.serviceAccountName" . }}
+      containers:
+        - name: meta
+          image: "{{ .Values.meta.image.repository }}:{{ .Values.meta.image.tag }}"
+          imagePullPolicy: {{ .Values.meta.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PG_META_PORT
+              value: "8080"
+            - name: PG_META_DB_HOST
+              value: {{ include "clearpipe.postgresql.host" . }}
+            - name: PG_META_DB_PORT
+              value: {{ include "clearpipe.postgresql.port" . | quote }}
+            - name: PG_META_DB_NAME
+              value: {{ include "clearpipe.postgresql.database" . }}
+            - name: PG_META_DB_USER
+              value: {{ include "clearpipe.postgresql.username" . }}
+            - name: PG_META_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: postgres-password
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.meta.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.meta.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+spec:
+  type: {{ .Values.meta.service.type }}
+  ports:
+    - port: {{ .Values.meta.service.port }}
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "clearpipe.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: meta
+{{- end }}

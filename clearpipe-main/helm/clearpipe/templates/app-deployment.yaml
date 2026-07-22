@@ -1,0 +1,79 @@
+{{- if .Values.app.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app.name }}
+  labels:
+    {{- include "clearpipe.app.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.app.autoscaling.enabled }}
+  replicas: {{ .Values.app.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "clearpipe.app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        {{- include "clearpipe.app.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "clearpipe.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Values.app.name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.global.imageRegistry }}{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.service.targetPort }}
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.app.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- if .Values.app.existingSecret }}
+            - name: NEXT_PUBLIC_SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.existingSecret }}
+                  key: {{ .Values.app.secretKeys.supabaseUrl }}
+            - name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.existingSecret }}
+                  key: {{ .Values.app.secretKeys.supabaseAnonKey }}
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.app.existingSecret }}
+                  key: {{ .Values.app.secretKeys.supabaseServiceRoleKey }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.app.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.app.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.app.resources | nindent 12 }}
+      {{- with .Values.app.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.app.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

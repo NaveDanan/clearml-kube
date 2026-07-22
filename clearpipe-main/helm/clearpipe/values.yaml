@@ -1,0 +1,489 @@
+# ============================================================
+# ClearPipe Helm Values - Default Configuration
+# ============================================================
+# This file contains the default values for the ClearPipe Helm chart.
+# Override these values in values-dev.yaml or values-prod.yaml
+# ============================================================
+
+# Global settings
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# ============================================
+# ClearPipe Application Configuration
+# ============================================
+app:
+  enabled: true
+  name: clearpipe-app
+  
+  image:
+    repository: clearpipe/app
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 2
+  
+  # Pod resources
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  
+  # Environment variables
+  env:
+    NODE_ENV: production
+    NEXT_TELEMETRY_DISABLED: "1"
+  
+  # Secrets reference (create this secret separately)
+  existingSecret: ""
+  secretKeys:
+    supabaseUrl: NEXT_PUBLIC_SUPABASE_URL
+    supabaseAnonKey: NEXT_PUBLIC_SUPABASE_ANON_KEY
+    supabaseServiceRoleKey: SUPABASE_SERVICE_ROLE_KEY
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  
+  # Autoscaling
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  
+  # Health checks
+  livenessProbe:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /api/health
+      port: 3000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  
+  # Node selector
+  nodeSelector: {}
+  
+  # Tolerations
+  tolerations: []
+  
+  # Affinity
+  affinity: {}
+
+# ============================================
+# Nginx Ingress Configuration
+# ============================================
+nginx:
+  enabled: true
+  name: clearpipe-nginx
+  
+  image:
+    repository: nginx
+    tag: "alpine"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 2
+  
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+  
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+  
+  # Custom nginx configuration
+  customConfig:
+    enabled: true
+    configMapName: clearpipe-nginx-config
+
+# ============================================
+# Ingress Configuration
+# ============================================
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    # cert-manager annotations (uncomment for automatic TLS)
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: clearpipe.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: app
+        - path: /rest/v1
+          pathType: Prefix
+          service: kong
+        - path: /auth/v1
+          pathType: Prefix
+          service: kong
+        - path: /storage/v1
+          pathType: Prefix
+          service: kong
+        - path: /realtime/v1
+          pathType: Prefix
+          service: kong
+  tls: []
+  #  - secretName: clearpipe-tls
+  #    hosts:
+  #      - clearpipe.local
+
+# ============================================
+# Supabase Kong API Gateway
+# ============================================
+kong:
+  enabled: true
+  name: clearpipe-kong
+  
+  image:
+    repository: kong
+    tag: "2.8.1"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 2
+  
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  
+  service:
+    type: ClusterIP
+    httpPort: 8000
+    httpsPort: 8443
+  
+  env:
+    KONG_DATABASE: "off"
+    KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+    KONG_DNS_ORDER: LAST,A,CNAME
+    KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+    KONG_LOG_LEVEL: warn
+
+# ============================================
+# Supabase Auth (GoTrue)
+# ============================================
+auth:
+  enabled: true
+  name: clearpipe-auth
+  
+  image:
+    repository: supabase/gotrue
+    tag: "v2.164.0"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 2
+  
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+  
+  service:
+    type: ClusterIP
+    port: 9999
+  
+  env:
+    GOTRUE_API_HOST: "0.0.0.0"
+    GOTRUE_API_PORT: "9999"
+    GOTRUE_DB_DRIVER: postgres
+    GOTRUE_JWT_ADMIN_ROLES: service_role
+    GOTRUE_JWT_AUD: authenticated
+    GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+    GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+    GOTRUE_MAILER_AUTOCONFIRM: "true"
+    GOTRUE_DISABLE_SIGNUP: "false"
+
+# ============================================
+# Supabase PostgREST
+# ============================================
+rest:
+  enabled: true
+  name: clearpipe-rest
+  
+  image:
+    repository: postgrest/postgrest
+    tag: "v12.2.0"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 2
+  
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+  
+  service:
+    type: ClusterIP
+    port: 3000
+  
+  env:
+    PGRST_DB_SCHEMAS: public,storage,graphql_public
+    PGRST_DB_ANON_ROLE: anon
+    PGRST_DB_USE_LEGACY_GUCS: "false"
+
+# ============================================
+# Supabase Realtime
+# ============================================
+realtime:
+  enabled: true
+  name: clearpipe-realtime
+  
+  image:
+    repository: supabase/realtime
+    tag: "v2.30.34"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 2
+  
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  
+  service:
+    type: ClusterIP
+    port: 4000
+
+# ============================================
+# Supabase Storage
+# ============================================
+storage:
+  enabled: true
+  name: clearpipe-storage
+  
+  image:
+    repository: supabase/storage-api
+    tag: "v1.11.13"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 2
+  
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+  
+  service:
+    type: ClusterIP
+    port: 5000
+  
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+
+# ============================================
+# Supabase Meta (for Studio)
+# ============================================
+meta:
+  enabled: true
+  name: clearpipe-meta
+  
+  image:
+    repository: supabase/postgres-meta
+    tag: "v0.84.2"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+  
+  service:
+    type: ClusterIP
+    port: 8080
+
+# ============================================
+# Supabase Studio (Dashboard)
+# ============================================
+studio:
+  enabled: false  # Disabled by default in production
+  name: clearpipe-studio
+  
+  image:
+    repository: supabase/studio
+    tag: "20241202-71e5240"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  
+  service:
+    type: ClusterIP
+    port: 3000
+
+# ============================================
+# PostgreSQL Configuration (Bitnami)
+# ============================================
+postgresql:
+  enabled: true
+  
+  auth:
+    postgresPassword: ""  # Set via secrets
+    username: supabase_admin
+    password: ""  # Set via secrets
+    database: postgres
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+    
+    initdb:
+      scriptsConfigMap: clearpipe-db-init
+  
+  # High availability (optional)
+  architecture: standalone  # or replication for HA
+  
+  metrics:
+    enabled: false
+
+# ============================================
+# Redis Configuration (Bitnami) - Optional
+# ============================================
+redis:
+  enabled: false
+  
+  auth:
+    enabled: true
+    password: ""  # Set via secrets
+  
+  architecture: standalone
+  
+  master:
+    persistence:
+      enabled: true
+      size: 1Gi
+    
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+
+# ============================================
+# Image Proxy Configuration
+# ============================================
+imgproxy:
+  enabled: true
+  name: clearpipe-imgproxy
+  
+  image:
+    repository: darthsim/imgproxy
+    tag: "v3.8.0"
+    pullPolicy: IfNotPresent
+  
+  replicaCount: 1
+  
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  
+  service:
+    type: ClusterIP
+    port: 8080
+
+# ============================================
+# Service Account
+# ============================================
+serviceAccount:
+  create: true
+  name: clearpipe
+  annotations: {}
+
+# ============================================
+# Network Policies
+# ============================================
+networkPolicy:
+  enabled: false
+
+# ============================================
+# Pod Security Context
+# ============================================
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true

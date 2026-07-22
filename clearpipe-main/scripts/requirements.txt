@@ -1,0 +1,6 @@
+# Python dependencies for ClearPipe scripts
+# Install with: uv pip install -r scripts/requirements.txt
+# Or use: uv sync (if using pyproject.toml)
+
+# ClearML SDK for dataset versioning
+clearml>=1.14.0

@@ -1,0 +1,137 @@
+{{- if .Values.storage.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.storage.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  replicas: {{ .Values.storage.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "clearpipe.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: storage
+  template:
+    metadata:
+      labels:
+        {{- include "clearpipe.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: storage
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "clearpipe.serviceAccountName" . }}
+      containers:
+        - name: storage
+          image: "{{ .Values.storage.image.repository }}:{{ .Values.storage.image.tag }}"
+          imagePullPolicy: {{ .Values.storage.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+          env:
+            - name: ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: anon-key
+            - name: SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: service-role-key
+            - name: POSTGREST_URL
+              value: "http://{{ .Values.rest.name }}:{{ .Values.rest.service.port }}"
+            - name: PGRST_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: jwt-secret
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: database-url
+            - name: FILE_SIZE_LIMIT
+              value: "52428800"
+            - name: STORAGE_BACKEND
+              value: "file"
+            - name: FILE_STORAGE_BACKEND_PATH
+              value: "/var/lib/storage"
+            - name: TENANT_ID
+              value: "stub"
+            - name: REGION
+              value: "stub"
+            - name: GLOBAL_S3_BUCKET
+              value: "stub"
+            - name: ENABLE_IMAGE_TRANSFORMATION
+              value: "true"
+            {{- if .Values.imgproxy.enabled }}
+            - name: IMGPROXY_URL
+              value: "http://{{ .Values.imgproxy.name }}:{{ .Values.imgproxy.service.port }}"
+            {{- end }}
+          volumeMounts:
+            - name: storage-data
+              mountPath: /var/lib/storage
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 5000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /status
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.storage.resources | nindent 12 }}
+      volumes:
+        - name: storage-data
+          {{- if .Values.storage.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "clearpipe.fullname" . }}-storage
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.storage.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  type: {{ .Values.storage.service.type }}
+  ports:
+    - port: {{ .Values.storage.service.port }}
+      targetPort: 5000
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "clearpipe.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+---
+{{- if .Values.storage.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "clearpipe.fullname" . }}-storage
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    {{- toYaml .Values.storage.persistence.accessModes | nindent 4 }}
+  {{- if .Values.storage.persistence.storageClass }}
+  storageClassName: {{ .Values.storage.persistence.storageClass }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.persistence.size }}
+{{- end }}
+{{- end }}

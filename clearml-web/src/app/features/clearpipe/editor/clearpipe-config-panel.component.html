@@ -1,0 +1,83 @@
+@if (node(); as selected) {
+  <header>
+    <div><span>Node configuration</span><strong>{{ selected.type }}</strong></div>
+    <button mat-icon-button class="sm" (click)="state.selectedNodeId.set(null)" aria-label="Close configuration"><mat-icon>close</mat-icon></button>
+  </header>
+  <div class="form" [class.readonly]="readonly()">
+    <mat-form-field>
+      <mat-label>Name</mat-label>
+      <input matInput [ngModel]="selected.label" (ngModelChange)="updateLabel($event)" [disabled]="readonly()">
+    </mat-form-field>
+
+    @switch (selected.type) {
+      @case ('dataset') {
+        <mat-form-field><mat-label>Source</mat-label><mat-select [ngModel]="configValue('source')" (ngModelChange)="updateConfig('source',$event)" [disabled]="readonly()"><mat-option value="clearml">ClearML Dataset</mat-option><mat-option value="artifact">Task artifact</mat-option><mat-option value="upload">Browser upload</mat-option><mat-option value="url">URL / configured storage</mat-option></mat-select></mat-form-field>
+        @if (configValue('source') === 'clearml') {
+          <mat-form-field><mat-label>Dataset</mat-label><mat-select [ngModel]="configValue('datasetId')" (ngModelChange)="updateConfig('datasetId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('dataset');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
+        } @else if (configValue('source') === 'artifact') {
+          <mat-form-field><mat-label>Task</mat-label><mat-select [ngModel]="configValue('taskId')" (ngModelChange)="updateConfig('taskId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('task');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
+          <mat-form-field><mat-label>Artifact name</mat-label><input matInput [ngModel]="configValue('artifactName')" (ngModelChange)="updateConfig('artifactName',$event)" [disabled]="readonly()"></mat-form-field>
+        } @else {
+          <mat-form-field><mat-label>URL or uploaded-file URI</mat-label><input matInput [ngModel]="configValue('uri')" (ngModelChange)="updateConfig('uri',$event)" [disabled]="readonly()"></mat-form-field>
+        }
+      }
+      @case ('versioning') {
+        <mat-form-field><mat-label>Versioning tool</mat-label><mat-select [ngModel]="configValue('tool')" (ngModelChange)="updateConfig('tool',$event)" [disabled]="readonly()"><mat-option value="clearml-data">ClearML Data</mat-option><mat-option value="dvc">DVC</mat-option><mat-option value="git-lfs">Git LFS</mat-option><mat-option value="mlflow-artifacts">MLflow artifacts</mat-option><mat-option value="custom">Custom agent command</mat-option></mat-select></mat-form-field>
+        <mat-form-field><mat-label>Action</mat-label><mat-select [ngModel]="configValue('action')" (ngModelChange)="updateConfig('action',$event)" [disabled]="readonly()"><mat-option value="create">Create</mat-option><mat-option value="version">Version</mat-option><mat-option value="download">Download</mat-option></mat-select></mat-form-field>
+        <mat-form-field><mat-label>Dataset</mat-label><mat-select [ngModel]="configValue('datasetId')" (ngModelChange)="updateConfig('datasetId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('dataset');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
+      }
+      @case ('execute') {
+        <mat-form-field><mat-label>Script source</mat-label><mat-select [ngModel]="configValue('scriptSource')" (ngModelChange)="updateConfig('scriptSource',$event)" [disabled]="readonly()"><mat-option value="inline">Inline</mat-option><mat-option value="repository">Repository</mat-option><mat-option value="upload">Browser upload</mat-option></mat-select></mat-form-field>
+        @if (configValue('scriptSource') === 'repository') {
+          <mat-form-field><mat-label>Repository URL</mat-label><input matInput [ngModel]="configValue('repository')" (ngModelChange)="updateConfig('repository',$event)" [disabled]="readonly()"></mat-form-field>
+          <mat-form-field><mat-label>Entry point</mat-label><input matInput [ngModel]="configValue('entry_point')" (ngModelChange)="updateConfig('entry_point',$event)" [disabled]="readonly()"></mat-form-field>
+        } @else {
+          <mat-form-field><mat-label>Python script</mat-label><textarea matInput rows="10" [ngModel]="inlineScript()" (ngModelChange)="updateInlineScript($event)" [disabled]="readonly()"></textarea></mat-form-field>
+        }
+      }
+      @case ('training') {
+        <mat-form-field><mat-label>Source</mat-label><mat-select [ngModel]="configValue('source')" (ngModelChange)="updateSource($event)" [disabled]="readonly()"><mat-option value="task">Existing task</mat-option><mat-option value="repository">Repository</mat-option><mat-option value="upload">Uploaded script</mat-option><mat-option value="model">Model configuration</mat-option></mat-select></mat-form-field>
+        @if (configValue('source') === 'task') {
+          <mat-form-field><mat-label>Training task</mat-label><mat-select [ngModel]="configValue('taskId')" (ngModelChange)="updateConfig('taskId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('task');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
+        } @else if (configValue('source') === 'model') {
+          <mat-form-field><mat-label>Model</mat-label><mat-select [ngModel]="configValue('modelId')" (ngModelChange)="updateConfig('modelId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('model');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
+        } @else {
+          <mat-form-field><mat-label>Repository / uploaded-file URI</mat-label><input matInput [ngModel]="configValue('repository')" (ngModelChange)="updateConfig('repository',$event)" [disabled]="readonly()"></mat-form-field>
+        }
+      }
+      @case ('experiment') {
+        <mat-form-field><mat-label>Tracker</mat-label><mat-select [ngModel]="configValue('tracker')" (ngModelChange)="updateConfig('tracker',$event)" [disabled]="readonly()"><mat-option value="clearml">ClearML native</mat-option><mat-option value="mlflow">MLflow sync</mat-option><mat-option value="wandb">Weights & Biases sync</mat-option><mat-option value="comet">Comet sync</mat-option></mat-select></mat-form-field>
+        <mat-form-field><mat-label>Project</mat-label><mat-select [ngModel]="configValue('projectId')" (ngModelChange)="updateProject($event)" [disabled]="readonly() || resourceLoading()">@for(option of options('project');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
+        <p class="help">External tracker credentials are read from the Agent environment and are never stored in the graph.</p>
+      }
+      @case ('report') {
+        <mat-form-field><mat-label>Title</mat-label><input matInput [ngModel]="configValue('title')" (ngModelChange)="updateConfig('title',$event)" [disabled]="readonly()"></mat-form-field>
+        <mat-form-field><mat-label>Format</mat-label><mat-select [ngModel]="configValue('outputFormat')" (ngModelChange)="updateConfig('outputFormat',$event)" [disabled]="readonly()"><mat-option value="html">HTML</mat-option><mat-option value="markdown">Markdown</mat-option><mat-option value="json">JSON</mat-option><mat-option value="pdf">PDF</mat-option></mat-select></mat-form-field>
+        <mat-checkbox [ngModel]="configValue('includeMetrics')" (ngModelChange)="updateConfig('includeMetrics',$event)" [disabled]="readonly()">Include metrics and plots</mat-checkbox>
+      }
+    }
+
+    <mat-form-field><mat-label>Target queue</mat-label><mat-select [ngModel]="configValue('queueId')" (ngModelChange)="updateConfig('queueId',$event)" [disabled]="readonly() || resourceLoading()">@for(option of options('queue');track option.id){<mat-option [value]="option.id">{{option.name}}</mat-option>}</mat-select></mat-form-field>
+
+    @if (configValue('datasetId') || configValue('taskId') || configValue('modelId') || configValue('queueId')) {
+      <section class="resource-links"><h3>ClearML resources</h3>
+        @for(type of ['dataset','task','model','queue'];track type) {
+          @for(option of options($any(type));track option.id) {
+            @if ([configValue('datasetId'),configValue('taskId'),configValue('modelId'),configValue('queueId')].includes(option.id)) {
+              <a [routerLink]="resourceLink(option)" target="_blank"><mat-icon fontSet="al" fontIcon="al-ico-link"></mat-icon>{{option.name}}</a>
+            }
+          }
+        }
+      </section>
+    }
+
+    @if (!readonly()) {
+      <div class="node-actions">
+        <button mat-stroked-button (click)="state.duplicateNode(selected.id)"><mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>DUPLICATE</button>
+        <button mat-stroked-button color="warn" (click)="state.removeNode(selected.id)"><mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>DELETE</button>
+      </div>
+    }
+  </div>
+} @else {
+  <div class="empty"><mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon><strong>No node selected</strong><span>Select a node to configure its native ClearML resources.</span></div>
+}

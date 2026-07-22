@@ -1,0 +1,228 @@
+import unittest
+from contextlib import ExitStack
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+from apiserver.apierrors import errors
+from apiserver.apimodels.clearpipe import GetAllRequest
+from apiserver.services import clearpipe
+
+
+class FakeQuerySet:
+    def __init__(self, tasks):
+        self.tasks = list(tasks)
+
+    def all_fields(self):
+        return self
+
+    def first(self):
+        return self.tasks[0] if self.tasks else None
+
+    def order_by(self, *_):
+        return self
+
+    def count(self):
+        return len(self.tasks)
+
+    def skip(self, _):
+        return self
+
+    def limit(self, _):
+        return self
+
+    def __iter__(self):
+        return iter(self.tasks)
+
+
+def task(company, origin=None):
+    return SimpleNamespace(
+        id="definition",
+        company=company,
+        company_origin=origin,
+        project="project-a",
+        name="Pipeline A",
+        comment="",
+    )
+
+
+class ServiceCompanyIsolationTests(unittest.TestCase):
+    def _with_task_model(self, item):
+        model = Mock()
+        model.objects.return_value = FakeQuerySet([item])
+        return patch.object(clearpipe, "Task", model)
+
+    def test_private_cross_company_read_and_write_are_rejected_even_if_db_returns_task(self):
+        with self._with_task_model(task("company-a")):
+            with self.assertRaises(errors.bad_request.InvalidTaskId):
+                clearpipe._get_task("company-b", "definition")
+            with self.assertRaises(errors.bad_request.InvalidTaskId):
+                clearpipe._get_task("company-b", "definition", owned=True)
+
+    def test_public_cross_company_read_allowed_but_mutation_is_origin_only(self):
+        public = task("", "company-a")
+        with self._with_task_model(public):
+            self.assertIs(clearpipe._get_task("company-b", "definition"), public)
+            with self.assertRaises(errors.bad_request.InvalidTaskId):
+                clearpipe._get_task("company-b", "definition", owned=True)
+            self.assertIs(
+                clearpipe._get_task("company-a", "definition", owned=True), public
+            )
+
+    def test_public_run_project_is_created_in_requester_company(self):
+        public = task("", "company-a")
+        with patch.object(clearpipe, "_find_project", return_value="company-b-project") as find:
+            project = clearpipe._run_project_for_definition(
+                public, "company-b", "user-b"
+            )
+        self.assertEqual(project, "company-b-project")
+        find.assert_called_once_with("company-b", "user-b", "Pipeline A", "")
+
+    def test_private_run_keeps_definition_project(self):
+        self.assertEqual(
+            clearpipe._run_project_for_definition(
+                task("company-a"), "company-a", "user-a"
+            ),
+            "project-a",
+        )
+
+
+class ServiceFailurePolicyTests(unittest.TestCase):
+    @staticmethod
+    def _start_call_and_request():
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=None,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+        )
+        return call, request
+
+    @staticmethod
+    def _start_patches(*, clone_side_effect=None, enqueue_side_effect=None):
+        definition = SimpleNamespace(
+            id="definition",
+            company="company-a",
+            company_origin=None,
+            project="project-a",
+            name="Pipeline A",
+            system_tags=[],
+        )
+        run = SimpleNamespace(id="run-1")
+        compiled = {"script": "# controller", "configuration": {}}
+        patches = [
+            patch.object(clearpipe, "_get_task", return_value=definition),
+            patch.object(clearpipe, "_revision", return_value=1),
+            patch.object(clearpipe, "_graph", return_value={"nodes": [], "edges": []}),
+            patch.object(clearpipe, "_validate_graph", return_value=SimpleNamespace(valid=True)),
+            patch.object(clearpipe, "_assert_valid"),
+            patch.object(clearpipe.queue_bll, "get_default", return_value=SimpleNamespace(id="queue-a")),
+            patch.object(clearpipe, "_compile", return_value=compiled),
+            patch.object(clearpipe, "_configurations", return_value={}),
+            patch.object(clearpipe, "_run_project_for_definition", return_value="project-a"),
+            patch.object(
+                clearpipe.task_bll,
+                "clone_task",
+                return_value=(run, None),
+                side_effect=clone_side_effect,
+            ),
+            patch.object(
+                clearpipe,
+                "enqueue_task",
+                return_value=(True, None),
+                side_effect=enqueue_side_effect,
+            ),
+        ]
+        return patches, run
+
+    def test_clone_failure_does_not_attempt_orphan_cleanup(self):
+        call, request = self._start_call_and_request()
+        task_model = Mock()
+        patches, _ = self._start_patches(clone_side_effect=RuntimeError("clone failed"))
+        with patch.object(clearpipe, "Task", task_model):
+            with ExitStack() as stack:
+                for item in patches:
+                    stack.enter_context(item)
+                with self.assertRaisesRegex(RuntimeError, "clone failed"):
+                    clearpipe.start(call, "company-a", request)
+        task_model.objects.assert_not_called()
+        self.assertIsNone(call.result.data)
+
+    def test_enqueue_failure_deletes_only_the_created_company_run(self):
+        call, request = self._start_call_and_request()
+        runtime_update = Mock()
+        cleanup = Mock()
+        task_model = Mock()
+        task_model.objects.side_effect = [runtime_update, cleanup]
+        patches, _ = self._start_patches(enqueue_side_effect=RuntimeError("enqueue failed"))
+        with patch.object(clearpipe, "Task", task_model):
+            with ExitStack() as stack:
+                for item in patches:
+                    stack.enter_context(item)
+                with self.assertRaisesRegex(RuntimeError, "enqueue failed"):
+                    clearpipe.start(call, "company-a", request)
+        runtime_update.update_one.assert_called_once_with(
+            set__runtime={"clearpipe_revision": 1, "_pipeline_hash": "clearpipe-v1"}
+        )
+        self.assertEqual(
+            task_model.objects.call_args_list[1].kwargs,
+            {
+                "id": "run-1",
+                "company": "company-a",
+                "status": clearpipe.TaskStatus.created,
+            },
+        )
+        cleanup.delete.assert_called_once_with()
+        self.assertIsNone(call.result.data)
+
+    def test_cleanup_failure_is_reported_as_unambiguous_internal_error(self):
+        call, request = self._start_call_and_request()
+        runtime_update = Mock()
+        cleanup = Mock()
+        cleanup.delete.side_effect = RuntimeError("delete failed")
+        task_model = Mock()
+        task_model.objects.side_effect = [runtime_update, cleanup]
+        patches, _ = self._start_patches(enqueue_side_effect=RuntimeError("enqueue failed"))
+        with patch.object(clearpipe, "Task", task_model):
+            with ExitStack() as stack:
+                for item in patches:
+                    stack.enter_context(item)
+                with self.assertRaises(errors.server_error.InternalError):
+                    clearpipe.start(call, "company-a", request)
+        cleanup.delete.assert_called_once_with()
+        self.assertIsNone(call.result.data)
+
+    def test_unsafe_get_all_refuses_page_instead_of_returning_short_count(self):
+        queryset = FakeQuerySet([task("company-a")])
+        model = Mock()
+        model.objects.return_value = queryset
+        call = SimpleNamespace(data={}, result=SimpleNamespace(data=None))
+        with patch.object(clearpipe, "Task", model), patch.object(
+            clearpipe,
+            "_definition",
+            side_effect=errors.bad_request.ValidationError("unsafe stored graph"),
+        ):
+            with self.assertRaises(errors.bad_request.ValidationError):
+                clearpipe.get_all(call, "company-a", GetAllRequest())
+        self.assertIsNone(call.result.data)
+
+    def test_pre_enqueue_cleanup_is_company_status_scoped(self):
+        deletion = Mock()
+        model = Mock()
+        model.objects.return_value = deletion
+        run = SimpleNamespace(id="run-1")
+        with patch.object(clearpipe, "Task", model):
+            clearpipe._cleanup_unqueued_run(run, "company-a")
+        model.objects.assert_called_once_with(
+            id="run-1", company="company-a", status=clearpipe.TaskStatus.created
+        )
+        deletion.delete.assert_called_once_with()
+
+
+if __name__ == "__main__":
+    unittest.main()

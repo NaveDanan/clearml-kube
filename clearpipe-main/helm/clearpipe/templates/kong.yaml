@@ -1,0 +1,88 @@
+{{- if .Values.kong.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.kong.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kong
+spec:
+  replicas: {{ .Values.kong.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "clearpipe.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: kong
+  template:
+    metadata:
+      labels:
+        {{- include "clearpipe.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kong
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "clearpipe.serviceAccountName" . }}
+      containers:
+        - name: kong
+          image: "{{ .Values.kong.image.repository }}:{{ .Values.kong.image.tag }}"
+          imagePullPolicy: {{ .Values.kong.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.kong.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: kong-config
+              mountPath: /var/lib/kong
+              readOnly: true
+          livenessProbe:
+            exec:
+              command:
+                - kong
+                - health
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - kong
+                - health
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.kong.resources | nindent 12 }}
+      volumes:
+        - name: kong-config
+          configMap:
+            name: {{ include "clearpipe.fullname" . }}-kong
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.kong.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kong
+spec:
+  type: {{ .Values.kong.service.type }}
+  ports:
+    - port: {{ .Values.kong.service.httpPort }}
+      targetPort: 8000
+      protocol: TCP
+      name: http
+    - port: {{ .Values.kong.service.httpsPort }}
+      targetPort: 8443
+      protocol: TCP
+      name: https
+  selector:
+    {{- include "clearpipe.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: kong
+{{- end }}

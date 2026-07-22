@@ -1,0 +1,104 @@
+{{- if .Values.studio.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.studio.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: studio
+spec:
+  replicas: {{ .Values.studio.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "clearpipe.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: studio
+  template:
+    metadata:
+      labels:
+        {{- include "clearpipe.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: studio
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "clearpipe.serviceAccountName" . }}
+      containers:
+        - name: studio
+          image: "{{ .Values.studio.image.repository }}:{{ .Values.studio.image.tag }}"
+          imagePullPolicy: {{ .Values.studio.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: STUDIO_PG_META_URL
+              value: "http://{{ .Values.meta.name }}:{{ .Values.meta.service.port }}"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: postgres-password
+            - name: DEFAULT_ORGANIZATION_NAME
+              value: "ClearPipe"
+            - name: DEFAULT_PROJECT_NAME
+              value: "clearpipe"
+            - name: SUPABASE_URL
+              value: "http://{{ .Values.kong.name }}:{{ .Values.kong.service.httpPort }}"
+            - name: SUPABASE_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-config
+                  key: api-external-url
+            - name: SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: anon-key
+            - name: SUPABASE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: service-role-key
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: jwt-secret
+            - name: NEXT_PUBLIC_ENABLE_LOGS
+              value: "true"
+            - name: NEXT_ANALYTICS_BACKEND_PROVIDER
+              value: "postgres"
+          livenessProbe:
+            httpGet:
+              path: /api/profile
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/profile
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.studio.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.studio.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: studio
+spec:
+  type: {{ .Values.studio.service.type }}
+  ports:
+    - port: {{ .Values.studio.service.port }}
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "clearpipe.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: studio
+{{- end }}

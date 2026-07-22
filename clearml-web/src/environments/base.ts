@@ -72,6 +72,8 @@ export interface Environment {
   defaultTheme?: 'light' | 'dark';
   customStyle?: string;
   interfaceCustomization?: InterfaceCustomizations| undefined;
+  /** Enables the native ClearPipe definition library and editor. Defaults to true. */
+  clearpipeEnabled?: boolean;
 }
 
 export const BASE_ENV = {
@@ -113,5 +115,6 @@ export const BASE_ENV = {
   platformYoutubeChannel: 'https://www.youtube.com/c/ClearML/featured',
   newExperimentYouTubeVideoId: 's3k9ntmQmD4',
   displayTips: true,
+  clearpipeEnabled: true,
 } as Environment;
 

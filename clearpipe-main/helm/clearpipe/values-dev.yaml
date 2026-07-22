@@ -1,0 +1,169 @@
+# ============================================================
+# ClearPipe Helm Values - Development Environment
+# ============================================================
+# Override values for local/development Kubernetes clusters
+# Usage: helm install clearpipe ./helm/clearpipe -f ./helm/clearpipe/values-dev.yaml
+# ============================================================
+
+# App configuration
+app:
+  replicaCount: 1
+  
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+  
+  autoscaling:
+    enabled: false
+  
+  podDisruptionBudget:
+    enabled: false
+
+# Nginx
+nginx:
+  replicaCount: 1
+
+# Ingress for development
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+  hosts:
+    - host: clearpipe.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: app
+        - path: /rest/v1
+          pathType: Prefix
+          service: kong
+        - path: /auth/v1
+          pathType: Prefix
+          service: kong
+        - path: /storage/v1
+          pathType: Prefix
+          service: kong
+        - path: /realtime/v1
+          pathType: Prefix
+          service: kong
+  tls: []
+
+# Kong
+kong:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+# Auth
+auth:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "125m"
+      memory: "128Mi"
+  env:
+    GOTRUE_MAILER_AUTOCONFIRM: "true"
+    GOTRUE_DISABLE_SIGNUP: "false"
+
+# PostgREST
+rest:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "125m"
+      memory: "128Mi"
+
+# Realtime
+realtime:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+# Storage
+storage:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "125m"
+      memory: "128Mi"
+  persistence:
+    enabled: true
+    size: 5Gi
+
+# Meta
+meta:
+  replicaCount: 1
+
+# Studio - Enable for development
+studio:
+  enabled: true
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+# PostgreSQL
+postgresql:
+  primary:
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+
+# Redis - Disabled for development
+redis:
+  enabled: false
+
+# ImgProxy
+imgproxy:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "128Mi"
+    limits:
+      cpu: "250m"
+      memory: "256Mi"
+
+# Disable network policies for development
+networkPolicy:
+  enabled: false
+
+# Relaxed security for development
+podSecurityContext:
+  runAsNonRoot: false
+  runAsUser: 0

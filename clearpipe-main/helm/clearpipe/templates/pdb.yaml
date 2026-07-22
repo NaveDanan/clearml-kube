@@ -1,0 +1,13 @@
+{{- if and .Values.app.enabled .Values.app.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Values.app.name }}
+  labels:
+    {{- include "clearpipe.app.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.app.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "clearpipe.app.selectorLabels" . | nindent 6 }}
+{{- end }}

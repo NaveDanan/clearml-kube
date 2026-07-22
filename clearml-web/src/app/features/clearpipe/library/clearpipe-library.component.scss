@@ -1,0 +1,34 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow: auto;
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+}
+
+.page {max-width: 1500px; margin: 0 auto; padding: 32px 40px 64px;}
+.page-header {display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;}
+h1 {font-size: 28px; font-weight: 500; margin: 0 0 6px;}
+h2 {font-size: 18px; font-weight: 500; margin: 16px 0 4px;}
+p {margin: 0; color: var(--color-on-surface-variant);}
+.filters {display: flex; align-items: center; gap: 12px; margin-bottom: 18px;}
+.filters mat-form-field {width: min(480px, 45vw);}
+.filters .selected {background: var(--color-primary-container);}
+.count {margin-left: auto; font-size: 12px; color: var(--color-on-surface-variant);}
+.table {border: 1px solid var(--color-outline-variant); border-radius: 4px; overflow: hidden; background: var(--color-surface);}
+.table-row {display: grid; grid-template-columns: minmax(280px, 2fr) minmax(120px, 1fr) 180px 90px 48px; min-height: 64px; align-items: center; gap: 16px; padding: 0 16px;}
+.table-head {min-height: 42px; background: var(--color-surface-container); color: var(--color-on-surface-variant); font-size: 11px; font-weight: 600; text-transform: uppercase;}
+.pipeline {width: 100%; border: 0; border-top: 1px solid var(--color-outline-variant); background: transparent; text-align: left; color: inherit; font: inherit; cursor: pointer;}
+.pipeline:hover {background: var(--color-surface-container-low);}
+.name-cell {display: flex; gap: 12px; align-items: center; min-width: 0;}
+.name-cell > mat-icon {color: var(--color-primary);}
+.name-cell > span {display: flex; flex-direction: column; min-width: 0;}
+.name-cell strong, .name-cell small {overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+.name-cell small {font-size: 12px; color: var(--color-on-surface-variant); margin-top: 3px;}
+.actions {text-align: right;}
+.state, .empty-state {min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--color-on-surface-variant);}
+.empty-state > mat-icon {font-size: 40px; width: 40px; height: 40px; color: var(--color-primary);}
+.empty-state button {margin-top: 20px;}
+.spinner {width: 28px; height: 28px; margin-bottom: 12px; border: 3px solid var(--color-outline-variant); border-top-color: var(--color-primary); border-radius: 50%; animation: spin .8s linear infinite;}
+@keyframes spin {to {transform: rotate(360deg)}}
+@media (max-width: 900px) {.page {padding: 24px 20px}.table-row {grid-template-columns: 1fr 120px 48px}.table-row > :nth-child(2), .table-row > :nth-child(3) {display: none;}}

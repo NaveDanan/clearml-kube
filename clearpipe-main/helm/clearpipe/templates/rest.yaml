@@ -1,0 +1,86 @@
+{{- if .Values.rest.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.rest.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rest
+spec:
+  replicas: {{ .Values.rest.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "clearpipe.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: rest
+  template:
+    metadata:
+      labels:
+        {{- include "clearpipe.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: rest
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "clearpipe.serviceAccountName" . }}
+      containers:
+        - name: rest
+          image: "{{ .Values.rest.image.repository }}:{{ .Values.rest.image.tag }}"
+          imagePullPolicy: {{ .Values.rest.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            {{- range $key, $value := .Values.rest.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: PGRST_DB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: database-url
+            - name: PGRST_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: jwt-secret
+            - name: PGRST_APP_SETTINGS_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "clearpipe.fullname" . }}-secrets
+                  key: jwt-secret
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.rest.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.rest.name }}
+  labels:
+    {{- include "clearpipe.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rest
+spec:
+  type: {{ .Values.rest.service.type }}
+  ports:
+    - port: {{ .Values.rest.service.port }}
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "clearpipe.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: rest
+{{- end }}

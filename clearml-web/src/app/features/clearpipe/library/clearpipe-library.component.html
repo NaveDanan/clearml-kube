@@ -1,0 +1,68 @@
+<section class="page">
+  <header class="page-header">
+    <div>
+      <h1>ClearPipe</h1>
+      <p>Build and run native ClearML pipelines visually.</p>
+    </div>
+    <button mat-flat-button routerLink="/clearpipe/new" data-id="New ClearPipe">
+      <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon>
+      NEW CLEARPIPE
+    </button>
+  </header>
+
+  <div class="filters">
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-icon matPrefix fontSet="al" fontIcon="al-ico-search"></mat-icon>
+      <input matInput [formControl]="search" placeholder="Search pipeline definitions" aria-label="Search ClearPipe definitions">
+    </mat-form-field>
+    <button mat-stroked-button (click)="toggleArchived()" [class.selected]="archived()">
+      <mat-icon fontSet="al" fontIcon="al-ico-archive"></mat-icon>
+      {{ archived() ? 'SHOW ACTIVE' : 'SHOW ARCHIVED' }}
+    </button>
+    <span class="count">{{ resultLabel() }}</span>
+  </div>
+
+  @if (loading()) {
+    <div class="state"><div class="spinner"></div><span>Loading ClearPipe definitions…</span></div>
+  } @else if (!pipelines().length) {
+    <div class="empty-state">
+      <mat-icon fontSet="al" fontIcon="al-ico-pipelines"></mat-icon>
+      <h2>No ClearPipe definitions found</h2>
+      <p>Create a visual pipeline or change the current filters.</p>
+      <button mat-flat-button routerLink="/clearpipe/new">CREATE CLEARPIPE</button>
+    </div>
+  } @else {
+    <div class="table" role="table" aria-label="ClearPipe definitions">
+      <div class="table-row table-head" role="row">
+        <span>Name</span><span>Owner</span><span>Updated</span><span>Revision</span><span></span>
+      </div>
+      @for (pipeline of pipelines(); track pipeline.task_id || pipeline.id) {
+        <button class="table-row pipeline" role="row" (click)="open(pipeline)" [attr.data-id]="'clearpipe-' + pipeline.name">
+          <span class="name-cell">
+            <mat-icon fontSet="al" fontIcon="al-ico-pipeline"></mat-icon>
+            <span><strong>{{ pipeline.name }}</strong><small>{{ pipeline.description || 'No description' }}</small></span>
+          </span>
+          <span>{{ pipeline.owner?.name || '—' }}</span>
+          <span>{{ (pipeline.last_update || pipeline.created) | date:'medium' }}</span>
+          <span>r{{ pipeline.revision }}</span>
+          <span class="actions">
+            @if (pipeline.can_edit !== false) {
+              <button mat-icon-button [matMenuTriggerFor]="menu" (click)="$event.stopPropagation()" aria-label="Definition actions">
+                <mat-icon fontSet="al" fontIcon="al-ico-more"></mat-icon>
+              </button>
+              <mat-menu #menu="matMenu">
+                <button mat-menu-item (click)="archive(pipeline, $event)">
+                  <mat-icon fontSet="al" [fontIcon]="pipeline.archived ? 'al-ico-restore' : 'al-ico-archive'"></mat-icon>
+                  {{ pipeline.archived ? 'Restore' : 'Archive' }}
+                </button>
+                <button mat-menu-item (click)="remove(pipeline, $event)">
+                  <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>Delete
+                </button>
+              </mat-menu>
+            }
+          </span>
+        </button>
+      }
+    </div>
+  }
+</section>

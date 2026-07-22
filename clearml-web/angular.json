@@ -35,6 +35,7 @@
               "src/favicon.ico",
               "src/version.json",
               "src/env.js",
+              "src/configuration.json",
               "src/404.html",
               "src/manifest.webmanifest",
               "src/app/webapp-common/assets",
@@ -172,9 +173,9 @@
               "zone.js"
             ],
             "tsConfig": "./tsconfig.spec.json",
-            "styles": [
-              "src/styles.scss"
-            ],
+              "styles": [
+                "src/app/webapp-common/styles/style.scss"
+              ],
             "stylePreprocessorOptions": {
               "includePaths": [
                 "",

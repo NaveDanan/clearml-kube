@@ -32,6 +32,14 @@
        [class.active]="baseRouteConfig() ==='pipelines'"
        smTooltip="PIPELINES"
     ></a>
+    @if (environment().clearpipeEnabled !== false) {
+      <a class="item al-ico-pipeline"
+         routerLink="/clearpipe"
+         [class.active]="baseRouteConfig() === 'clearpipe'"
+         smTooltip="CLEARPIPE"
+         data-id="clearpipeIcon"
+      ></a>
+    }
     @if (!hideEnterpriseFeatures()) {
       <a class="item al-ico-enterprise-rocket lm"
          routerLink="enterprise"

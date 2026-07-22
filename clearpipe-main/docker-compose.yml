@@ -1,0 +1,357 @@
+# ============================================================
+# ClearPipe - Docker Compose Configuration
+# ============================================================
+# This file sets up the complete development environment including:
+# - ClearPipe Next.js application
+# - Supabase (PostgreSQL, Auth, Storage, Realtime, etc.)
+# - Nginx reverse proxy
+# ============================================================
+
+name: clearpipe
+
+services:
+  # ============================================
+  # Nginx Reverse Proxy
+  # ============================================
+  nginx:
+    image: nginx:alpine
+    container_name: clearpipe-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      app:
+        condition: service_healthy
+      kong:
+        condition: service_healthy
+    networks:
+      - clearpipe-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # ClearPipe Next.js Application
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://localhost:8000}
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    container_name: clearpipe-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL:-http://kong:8000}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+      kong:
+        condition: service_healthy
+    networks:
+      - clearpipe-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ============================================
+  # Supabase PostgreSQL Database
+  # ============================================
+  db:
+    image: supabase/postgres:15.6.1.143
+    container_name: clearpipe-db
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      JWT_EXP: ${JWT_EXP:-3600}
+    volumes:
+      - clearpipe-db-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - clearpipe-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Supabase Kong API Gateway
+  # ============================================
+  kong:
+    image: kong:2.8.1
+    container_name: clearpipe-kong
+    restart: unless-stopped
+    ports:
+      - "${KONG_HTTP_PORT:-8000}:8000"
+      - "${KONG_HTTPS_PORT:-8443}:8443"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      KONG_LOG_LEVEL: warn
+    volumes:
+      - ./docker/kong/kong.yml:/var/lib/kong/kong.yml:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - clearpipe-network
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # Supabase Auth (GoTrue)
+  # ============================================
+  auth:
+    image: supabase/gotrue:v2.164.0
+    container_name: clearpipe-auth
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?search_path=auth
+      
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXP:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP:-true}
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: ${ENABLE_ANONYMOUS_USERS:-false}
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-true}
+      
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-admin@localhost}
+      GOTRUE_SMTP_MAX_FREQUENCY: 1ns
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - clearpipe-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9999/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # Supabase Realtime
+  # ============================================
+  realtime:
+    image: supabase/realtime:v2.30.34
+    container_name: clearpipe-realtime
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-UpNVntn3cDxHJpq99YMc1T1AQgQpc8kfYTuRgBiYa15BLrx8etQoXz3gZv1/u2oq}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      ENABLE_TAILSCALE: "false"
+      DNS_NODES: "''"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - clearpipe-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/api/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # Supabase Storage
+  # ============================================
+  storage:
+    image: supabase/storage-api:v1.11.13
+    container_name: clearpipe-storage
+    restart: unless-stopped
+    environment:
+      ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "true"
+      IMGPROXY_URL: http://imgproxy:8080
+    volumes:
+      - clearpipe-storage-data:/var/lib/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    networks:
+      - clearpipe-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # Supabase PostgREST
+  # ============================================
+  rest:
+    image: postgrest/postgrest:v12.2.0
+    container_name: clearpipe-rest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXP:-3600}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - clearpipe-network
+
+  # ============================================
+  # Supabase Meta (for Studio)
+  # ============================================
+  meta:
+    image: supabase/postgres-meta:v0.84.2
+    container_name: clearpipe-meta
+    restart: unless-stopped
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: ${POSTGRES_DB:-postgres}
+      PG_META_DB_USER: ${POSTGRES_USER:-postgres}
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - clearpipe-network
+
+  # ============================================
+  # Supabase Studio (Development UI)
+  # ============================================
+  studio:
+    image: supabase/studio:20241202-71e5240
+    container_name: clearpipe-studio
+    restart: unless-stopped
+    ports:
+      - "${STUDIO_PORT:-3001}:3000"
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      
+      DEFAULT_ORGANIZATION_NAME: ${STUDIO_DEFAULT_ORGANIZATION:-ClearPipe}
+      DEFAULT_PROJECT_NAME: ${STUDIO_DEFAULT_PROJECT:-clearpipe}
+      
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      
+      AUTH_JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      
+      LOGFLARE_API_KEY: ${LOGFLARE_API_KEY:-}
+      LOGFLARE_URL: http://analytics:4000
+      NEXT_PUBLIC_ENABLE_LOGS: true
+      NEXT_ANALYTICS_BACKEND_PROVIDER: postgres
+    depends_on:
+      kong:
+        condition: service_healthy
+      meta:
+        condition: service_started
+    networks:
+      - clearpipe-network
+
+  # ============================================
+  # Image Proxy (for Storage transformations)
+  # ============================================
+  imgproxy:
+    image: darthsim/imgproxy:v3.8.0
+    container_name: clearpipe-imgproxy
+    restart: unless-stopped
+    environment:
+      IMGPROXY_BIND: ":8080"
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
+      IMGPROXY_USE_ETAG: "true"
+      IMGPROXY_ENABLE_WEBP_DETECTION: ${IMGPROXY_ENABLE_WEBP_DETECTION:-true}
+    volumes:
+      - clearpipe-storage-data:/var/lib/storage:ro
+    networks:
+      - clearpipe-network
+    healthcheck:
+      test: ["CMD", "imgproxy", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  clearpipe-network:
+    driver: bridge
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  clearpipe-db-data:
+    driver: local
+  clearpipe-storage-data:
+    driver: local

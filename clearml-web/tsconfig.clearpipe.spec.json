@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/clearpipe-spec",
+    "types": ["jasmine", "node"]
+  },
+  "files": ["src/test.ts", "src/polyfills.ts"],
+  "include": [
+    "src/app/features/clearpipe/**/*.spec.ts",
+    "src/**/*.d.ts"
+  ]
+}

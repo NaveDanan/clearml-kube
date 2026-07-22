@@ -1,0 +1,25 @@
+apiVersion: v2
+name: clearpipe
+description: A Helm chart for ClearPipe - ML Pipeline Management Platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - clearpipe
+  - ml-pipeline
+  - machine-learning
+  - nextjs
+  - supabase
+home: https://github.com/your-org/clearpipe
+maintainers:
+  - name: ClearPipe Team
+    email: team@clearpipe.io
+dependencies:
+  - name: postgresql
+    version: "15.5.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  - name: redis
+    version: "19.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled

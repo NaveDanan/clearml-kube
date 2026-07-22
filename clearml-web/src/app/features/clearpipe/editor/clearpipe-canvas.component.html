@@ -1,0 +1,59 @@
+<aside class="palette" aria-label="Node palette" cdkDropList id="clearpipePalette"
+       [cdkDropListConnectedTo]="['clearpipeCanvasDrop']" [cdkDropListSortingDisabled]="true">
+  <h2>Nodes</h2>
+  @for (nodeType of nodeTypes; track nodeType.type) {
+    <div class="palette-node" role="button" tabindex="0" cdkDrag [cdkDragData]="nodeType.type"
+         (keydown.enter)="addPaletteNode(nodeType.type)" [attr.data-node-type]="nodeType.type">
+      <mat-icon fontSet="al" [fontIcon]="nodeType.icon"></mat-icon>
+      <span><strong>{{ nodeType.label }}</strong><small>{{ nodeType.description }}</small></span>
+    </div>
+  }
+  <p class="hint">Drag a node onto the canvas. Use the connector dots to create dependencies.</p>
+</aside>
+
+<div #canvas class="canvas-surface" [class.panning]="panning()" cdkDropList id="clearpipeCanvasDrop"
+     [cdkDropListConnectedTo]="['clearpipePalette']" [cdkDropListSortingDisabled]="true"
+     (cdkDropListDropped)="dropNode($event)" (wheel)="wheel($event)"
+     (mousedown)="beginPan($event)" (mousemove)="pan($event)" (mouseup)="endPan()" (mouseleave)="endPan()"
+     (click)="state.selectedNodeId.set(null)" (keydown.escape)="state.selectedNodeId.set(null)" tabindex="0">
+  <div class="graph" [style.transform]="transform()">
+    <svg class="edges" aria-label="Pipeline connections">
+      @for (edge of state.definition().edges; track edge.id) {
+        <path class="edge-hit" [attr.d]="edgePath(edge)" (dblclick)="!readonly() && state.removeEdge(edge.id)"></path>
+        <path class="edge" [attr.d]="edgePath(edge)"></path>
+      }
+    </svg>
+    @for (node of state.definition().nodes; track node.id) {
+      <article class="node" cdkDrag [cdkDragDisabled]="readonly()" [cdkDragFreeDragPosition]="node.position"
+               (cdkDragEnded)="nodeDragEnd(node, $event)" (click)="selectNode($event, node.id)"
+               (keydown.enter)="state.selectedNodeId.set(node.id)" tabindex="0"
+               [class.selected]="state.selectedNodeId() === node.id" [class.connecting]="state.connectionSource() === node.id">
+        <button class="connector input" (click)="connect($event, node.id)" aria-label="Connect into node"></button>
+        <mat-icon fontSet="al" [fontIcon]="nodeIcon(node.type)"></mat-icon>
+        <span><strong>{{ node.label }}</strong><small>{{ node.type }}</small></span>
+        <button class="connector output" (click)="connect($event, node.id)" aria-label="Connect from node"></button>
+      </article>
+    }
+  </div>
+
+  @if (!state.definition().nodes.length) {
+    <div class="canvas-empty">
+      <mat-icon fontSet="al" fontIcon="al-ico-pipeline"></mat-icon>
+      <strong>Build your pipeline</strong>
+      <span>Drag a node from the palette to get started.</span>
+    </div>
+  }
+
+  <div class="zoom-controls">
+    <button mat-icon-button (click)="changeZoom(.1, $event)" aria-label="Zoom in"><mat-icon fontSet="al" fontIcon="al-ico-zoom-in"></mat-icon></button>
+    <span>{{ viewport().zoom * 100 | number:'1.0-0' }}%</span>
+    <button mat-icon-button (click)="changeZoom(-.1, $event)" aria-label="Zoom out"><mat-icon fontSet="al" fontIcon="al-ico-zoom-out"></mat-icon></button>
+    <button mat-icon-button (click)="centerGraph(); $event.stopPropagation()" aria-label="Center graph"><mat-icon fontSet="al" fontIcon="al-ico-zoom-to-fit"></mat-icon></button>
+  </div>
+
+  <div class="minimap" aria-label="Pipeline minimap">
+    @for (node of state.definition().nodes; track node.id) {
+      <i [style.left.px]="node.position.x / 12" [style.top.px]="node.position.y / 12"></i>
+    }
+  </div>
+</div>

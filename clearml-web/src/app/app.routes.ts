@@ -7,6 +7,7 @@ import {Store} from '@ngrx/store';
 import {selectCurrentUser} from '@common/core/reducers/users-reducer';
 import {map} from 'rxjs/operators';
 import {AppComponent} from '~/app.component';
+import {ConfigurationService} from '@common/shared/services/configuration.service';
 
 
 const authenticationRequiredGuard: CanActivateFn = (route) => {
@@ -23,6 +24,12 @@ const authenticationRequiredGuard: CanActivateFn = (route) => {
         return router.parseUrl(redirectUrl);
       })
     );
+};
+
+const clearpipeEnabledGuard: CanActivateFn = () => {
+  const router = inject(Router);
+  const configuration = inject(ConfigurationService).configuration;
+  return configuration().clearpipeEnabled !== false || router.parseUrl('/404');
 };
 
 export const routes: Routes = [
@@ -101,6 +108,12 @@ export const routes: Routes = [
         path: 'pipelines',
         data: {search: true, autoSearchTab: 'pipelines'},
         loadChildren: () => import('@common/pipelines/pipelines.module').then(m => m.PipelinesModule),
+      },
+      {
+        path: 'clearpipe',
+        canMatch: [clearpipeEnabledGuard],
+        loadChildren: () => import('./features/clearpipe/clearpipe.routes').then(m => m.clearpipeRoutes),
+        data: {search: false},
       },
       {
         path: 'pipelines',

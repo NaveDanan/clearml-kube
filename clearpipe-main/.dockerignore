@@ -1,0 +1,66 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+.next
+out
+build
+dist
+
+# Python
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+.docker
+
+# Helm
+helm/
+
+# Documentation
+*.md
+docs/
+LICENSE
+
+# Testing
+test/
+*.test.ts
+*.spec.ts
+coverage/
+
+# Environment files (will be injected at runtime)
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.db.json
+clearpipe.db.json
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+*.tgz
+*.tar.gz
