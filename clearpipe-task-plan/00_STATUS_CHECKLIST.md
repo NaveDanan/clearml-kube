@@ -31,7 +31,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 | cp-25-function-authoring | Done | 715effc | Constrained function authoring is host-wired with typed persistence, explicit source fallback, and protected bound ports. |
 | [x] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | Done | 2755cb0 | Server-backed execution uses scoped lifecycle, idempotent reconciliation, bounded polling, and authenticated runtime snapshots. |
 | [x] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Done | f9e579b | Advanced history, clipboard, keyboard, selection, and layout operations integrated with atomic restore safety. |
-| [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 | cp-28-task-vertical-slice | In progress | copilot/cp-28 | Converging the complete task-backed authoring, save, preflight, run, and results journey. |
+| [x] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 | cp-28-task-vertical-slice | Done | af39ed9 | Deterministic two-task vertical slice proves canonical save/reload, generated output, typed execution handoff, snapshot correlation, navigation, and denied-task fail-closed behavior. |
 | [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 | cp-29-existing-pipeline-editing | In progress | copilot/cp-29 | Converging safe existing-pipeline visual editing and unsupported fallback behavior. |
 | [ ] | [CP-30](./cp_30_accessibility-responsive-performance.md) | 8 | 8 |  | Not started |  |  |
 | [ ] | [CP-31](./cp_31_automated-coverage-regression.md) | 8 | 8 |  | Not started |  |  |
