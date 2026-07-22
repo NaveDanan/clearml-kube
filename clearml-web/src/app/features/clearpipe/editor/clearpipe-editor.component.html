@@ -1,57 +1,278 @@
-<section class="editor">
-  <header class="toolbar">
+<section class="workspace"
+         aria-label="ClearPipe workspace"
+         [class.workspace--narrow]="isNarrow()"
+         [style.--palette-track]="panelTracks().palette"
+         [style.--inspector-track]="panelTracks().inspector">
+  <a class="skip-link" href="#clearpipe-canvas">Skip to ClearPipe canvas</a>
+
+  <header class="workspace-identity" aria-label="ClearPipe definition identity">
     <div class="identity">
-      <a mat-icon-button routerLink="/clearpipe" aria-label="Back to ClearPipe library"><mat-icon>arrow_back</mat-icon></a>
-      <div><strong>{{ state.definition().name }}</strong><span>Revision {{ state.definition().revision }} @if (isDirty()) { · Unsaved changes }</span></div>
-      @if (readOnly()) {<span class="readonly-badge">READ ONLY</span>}
+      <a mat-icon-button routerLink="/clearpipe" aria-label="Back to ClearPipe library">
+        <mat-icon>arrow_back</mat-icon>
+      </a>
+      <div>
+        <strong [attr.aria-label]="state.definition().name">{{ state.definition().name }}</strong>
+        <span>Revision {{ state.definition().revision }} @if (isDirty()) { · Unsaved changes }</span>
+      </div>
+      @if (readOnly()) {
+        <span class="readonly-badge">{{ routeSurface() === 'unsupported' ? 'UNSUPPORTED' : 'READ ONLY' }}</span>
+      }
     </div>
-    <div class="tools">
-      <button mat-icon-button (click)="state.undo()" [disabled]="!state.canUndo() || readOnly()" aria-label="Undo"><mat-icon>undo</mat-icon></button>
-      <button mat-icon-button (click)="state.redo()" [disabled]="!state.canRedo() || readOnly()" aria-label="Redo"><mat-icon>redo</mat-icon></button>
-      <span class="divider"></span>
-      <button mat-stroked-button (click)="validate()"><mat-icon fontSet="al" fontIcon="al-ico-check"></mat-icon>VALIDATE</button>
-      <button mat-stroked-button (click)="save()" [disabled]="readOnly() || saving()"><mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>{{ saving() ? 'SAVING…' : 'SAVE' }}</button>
-      <button mat-flat-button (click)="run()" [disabled]="running()"><mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>{{ running() ? 'STARTING…' : 'RUN' }}</button>
-      <button mat-icon-button [matMenuTriggerFor]="more" aria-label="More ClearPipe actions"><mat-icon fontSet="al" fontIcon="al-ico-more"></mat-icon></button>
+    <div class="identity-actions">
+      <button mat-icon-button
+              type="button"
+              data-panel-trigger="palette"
+              (click)="togglePanel('palette', $any($event.currentTarget))"
+              [attr.aria-expanded]="isNarrow() ? activeDrawer() === 'palette' : paletteOpen()"
+              aria-controls="clearpipe-palette"
+              aria-label="Toggle authoring catalog">
+        <mat-icon fontSet="al" fontIcon="al-ico-menu"></mat-icon>
+      </button>
+      <button mat-icon-button
+              type="button"
+              data-panel-trigger="inspector"
+              (click)="togglePanel('inspector', $any($event.currentTarget))"
+              [attr.aria-expanded]="isNarrow() ? activeDrawer() === 'inspector' : inspectorOpen()"
+              aria-controls="clearpipe-inspector"
+              aria-label="Toggle inspector">
+        <mat-icon fontSet="al" fontIcon="al-ico-properties"></mat-icon>
+      </button>
+    </div>
+  </header>
+
+  <div class="workspace-toolbar" role="toolbar" aria-label="ClearPipe toolbar">
+    <div class="toolbar-primary" smClearpipeWorkspaceSlot="workspace.toolbar.primary">
+      <button mat-icon-button type="button" (click)="state.undo()" [disabled]="!state.canUndo() || !canEdit()" aria-label="Undo">
+        <mat-icon>undo</mat-icon>
+      </button>
+      <button mat-icon-button type="button" (click)="state.redo()" [disabled]="!state.canRedo() || !canEdit()" aria-label="Redo">
+        <mat-icon>redo</mat-icon>
+      </button>
+      <span class="divider" aria-hidden="true"></span>
+      <button mat-stroked-button type="button" (click)="validate()" [disabled]="routeSurface() !== 'ready'">
+        <mat-icon fontSet="al" fontIcon="al-ico-check"></mat-icon>
+        <span>Validate</span>
+      </button>
+      <button mat-stroked-button type="button" (click)="save()" [disabled]="!canEdit() || saving()">
+        <mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>
+        <span>{{ saving() ? 'Saving…' : 'Save' }}</span>
+      </button>
+      <span class="run-unavailable" id="clearpipe-run-unavailable">
+        Run is unavailable until the approved ClearML Agent path is proven.
+      </span>
+      <button mat-flat-button type="button" disabled aria-describedby="clearpipe-run-unavailable">
+        <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>
+        <span>Run</span>
+      </button>
+    </div>
+    <div class="toolbar-overflow" smClearpipeWorkspaceSlot="workspace.toolbar.overflow">
+      <button mat-icon-button type="button" [matMenuTriggerFor]="more" aria-label="More ClearPipe actions">
+        <mat-icon fontSet="al" fontIcon="al-ico-more"></mat-icon>
+      </button>
       <mat-menu #more="matMenu">
-        <button mat-menu-item (click)="saveAs()" [disabled]="readOnly()"><mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>Save as</button>
-        <button mat-menu-item (click)="importInput.click()" [disabled]="readOnly()"><mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>Import JSON</button>
-        <button mat-menu-item (click)="exportJson()"><mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>Export JSON</button>
+        <button mat-menu-item type="button" (click)="saveAs()" [disabled]="!canEdit()">
+          <mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>
+          Save as
+        </button>
+        <button mat-menu-item type="button" (click)="importInput.click()" [disabled]="!canEdit()">
+          <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
+          Import approved definition
+        </button>
+        <button mat-menu-item type="button" (click)="exportJson()" [disabled]="routeSurface() !== 'ready'">
+          <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
+          Export definition
+        </button>
         @if (state.definition().id || state.definition().task_id) {
-          <button mat-menu-item (click)="archive()" [disabled]="readOnly()"><mat-icon fontSet="al" fontIcon="al-ico-archive"></mat-icon>Archive</button>
-          <button mat-menu-item (click)="delete()" [disabled]="readOnly()"><mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>Delete</button>
+          <button mat-menu-item type="button" (click)="archive()" [disabled]="!canEdit()">
+            <mat-icon fontSet="al" fontIcon="al-ico-archive"></mat-icon>
+            Archive
+          </button>
+          <button mat-menu-item type="button" (click)="delete()" [disabled]="!canEdit()">
+            <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+            Delete
+          </button>
         }
       </mat-menu>
       <input #importInput hidden type="file" accept="application/json,.json" (change)="importJson($event)">
     </div>
-  </header>
+  </div>
 
-  @if (lastRunTask()) {
-    <div class="run-banner">
-      <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
-      Run queued successfully.
-      <a [routerLink]="['/pipelines','*','tasks',lastRunTask()]">OPEN RUN STATUS</a>
-      <button mat-icon-button class="sm" (click)="lastRunTask.set(null)" aria-label="Dismiss"><mat-icon>close</mat-icon></button>
-    </div>
-  }
-
-  <main [class.validation-visible]="validationOpen()">
-    @if (loading()) {
-      <div class="loading"><div></div><span>Loading ClearPipe definition…</span></div>
-    } @else {
-      <sm-clearpipe-canvas [readonly]="readOnly()"></sm-clearpipe-canvas>
-      <sm-clearpipe-config-panel [readonly]="readOnly()"></sm-clearpipe-config-panel>
+  <div class="workspace-regions">
+    @if (isNarrow() && activeDrawer()) {
+      <button class="drawer-backdrop" type="button" aria-label="Close open workspace drawer" (click)="closeDrawer()"></button>
     }
-  </main>
 
-  @if (validationOpen() && validation(); as result) {
-    <aside class="validation-panel">
-      <header><div><strong>Validation</strong><span>{{ result.valid ? 'Graph is valid' : result.errors.length + ' error(s)' }}</span></div><button mat-icon-button class="sm" (click)="validationOpen.set(false)" aria-label="Close validation"><mat-icon>close</mat-icon></button></header>
-      <div class="issues">
-        @if (!result.errors.length && !result.warnings.length) {<p class="valid"><mat-icon>check_circle</mat-icon>No issues found.</p>}
-        @for (issue of result.errors; track $index) {<button (click)="issue.node_id && state.selectedNodeId.set(issue.node_id)" class="issue error"><mat-icon>error</mat-icon><span>{{ issue.message }} @if (issue.node_id) {<small>Node: {{ issue.node_id }}</small>}</span></button>}
-        @for (issue of result.warnings; track $index) {<button (click)="issue.node_id && state.selectedNodeId.set(issue.node_id)" class="issue warning"><mat-icon>warning</mat-icon><span>{{ issue.message }} @if (issue.node_id) {<small>Node: {{ issue.node_id }}</small>}</span></button>}
+    <aside id="clearpipe-palette"
+           class="workspace-panel workspace-panel--palette"
+           [class.workspace-panel--hidden]="(isNarrow() && activeDrawer() !== 'palette') || (!isNarrow() && !paletteOpen())"
+           [class.workspace-panel--drawer]="isNarrow() && activeDrawer() === 'palette'"
+           [attr.aria-hidden]="(isNarrow() && activeDrawer() !== 'palette') || (!isNarrow() && !paletteOpen())">
+      <header>
+        <div>
+          <h2 #paletteHeading tabindex="-1">Authoring catalog</h2>
+          <span>Registered starts</span>
+        </div>
+        <button mat-icon-button type="button"
+                (click)="isNarrow() ? closeDrawer() : togglePanel('palette', $any($event.currentTarget))"
+                [attr.aria-label]="isNarrow() ? 'Close authoring catalog' : 'Collapse authoring catalog'">
+          <mat-icon>{{ isNarrow() ? 'close' : 'chevron_left' }}</mat-icon>
+        </button>
+      </header>
+      <div class="workspace-panel__body" smClearpipeWorkspaceSlot="workspace.palette">
+        <p class="slot-empty">Registered task and function authoring capabilities appear here. Unsupported legacy node choices are intentionally unavailable.</p>
+        <button mat-stroked-button type="button" (click)="focusCanvas()">Focus canvas</button>
       </div>
     </aside>
-  }
+
+    @if (!isNarrow() && paletteOpen()) {
+      <div class="panel-resizer panel-resizer--palette"
+           role="separator"
+           tabindex="0"
+           aria-orientation="vertical"
+           aria-label="Resize authoring catalog"
+           [attr.aria-valuemin]="240"
+           [attr.aria-valuemax]="480"
+           [attr.aria-valuenow]="panelWidth('palette')"
+           [attr.aria-valuetext]="panelWidth('palette') + ' pixels'"
+           (pointerdown)="beginResize($event, 'palette')"
+           (keydown)="resizeWithKeyboard($event, 'palette')"></div>
+    }
+
+    <main id="clearpipe-canvas"
+          #canvasRegion
+          class="workspace-canvas"
+          tabindex="-1"
+          aria-label="ClearPipe canvas">
+      @if (routeSurface() === 'loading') {
+        <section class="route-surface route-surface--loading" aria-live="polite" aria-busy="true">
+          <div class="loading-indicator" aria-hidden="true"></div>
+          <h2>Loading ClearPipe definition</h2>
+          <p>The workspace remains available while the definition loads.</p>
+        </section>
+      } @else if (routeSurface() === 'denied') {
+        <section class="route-surface route-surface--error" role="alert">
+          <h2>Access unavailable</h2>
+          <p>{{ routeError() }}</p>
+          <a mat-stroked-button routerLink="/clearpipe">Back to ClearPipe library</a>
+        </section>
+      } @else if (routeSurface() === 'not-found') {
+        <section class="route-surface route-surface--error" role="alert">
+          <h2>Definition unavailable</h2>
+          <p>{{ routeError() }}</p>
+          <a mat-stroked-button routerLink="/clearpipe">Back to ClearPipe library</a>
+        </section>
+      } @else if (routeSurface() === 'unsupported') {
+        <section class="route-surface route-surface--unsupported" role="alert">
+          <h2>Unsupported for ClearPipe editing</h2>
+          <p>{{ routeError() }}</p>
+          <p>You can return to the library; no conversion, edit, or run action is available here.</p>
+          <a mat-stroked-button routerLink="/clearpipe">Back to ClearPipe library</a>
+        </section>
+      } @else if (routeSurface() === 'error') {
+        <section class="route-surface route-surface--error" role="alert">
+          <h2>ClearPipe could not load</h2>
+          <p>{{ routeError() }}</p>
+          <div class="route-surface__actions">
+            <button mat-flat-button type="button" (click)="retryLoad()">Retry</button>
+            <a mat-stroked-button routerLink="/clearpipe">Back to ClearPipe library</a>
+          </div>
+        </section>
+      } @else {
+        <div class="canvas-slot" smClearpipeWorkspaceSlot="workspace.canvas">
+          <sm-clearpipe-canvas [readonly]="readOnly()"></sm-clearpipe-canvas>
+        </div>
+
+        @if (firstUse()) {
+          <section class="first-use" smClearpipeWorkspaceSlot="workspace.first-use" aria-labelledby="clearpipe-first-use-title">
+            <span class="first-use__eyebrow">Start authoring</span>
+            <h2 id="clearpipe-first-use-title">Choose an approved ClearPipe start</h2>
+            <p>Build with registered task or function capabilities. ClearPipe does not create a sample graph, runtime ID, or runnable placeholder.</p>
+            <button mat-flat-button type="button" (click)="openPanel('palette', $any($event.currentTarget))">Explore available starts</button>
+            <ul>
+              <li><strong>Tasks and functions</strong><span>Select a permitted registered capability from the catalog.</span></li>
+              <li><strong>Code-backed components</strong><span>Appear only after their approved registration is available.</span></li>
+              <li><strong>Approved templates</strong><span>Appear only when a template is validated for this workspace.</span></li>
+              <li><strong>Existing pipelines</strong><span>Require a lossless representability review; unsupported sources remain read-only.</span></li>
+            </ul>
+          </section>
+        }
+
+        @if (readOnly()) {
+          <p class="read-only-notice" role="status">This definition is read-only. Values remain available for review; edit actions are disabled.</p>
+        }
+      }
+    </main>
+
+    @if (!isNarrow() && inspectorOpen()) {
+      <div class="panel-resizer panel-resizer--inspector"
+           role="separator"
+           tabindex="0"
+           aria-orientation="vertical"
+           aria-label="Resize inspector"
+           [attr.aria-valuemin]="240"
+           [attr.aria-valuemax]="480"
+           [attr.aria-valuenow]="panelWidth('inspector')"
+           [attr.aria-valuetext]="panelWidth('inspector') + ' pixels'"
+           (pointerdown)="beginResize($event, 'inspector')"
+           (keydown)="resizeWithKeyboard($event, 'inspector')"></div>
+    }
+
+    <aside id="clearpipe-inspector"
+           class="workspace-panel workspace-panel--inspector"
+           [class.workspace-panel--hidden]="(isNarrow() && activeDrawer() !== 'inspector') || (!isNarrow() && !inspectorOpen())"
+           [class.workspace-panel--drawer]="isNarrow() && activeDrawer() === 'inspector'"
+           [attr.aria-hidden]="(isNarrow() && activeDrawer() !== 'inspector') || (!isNarrow() && !inspectorOpen())">
+      <header>
+        <div>
+          <h2 #inspectorHeading tabindex="-1">Inspector</h2>
+          <span>@if (state.selectedNodeId()) { Selected graph item } @else { No item selected }</span>
+        </div>
+        <button mat-icon-button type="button"
+                (click)="isNarrow() ? closeDrawer() : togglePanel('inspector', $any($event.currentTarget))"
+                [attr.aria-label]="isNarrow() ? 'Close inspector' : 'Collapse inspector'">
+          <mat-icon>{{ isNarrow() ? 'close' : 'chevron_right' }}</mat-icon>
+        </button>
+      </header>
+      <div class="workspace-panel__body" smClearpipeWorkspaceSlot="workspace.inspector">
+        @if (state.selectedNodeId()) {
+          <p class="slot-empty">The registered inspector extension will show this item’s safe configuration and diagnostics.</p>
+        } @else {
+          <p class="slot-empty">Select a graph item to inspect its configuration and diagnostics.</p>
+        }
+      </div>
+    </aside>
+
+    @if (validationOpen() && validation(); as result) {
+      <aside class="validation-panel" smClearpipeWorkspaceSlot="workspace.status" aria-labelledby="clearpipe-validation-title">
+        <header>
+          <div>
+            <h2 id="clearpipe-validation-title">Validation</h2>
+            <span>{{ result.valid ? 'Graph is valid' : result.errors.length + ' error(s)' }}</span>
+          </div>
+          <button mat-icon-button type="button" (click)="validationOpen.set(false)" aria-label="Close validation">
+            <mat-icon>close</mat-icon>
+          </button>
+        </header>
+        <div class="issues">
+          @if (!result.errors.length && !result.warnings.length) {
+            <p class="valid"><mat-icon>check_circle</mat-icon>No issues found.</p>
+          }
+          @for (issue of result.errors; track $index) {
+            <button type="button" (click)="issue.node_id && state.selectedNodeId.set(issue.node_id)" class="issue error">
+              <mat-icon>error</mat-icon>
+              <span>{{ issue.message }} @if (issue.node_id) {<small>Node: {{ issue.node_id }}</small>}</span>
+            </button>
+          }
+          @for (issue of result.warnings; track $index) {
+            <button type="button" (click)="issue.node_id && state.selectedNodeId.set(issue.node_id)" class="issue warning">
+              <mat-icon>warning</mat-icon>
+              <span>{{ issue.message }} @if (issue.node_id) {<small>Node: {{ issue.node_id }}</small>}</span>
+            </button>
+          }
+        </div>
+      </aside>
+    }
+  </div>
+
+  <div class="workspace-status" smClearpipeWorkspaceSlot="workspace.status" aria-live="polite" aria-atomic="true">{{ announcement() }}</div>
 </section>
