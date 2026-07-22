@@ -29,7 +29,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
 | [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
 | [ ] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
-| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 |  | Not started |  |  |
+| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | In progress | copilot/cp-26 | Preflight, real execution adapter, and status handoff worktree active. |
 | [ ] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 |  | Not started |  |  |
 | [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 |  | Not started |  |  |
 | [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 |  | Not started |  |  |
