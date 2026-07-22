@@ -76,6 +76,7 @@ from apiserver.database.utils import id as create_id
 from apiserver.service_repo import APICall, endpoint
 from apiserver.sync import distributed_lock
 from apiserver.utilities.dicts import nested_get
+from apiserver.utilities.parameter_key_escaper import ParameterKeyEscaper
 
 
 CLEARPIPE_TAG = "clearpipe"
@@ -84,9 +85,23 @@ MAX_PAGE_SIZE = 500
 CLEARPIPE_RUNTIME_CONFIGURATION = "ClearPipeRuntime"
 CLEARPIPE_RUNTIME_SCHEMA_VERSION = 1
 CLEARPIPE_RUNTIME_PROVENANCE = "clearpipe_runtime_provenance"
-CLEARPIPE_RUNTIME_PROVENANCE_VERSION = 1
-MAX_RUNTIME_SNAPSHOT_STEPS = 100
+CLEARPIPE_RUNTIME_PROVENANCE_VERSION = 2
+CLEARPIPE_LEGACY_PROVENANCE_VERSION = 1
+CLEARPIPE_LEGACY_PROVENANCE_KEY_ID = "legacy-auth-token-v1"
+MAX_RUNTIME_SNAPSHOT_PAGE_SIZE = 100
 MAX_RUNTIME_SNAPSHOT_MODELS = 500
+DESCRIPTOR_TASK_FIELDS = ("id", "name", "type", "status", "project", "last_update")
+SNAPSHOT_RUN_FIELDS = (
+    "id",
+    "type",
+    "status",
+    "started",
+    "completed",
+    "last_update",
+    "runtime",
+    "configuration.ClearPipeRuntime",
+    "configuration.Pipeline",
+)
 _SECRET_PARAMETER_VALUE = re.compile(
     r"(?i)(?:(?:^|[^a-z0-9])(?:password|passwd|secret|token|api[_-]?key|"
     r"access[_-]?key|private[_-]?key|credential)s?(?:$|[^a-z0-9])|"
@@ -317,10 +332,57 @@ def _runtime_configuration_digest(task: Task) -> Optional[str]:
     )
 
 
-def _runtime_provenance_signature(payload: Mapping) -> Optional[str]:
-    secret = config.get("secure.auth.token_secret", None)
-    if not isinstance(secret, str) or not secret:
+def _runtime_provenance_key_ring() -> Optional[tuple]:
+    """
+    Return the configured signing key plus explicitly active verification keys.
+    Deployments without the optional ClearPipe ring retain the v1 auth-secret
+    behavior long enough to migrate existing signed runs.
+    """
+
+    configured = config.get("secure.clearpipe.provenance_keys", None)
+    legacy_secret = config.get("secure.auth.token_secret", None)
+    if configured is None:
+        if not isinstance(legacy_secret, str) or not legacy_secret:
+            return None
+        return (
+            CLEARPIPE_LEGACY_PROVENANCE_KEY_ID,
+            legacy_secret,
+            {CLEARPIPE_LEGACY_PROVENANCE_KEY_ID: legacy_secret},
+        )
+    if not isinstance(configured, Mapping):
         return None
+    current_key_id = configured.get("current_key_id")
+    keys = configured.get("keys")
+    transition_key_ids = configured.get("transition_key_ids", ())
+    if (
+        not isinstance(current_key_id, str)
+        or not current_key_id
+        or not isinstance(keys, Mapping)
+        or not isinstance(transition_key_ids, (list, tuple))
+        or not all(isinstance(key_id, str) and key_id for key_id in transition_key_ids)
+    ):
+        return None
+    active_key_ids = {current_key_id, *transition_key_ids}
+    active_keys = {
+        key_id: secret
+        for key_id, secret in keys.items()
+        if key_id in active_key_ids and isinstance(secret, str) and secret
+    }
+    if (
+        CLEARPIPE_LEGACY_PROVENANCE_KEY_ID in active_key_ids
+        and isinstance(legacy_secret, str)
+        and legacy_secret
+    ):
+        active_keys.setdefault(CLEARPIPE_LEGACY_PROVENANCE_KEY_ID, legacy_secret)
+    signing_secret = active_keys.get(current_key_id)
+    return (
+        (current_key_id, signing_secret, active_keys)
+        if isinstance(signing_secret, str) and signing_secret
+        else None
+    )
+
+
+def _runtime_provenance_signature(payload: Mapping, secret: str) -> str:
     encoded = json.dumps(
         payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
@@ -336,8 +398,15 @@ def _runtime_provenance(
     runtime: ClearPipeRuntimeConfiguration,
     runtime_configuration_value: str,
 ) -> dict:
+    key_ring = _runtime_provenance_key_ring()
+    if key_ring is None:
+        raise errors.server_error.InternalError(
+            "ClearPipe runtime provenance signing is unavailable"
+        )
+    key_id, signing_secret, _ = key_ring
     payload = {
         "schema_version": CLEARPIPE_RUNTIME_PROVENANCE_VERSION,
+        "key_id": key_id,
         "run_task_id": run_id,
         "company_id": company_id,
         "definition_task_id": definition_id,
@@ -347,20 +416,16 @@ def _runtime_provenance(
             runtime_configuration_value.encode("utf-8")
         ).hexdigest(),
     }
-    signature = _runtime_provenance_signature(payload)
-    if signature is None:
-        raise errors.server_error.InternalError(
-            "ClearPipe runtime provenance signing is unavailable"
-        )
-    return {**payload, "signature": signature}
+    return {**payload, "signature": _runtime_provenance_signature(payload, signing_secret)}
 
 
 def _verified_runtime_provenance(
     run: Task, company_id: str
 ) -> Optional[ClearPipeRuntimeConfiguration]:
     provenance = (run.runtime or {}).get(CLEARPIPE_RUNTIME_PROVENANCE)
-    expected_keys = {
+    v2_keys = {
         "schema_version",
+        "key_id",
         "run_task_id",
         "company_id",
         "definition_task_id",
@@ -369,16 +434,38 @@ def _verified_runtime_provenance(
         "runtime_configuration_digest",
         "signature",
     }
-    if not isinstance(provenance, Mapping) or set(provenance) != expected_keys:
+    v1_keys = v2_keys - {"key_id"}
+    if not isinstance(provenance, Mapping) or (
+        set(provenance) != v1_keys and set(provenance) != v2_keys
+    ):
         return None
     signature = provenance.get("signature")
     payload = {key: value for key, value in provenance.items() if key != "signature"}
-    expected_signature = _runtime_provenance_signature(payload)
+    schema_version = payload.get("schema_version")
+    key_id = (
+        payload.get("key_id")
+        if schema_version == CLEARPIPE_RUNTIME_PROVENANCE_VERSION
+        else CLEARPIPE_LEGACY_PROVENANCE_KEY_ID
+        if schema_version == CLEARPIPE_LEGACY_PROVENANCE_VERSION
+        else None
+    )
+    key_ring = _runtime_provenance_key_ring()
+    verification_secret = (
+        key_ring[2].get(key_id)
+        if key_ring is not None and isinstance(key_id, str)
+        else None
+    )
     if (
         not isinstance(signature, str)
-        or expected_signature is None
-        or not hmac.compare_digest(signature, expected_signature)
-        or payload.get("schema_version") != CLEARPIPE_RUNTIME_PROVENANCE_VERSION
+        or not isinstance(verification_secret, str)
+        or not hmac.compare_digest(
+            signature, _runtime_provenance_signature(payload, verification_secret)
+        )
+        or schema_version
+        not in {
+            CLEARPIPE_LEGACY_PROVENANCE_VERSION,
+            CLEARPIPE_RUNTIME_PROVENANCE_VERSION,
+        }
         or payload.get("run_task_id") != run.id
         or payload.get("company_id") != company_id
         or not isinstance(payload.get("definition_task_id"), str)
@@ -396,9 +483,7 @@ def _verified_runtime_provenance(
         or runtime.graph_digest != payload["graph_digest"]
     ):
         return None
-    try:
-        _get_task(company_id, payload["definition_task_id"])
-    except errors.bad_request.InvalidTaskId:
+    if _visible_definition(company_id, payload["definition_task_id"]) is None:
         return None
     return runtime
 
@@ -617,51 +702,127 @@ def _timestamp(value) -> Optional[str]:
     return value.isoformat() if value is not None and hasattr(value, "isoformat") else None
 
 
-def _visible_task(company_id: str, task_id: str) -> Optional[Task]:
-    """Use native visibility checks without turning a task ID into an oracle."""
-    try:
-        return task_bll.get_by_id(company_id, task_id, allow_public=True)
-    except errors.bad_request.InvalidTaskId:
-        return None
+def _visible_task(
+    company_id: str, task_id: str, only_fields
+) -> Optional[Task]:
+    """Use a scoped minimal projection without turning a task ID into an oracle."""
 
-
-def _safe_parameter_descriptors(task: Task) -> list:
-    descriptors = []
-    for section, parameters in (getattr(task, "hyperparams", None) or {}).items():
-        if not isinstance(section, str) or not isinstance(parameters, Mapping):
-            continue
-        for name, item in parameters.items():
-            item_name = getattr(item, "name", name)
-            item_section = getattr(item, "section", section)
-            if not isinstance(item_name, str) or not isinstance(item_section, str):
-                continue
-            descriptor = {"section": item_section, "name": item_name}
-            item_type = getattr(item, "type", None)
-            if isinstance(item_type, str) and item_type:
-                descriptor["type"] = item_type
-            descriptors.append(descriptor)
-    return sorted(
-        descriptors,
-        key=lambda item: (item["section"].casefold(), item["name"].casefold()),
+    return (
+        Task.objects(Q(id=task_id) & _visible_query(company_id, True))
+        .only(*only_fields)
+        .first()
     )
 
 
-def _safe_artifact_descriptors(task: Task) -> list:
-    artifacts = getattr(getattr(task, "execution", None), "artifacts", None) or {}
-    descriptors = []
-    for key, artifact in artifacts.items():
-        artifact_id = getattr(artifact, "key", key)
-        artifact_type = getattr(artifact, "type", None)
-        direction = getattr(artifact, "mode", None)
-        if not isinstance(artifact_id, str) or not artifact_id:
+def _visible_definition(company_id: str, task_id: str) -> Optional[Task]:
+    return (
+        Task.objects(
+            Q(id=task_id) & _visible_query(company_id, True) & _definition_query()
+        )
+        .only("id")
+        .first()
+    )
+
+
+def _safe_artifact_descriptor(item: Mapping) -> Optional[dict]:
+    artifact_id = item.get("id")
+    if not isinstance(artifact_id, str) or not artifact_id:
+        return None
+    descriptor = {"id": artifact_id, "name": artifact_id}
+    if isinstance(item.get("type"), str) and item["type"]:
+        descriptor["type"] = item["type"]
+    if item.get("direction") in {"input", "output"}:
+        descriptor["direction"] = item["direction"]
+    return descriptor
+
+
+def _descriptor_ports(company_id: str, task_id: str) -> tuple:
+    """
+    Project only parameter names/types and artifact key/type/mode in Mongo.
+    Param values, artifact URIs, task script, and configuration never enter a
+    Task document or response object in this endpoint.
+    """
+
+    pipeline = [
+        {
+            "$match": {
+                "_id": task_id,
+                "company": {"$in": ["", company_id]},
+            }
+        },
+        {
+            "$facet": {
+                "parameters": [
+                    {
+                        "$project": {
+                            "sections": {
+                                "$objectToArray": {"$ifNull": ["$hyperparams", {}]}
+                            }
+                        }
+                    },
+                    {"$unwind": "$sections"},
+                    {
+                        "$project": {
+                            "section": "$sections.k",
+                            "items": {"$objectToArray": "$sections.v"},
+                        }
+                    },
+                    {"$unwind": "$items"},
+                    {
+                        "$project": {
+                            "_id": 0,
+                            "section": 1,
+                            "name": "$items.k",
+                            "type": "$items.v.type",
+                        }
+                    },
+                    {"$sort": {"section": 1, "name": 1}},
+                ],
+                "artifacts": [
+                    {
+                        "$project": {
+                            "items": {
+                                "$objectToArray": {
+                                    "$ifNull": ["$execution.artifacts", {}]
+                                }
+                            }
+                        }
+                    },
+                    {"$unwind": "$items"},
+                    {
+                        "$project": {
+                            "_id": 0,
+                            "id": {"$ifNull": ["$items.v.key", "$items.k"]},
+                            "type": "$items.v.type",
+                            "direction": "$items.v.mode",
+                        }
+                    },
+                    {"$sort": {"id": 1}},
+                ],
+            }
+        },
+    ]
+    result = next(Task.aggregate(pipeline), {})
+    parameters = []
+    for item in result.get("parameters", ()):
+        section = item.get("section")
+        name = item.get("name")
+        if not isinstance(section, str) or not isinstance(name, str):
             continue
-        descriptor = {"id": artifact_id, "name": artifact_id}
-        if isinstance(artifact_type, str) and artifact_type:
-            descriptor["type"] = artifact_type
-        if direction in {"input", "output"}:
-            descriptor["direction"] = direction
-        descriptors.append(descriptor)
-    return sorted(descriptors, key=lambda item: item["id"].casefold())
+        descriptor = {
+            "section": ParameterKeyEscaper.unescape(section),
+            "name": ParameterKeyEscaper.unescape(name),
+        }
+        if isinstance(item.get("type"), str) and item["type"]:
+            descriptor["type"] = item["type"]
+        parameters.append(descriptor)
+    artifacts = [
+        descriptor
+        for item in result.get("artifacts", ())
+        if isinstance(item, Mapping)
+        if (descriptor := _safe_artifact_descriptor(item)) is not None
+    ]
+    return parameters, artifacts
 
 
 def _task_descriptor(task: Task, company_id: str) -> dict:
@@ -682,17 +843,18 @@ def _task_descriptor(task: Task, company_id: str) -> dict:
         context["project_name"] = project_name
     if updated_at := _timestamp(task.last_update):
         context["updated_at"] = updated_at
+    parameters, artifacts = _descriptor_ports(company_id, task.id)
     return {
         # Base identity is always the immutable task ID. Project/name are
         # display context only and must never be substituted with a run ID.
         "identity": {"task_id": task.id},
         "context": context,
-        "parameters": _safe_parameter_descriptors(task),
-        "artifacts": _safe_artifact_descriptors(task),
+        "parameters": parameters,
+        "artifacts": artifacts,
     }
 
 
-def _runtime_step_task_ids(task: Task) -> dict:
+def _runtime_step_task_ids(task: Task, runtime_steps) -> dict:
     """
     Read only monitored child task IDs for server-authenticated runtime step
     names. Provenance establishes graph-to-step identity; Pipeline monitoring
@@ -709,8 +871,10 @@ def _runtime_step_task_ids(task: Task) -> dict:
     if not isinstance(steps, Mapping):
         steps = pipeline
     task_ids = {}
-    for name, step in steps.items():
-        if not isinstance(name, str) or not isinstance(step, Mapping):
+    for runtime_step in runtime_steps:
+        name = runtime_step.pipeline_step_name
+        step = steps.get(name)
+        if not isinstance(step, Mapping):
             continue
         task_id = step.get("task_id") or step.get("job_id")
         if isinstance(task_id, str) and task_id:
@@ -739,7 +903,11 @@ def _safe_models(task: Task, visible_models: Mapping[str, Model]) -> dict:
     return result
 
 
-def _safe_node_snapshot(task: Task, visible_models: Mapping[str, Model]) -> dict:
+def _safe_node_snapshot(
+    task: Task,
+    visible_models: Mapping[str, Model],
+    artifacts_by_task_id: Mapping[str, list],
+) -> dict:
     result = {
         "task_id": task.id,
         "status": task.status,
@@ -747,7 +915,7 @@ def _safe_node_snapshot(task: Task, visible_models: Mapping[str, Model]) -> dict
         # This is an authorized task-detail/log handoff identifier, not log
         # content or a URL.
         "log_task_id": task.id,
-        "artifacts": _safe_artifact_descriptors(task),
+        "artifacts": artifacts_by_task_id.get(task.id, []),
         "models": _safe_models(task, visible_models),
     }
     for name, value in (
@@ -780,8 +948,7 @@ def _visible_run_children(
         "started",
         "completed",
         "last_update",
-        "output",
-        "execution",
+        "output.result",
         "models",
         "system_tags",
     )
@@ -789,6 +956,54 @@ def _visible_run_children(
         Q(id__in=task_ids, parent=run_id) & _visible_query(company_id, True)
     ).only(*fields)
     return {child.id: child for child in children}
+
+
+def _visible_run_artifacts(
+    company_id: str, run_id: str, task_ids
+) -> Mapping[str, list]:
+    task_ids = tuple(dict.fromkeys(task_ids))
+    if not task_ids:
+        return {}
+    pipeline = [
+        {
+            "$match": {
+                "_id": {"$in": list(task_ids)},
+                "parent": run_id,
+                "company": {"$in": ["", company_id]},
+            }
+        },
+        {
+            "$project": {
+                "items": {
+                    "$objectToArray": {"$ifNull": ["$execution.artifacts", {}]}
+                }
+            }
+        },
+        {"$unwind": "$items"},
+        {
+            "$project": {
+                "id": "$_id",
+                "artifact": {
+                    "id": {"$ifNull": ["$items.v.key", "$items.k"]},
+                    "type": "$items.v.type",
+                    "direction": "$items.v.mode",
+                },
+            }
+        },
+        {"$group": {"_id": "$id", "artifacts": {"$push": "$artifact"}}},
+    ]
+    result = {}
+    for item in Task.aggregate(pipeline):
+        task_id = item.get("_id")
+        if not isinstance(task_id, str):
+            continue
+        result[task_id] = [
+            descriptor
+            for artifact in item.get("artifacts", ())
+            if isinstance(artifact, Mapping)
+            if (descriptor := _safe_artifact_descriptor(artifact)) is not None
+        ]
+    return result
 
 
 def _visible_models_by_id(company_id: str, model_ids) -> Mapping[str, Model]:
@@ -811,7 +1026,9 @@ def _task_model_ids(tasks) -> tuple:
     )
 
 
-def _execution_snapshot(run: Task, company_id: str) -> Optional[dict]:
+def _execution_snapshot(
+    run: Task, company_id: str, node_offset: int, node_limit: int
+) -> Optional[dict]:
     runtime = _verified_runtime_provenance(run, company_id)
     if (
         runtime is None
@@ -819,25 +1036,32 @@ def _execution_snapshot(run: Task, company_id: str) -> Optional[dict]:
         or run.type != TaskType.controller
     ):
         return None
-    step_task_ids = _runtime_step_task_ids(run)
+    total_nodes = len(runtime.runtime_steps)
+    node_offset = min(max(0, node_offset), total_nodes)
+    node_limit = min(MAX_RUNTIME_SNAPSHOT_PAGE_SIZE, max(1, node_limit))
+    page_steps = runtime.runtime_steps[node_offset : node_offset + node_limit]
+    step_task_ids = _runtime_step_task_ids(run, page_steps)
     mapped_task_ids = [
         step_task_ids[item.pipeline_step_name]
-        for item in runtime.runtime_steps
+        for item in page_steps
         if item.pipeline_step_name in step_task_ids
     ]
     if len(mapped_task_ids) != len(set(mapped_task_ids)):
         return None
-    bounded_task_ids = set(mapped_task_ids[:MAX_RUNTIME_SNAPSHOT_STEPS])
+    bounded_task_ids = set(mapped_task_ids)
     children = _visible_run_children(company_id, run.id, bounded_task_ids)
+    artifacts_by_task_id = _visible_run_artifacts(
+        company_id, run.id, bounded_task_ids
+    )
     visible_models = _visible_models_by_id(company_id, _task_model_ids(children.values()))
     nodes = []
-    for index, identity in enumerate(runtime.runtime_steps):
+    for identity in page_steps:
         node = {
             "graph_node_id": identity.graph_node_id,
             "pipeline_step_name": identity.pipeline_step_name,
         }
         step_task_id = step_task_ids.get(identity.pipeline_step_name)
-        if not step_task_id or index >= MAX_RUNTIME_SNAPSHOT_STEPS:
+        if not step_task_id:
             node["record_status"] = "unavailable"
             nodes.append(node)
             continue
@@ -846,7 +1070,9 @@ def _execution_snapshot(run: Task, company_id: str) -> Optional[dict]:
             node["record_status"] = "unavailable"
             nodes.append(node)
             continue
-        node.update(_safe_node_snapshot(child, visible_models))
+        node.update(
+            _safe_node_snapshot(child, visible_models, artifacts_by_task_id)
+        )
         nodes.append(node)
     controller = {"task_id": run.id, "status": run.status}
     for name, value in (
@@ -863,9 +1089,14 @@ def _execution_snapshot(run: Task, company_id: str) -> Optional[dict]:
         ],
         "definition_revision": runtime.definition_revision,
         "graph_digest": runtime.graph_digest,
+        "node_offset": node_offset,
+        "total_nodes": total_nodes,
+        "truncated": node_offset + len(page_steps) < total_nodes,
         "controller": controller,
         "nodes": nodes,
     }
+    if snapshot["truncated"]:
+        snapshot["next_node_offset"] = node_offset + len(page_steps)
     return snapshot
 
 
@@ -1353,7 +1584,7 @@ def start(call: APICall, company_id: str, request: StartRequest):
 def task_descriptor(
     call: APICall, company_id: str, request: TaskDescriptorRequest
 ):
-    task = _visible_task(company_id, request.task)
+    task = _visible_task(company_id, request.task, DESCRIPTOR_TASK_FIELDS)
     if task is None:
         call.result.data = {"status": "unavailable"}
         return
@@ -1377,11 +1608,16 @@ def task_descriptor(
 def execution_snapshot(
     call: APICall, company_id: str, request: ExecutionSnapshotRequest
 ):
-    run = _visible_task(company_id, request.run)
+    run = _visible_task(company_id, request.run, SNAPSHOT_RUN_FIELDS)
     if run is None:
         call.result.data = {"status": "unavailable"}
         return
-    snapshot = _execution_snapshot(run, company_id)
+    snapshot = _execution_snapshot(
+        run,
+        company_id,
+        getattr(request, "node_offset", None) or 0,
+        getattr(request, "node_limit", None) or MAX_RUNTIME_SNAPSHOT_PAGE_SIZE,
+    )
     if snapshot is None:
         call.result.data = {"status": "unavailable"}
         return

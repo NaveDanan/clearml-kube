@@ -181,6 +181,10 @@ describe('ClearpipeApiService', () => {
           definition_task_id: 'definition-1',
           definition_revision: 4,
           graph_digest: 'sha256:digest',
+          node_offset: 0,
+          total_nodes: 2,
+          truncated: true,
+          next_node_offset: 2,
           controller: {task_id: 'run-1', status: 'in_progress'},
           nodes: [{
             graph_node_id: 'node-1',
@@ -206,6 +210,8 @@ describe('ClearpipeApiService', () => {
       run: 'run-1',
       definition_revision: 4,
       graph_digest: 'sha256:digest',
+      node_offset: 0,
+      node_limit: 2,
     }).subscribe(result => snapshot = result);
 
     expect(requests.post.calls.argsFor(0)).toEqual([
@@ -214,7 +220,13 @@ describe('ClearpipeApiService', () => {
     ]);
     expect(requests.post.calls.argsFor(1)).toEqual([
       '/service/1/api/v2.35/clearpipe.execution_snapshot',
-      {run: 'run-1', definition_revision: 4, graph_digest: 'sha256:digest'},
+      {
+        run: 'run-1',
+        definition_revision: 4,
+        graph_digest: 'sha256:digest',
+        node_offset: 0,
+        node_limit: 2,
+      },
     ]);
     expect(descriptor).toEqual(jasmine.objectContaining({
       status: 'stale',
@@ -230,6 +242,10 @@ describe('ClearpipeApiService', () => {
       status: 'available',
       snapshot: jasmine.objectContaining({
         run_task_id: 'run-1',
+        node_offset: 0,
+        total_nodes: 2,
+        truncated: true,
+        next_node_offset: 2,
         nodes: [jasmine.objectContaining({
           graph_node_id: 'node-1',
           task_id: 'child-1',

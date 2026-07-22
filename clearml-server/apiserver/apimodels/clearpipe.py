@@ -89,6 +89,8 @@ class ExecutionSnapshotRequest(models.Base):
     run = StringField(required=True)
     definition_revision = IntField()
     graph_digest = StringField()
+    node_offset = IntField()
+    node_limit = IntField()
 
 
 class DefinitionResponse(models.Base):

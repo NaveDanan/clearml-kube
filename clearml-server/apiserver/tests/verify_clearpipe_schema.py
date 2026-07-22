@@ -42,6 +42,15 @@ assert service.endpoint_groups["task_descriptor"].get_for_version(
     "stale",
     "unavailable",
 ]
+snapshot = service.endpoint_groups["execution_snapshot"].get_for_version(
+    PartialVersion("2.35")
+)
+assert {"node_offset", "node_limit"}.issubset(snapshot.request_schema["properties"])
+assert {
+    "node_offset",
+    "total_nodes",
+    "truncated",
+}.issubset(service.definitions["execution_snapshot"]["properties"])
 
 for action in EXPECTED:
     endpoint = service.endpoint_groups[action].get_for_version(PartialVersion("2.35"))

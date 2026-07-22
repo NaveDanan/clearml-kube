@@ -9,6 +9,8 @@ from typing import Mapping, Tuple
 
 from ..graph_v2 import Binding, FunctionNode, GraphNode, GraphV2, TaskNode
 
+MAX_RUNTIME_STEPS = 1000
+
 
 @dataclass(frozen=True)
 class SourceMapEntry:
@@ -54,6 +56,10 @@ class ClearPipeRuntimeConfiguration:
     runtime_steps: Tuple[RuntimeStepIdentity, ...]
     source_map: Tuple[SourceMapEntry, ...]
 
+    def __post_init__(self):
+        if len(self.runtime_steps) > MAX_RUNTIME_STEPS:
+            raise ValueError("invalid ClearPipe runtime configuration")
+
     def to_dict(self) -> dict:
         return {
             "schema_version": self.schema_version,
@@ -93,9 +99,10 @@ class ClearPipeRuntimeConfiguration:
             or not value["graph_digest"].startswith("sha256:")
         ):
             raise ValueError("invalid ClearPipe runtime configuration")
-        runtime_steps = tuple(
-            _runtime_step(item) for item in _runtime_list(value["runtime_steps"])
-        )
+        runtime_step_values = _runtime_list(value["runtime_steps"])
+        if len(runtime_step_values) > MAX_RUNTIME_STEPS:
+            raise ValueError("invalid ClearPipe runtime configuration")
+        runtime_steps = tuple(_runtime_step(item) for item in runtime_step_values)
         source_map = tuple(
             _runtime_source_map_entry(item) for item in _runtime_list(value["source_map"])
         )

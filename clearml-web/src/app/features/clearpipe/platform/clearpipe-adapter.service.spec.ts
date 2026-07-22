@@ -230,6 +230,9 @@ describe('ClearpipeAdapterService', () => {
           definition_task_id: 'pipe-1',
           definition_revision: 3,
           graph_digest: 'sha256:digest',
+          node_offset: 0,
+          total_nodes: 0,
+          truncated: false,
           controller: {task_id: 'run-1', status: 'in_progress'},
           nodes: [],
         },
@@ -241,6 +244,9 @@ describe('ClearpipeAdapterService', () => {
           definition_task_id: 'pipe-1',
           definition_revision: 3,
           graph_digest: 'sha256:digest',
+          node_offset: 0,
+          total_nodes: 0,
+          truncated: false,
           controller: {task_id: 'run-1', status: 'completed'},
           nodes: [],
         },
@@ -268,7 +274,13 @@ describe('ClearpipeAdapterService', () => {
     expect(requests.post.calls.count()).toBe(3);
     expect(requests.post.calls.argsFor(1)).toEqual([
       '/service/1/api/v2.35/clearpipe.execution_snapshot',
-      {run: 'run-1', definition_revision: undefined, graph_digest: undefined},
+      {
+        run: 'run-1',
+        definition_revision: undefined,
+        graph_digest: undefined,
+        node_offset: undefined,
+        node_limit: undefined,
+      },
     ]);
   }));
 

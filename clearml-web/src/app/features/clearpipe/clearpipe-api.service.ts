@@ -165,6 +165,10 @@ export interface ClearpipeExecutionSnapshot {
   definition_task_id: string;
   definition_revision: number;
   graph_digest: string;
+  node_offset: number;
+  total_nodes: number;
+  truncated: boolean;
+  next_node_offset?: number;
   controller: {
     task_id: string;
     status: string;
@@ -179,6 +183,8 @@ export interface ClearpipeExecutionSnapshotRequest {
   run: string;
   definition_revision?: number;
   graph_digest?: string;
+  node_offset?: number;
+  node_limit?: number;
 }
 
 export interface ClearpipeExecutionSnapshotResponse {
@@ -358,6 +364,8 @@ export class ClearpipeApiService {
       run: request.run,
       definition_revision: request.definition_revision,
       graph_digest: request.graph_digest,
+      node_offset: request.node_offset,
+      node_limit: request.node_limit,
     }).pipe(map(response => this.executionSnapshotResponse(response)));
   }
 
@@ -457,18 +465,20 @@ export class ClearpipeApiService {
   private taskDescriptorResponse(response: any): ClearpipeTaskDescriptorResponse {
     const status = this.taskDescriptorStatus(response?.status);
     const descriptor = this.safeTaskDescriptor(response?.descriptor);
+    const usable = descriptor && (status === 'available' || status === 'stale');
     return {
-      status,
-      ...(descriptor && (status === 'available' || status === 'stale') ? {descriptor} : {}),
+      status: usable ? status : status === 'unavailable' ? status : 'unavailable',
+      ...(usable ? {descriptor} : {}),
     };
   }
 
   private executionSnapshotResponse(response: any): ClearpipeExecutionSnapshotResponse {
     const status = this.executionSnapshotStatus(response?.status);
     const snapshot = this.safeExecutionSnapshot(response?.snapshot);
+    const usable = snapshot && (status === 'available' || status === 'stale');
     return {
-      status,
-      ...(snapshot && (status === 'available' || status === 'stale') ? {snapshot} : {}),
+      status: usable ? status : status === 'unavailable' ? status : 'unavailable',
+      ...(usable ? {snapshot} : {}),
     };
   }
 
@@ -503,9 +513,14 @@ export class ClearpipeApiService {
     const definitionTaskId = this.text(snapshot?.definition_task_id);
     const revision = this.integer(snapshot?.definition_revision);
     const graphDigest = this.text(snapshot?.graph_digest);
+    const nodeOffset = this.integer(snapshot?.node_offset);
+    const totalNodes = this.integer(snapshot?.total_nodes);
+    const truncated = typeof snapshot?.truncated === 'boolean' ? snapshot.truncated : undefined;
     const controllerTaskId = this.text(controller?.task_id);
     const controllerStatus = this.text(controller?.status);
-    if (!runTaskId || !definitionTaskId || revision === undefined || !graphDigest || !controllerTaskId || !controllerStatus) {
+    if (!runTaskId || !definitionTaskId || revision === undefined || !graphDigest
+      || nodeOffset === undefined || totalNodes === undefined || truncated === undefined
+      || !controllerTaskId || !controllerStatus) {
       return undefined;
     }
     return {
@@ -513,6 +528,12 @@ export class ClearpipeApiService {
       definition_task_id: definitionTaskId,
       definition_revision: revision,
       graph_digest: graphDigest,
+      node_offset: nodeOffset,
+      total_nodes: totalNodes,
+      truncated,
+      ...(truncated && this.integer(snapshot?.next_node_offset) !== undefined
+        ? {next_node_offset: this.integer(snapshot?.next_node_offset)!}
+        : {}),
       controller: {
         task_id: controllerTaskId,
         status: controllerStatus,

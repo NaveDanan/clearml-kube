@@ -157,6 +157,14 @@ class ClearPipeContractSchemaTests(unittest.TestCase):
             .response_schema["properties"]["status"]["enum"],
             ["available", "stale", "unavailable"],
         )
+        snapshot = service.endpoint_groups["execution_snapshot"].get_for_version(
+            PartialVersion("2.35")
+        )
+        self.assertTrue(
+            {"node_offset", "node_limit"}.issubset(
+                snapshot.request_schema["properties"]
+            )
+        )
 
     def test_named_opaque_envelopes_do_not_redeclare_graph_semantics(self):
         definitions = SchemaReader().get_schema().services["clearpipe"].definitions

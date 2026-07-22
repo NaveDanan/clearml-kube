@@ -309,6 +309,7 @@ class V2StartTests(unittest.TestCase):
         self.assertEqual(run_runtime["clearpipe_revision"], 7)
         self.assertEqual(run_runtime["_pipeline_hash"], runtime["graph_digest"])
         provenance = run_runtime["clearpipe_runtime_provenance"]
+        key_id, signing_secret, _ = clearpipe._runtime_provenance_key_ring()
         self.assertEqual(
             {
                 key: value
@@ -316,7 +317,8 @@ class V2StartTests(unittest.TestCase):
                 if key != "signature"
             },
             {
-                "schema_version": 1,
+                "schema_version": 2,
+                "key_id": key_id,
                 "run_task_id": "run-1",
                 "company_id": "company-a",
                 "definition_task_id": "definition",
@@ -330,7 +332,8 @@ class V2StartTests(unittest.TestCase):
         self.assertEqual(
             provenance["signature"],
             clearpipe._runtime_provenance_signature(
-                {key: value for key, value in provenance.items() if key != "signature"}
+                {key: value for key, value in provenance.items() if key != "signature"},
+                signing_secret,
             ),
         )
         enqueue.assert_called_once_with(
