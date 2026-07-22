@@ -4,6 +4,7 @@ import {
   createEmptyGraphV2,
   GraphStoreService,
   graphV2LogicallyEquals,
+  FunctionConfigurationPatch,
   TaskConfigurationPatch,
 } from '../domain/graph-store.service';
 
@@ -259,6 +260,83 @@ describe('GraphStoreService', () => {
     expect(result.ok).toBeFalse();
     expect(store.serialize()).toBe(beforeTransaction);
     expect(store.selectedNode()?.id).toBe(taskId);
+    expect(store.dirty()).toBeFalse();
+  });
+
+  it('updates function descriptions and declarative execution settings through typed commands', () => {
+    store.selectNode('normalize');
+    expect(store.updateFunctionDescription('normalize', 'Normalize an input value.')).toEqual(
+      jasmine.objectContaining({ok: true, changed: true}),
+    );
+    expect(store.updateFunctionConfiguration('normalize', {
+      packages: ['pandas==2.2.3', 'scikit-learn==1.5.2'],
+      retry_on_failure: 2,
+    })).toEqual(jasmine.objectContaining({ok: true, changed: true}));
+
+    const node = store.node('normalize');
+    if (!node || node.kind !== 'function') throw new Error('function node must be available');
+    expect(node.description).toBe('Normalize an input value.');
+    expect(node.configuration).toEqual(jasmine.objectContaining({
+      packages: ['pandas==2.2.3', 'scikit-learn==1.5.2'],
+      retry_on_failure: 2,
+    }));
+    expect(store.selectedNode()?.id).toBe('normalize');
+    expect(store.dirty()).toBeTrue();
+
+    const beforeInvalidUpdate = store.serialize();
+    expect(store.updateFunctionConfiguration('normalize', {retry_on_failure: -1})).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'invalid_integer'})],
+    }));
+    expect(store.updateFunctionConfiguration('normalize', {
+      unsupported_option: true,
+    } as unknown as FunctionConfigurationPatch)).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'unsupported_function_configuration_field'})],
+    }));
+    expect(store.serialize()).toBe(beforeInvalidUpdate);
+
+    expect(store.markSaved()).toEqual(jasmine.objectContaining({ok: true}));
+    const beforeTransaction = store.serialize();
+    const transaction = store.transaction('rollback function changes', () => {
+      store.updateFunctionDescription('normalize', 'This must be rolled back');
+      store.updateFunctionConfiguration('normalize', {retry_on_failure: 3});
+      store.addBinding({
+        id: 'bad-binding',
+        kind: 'execution-only',
+        source: {kind: 'node', node_id: 'normalize'},
+        target: {kind: 'node', node_id: 'missing'},
+      });
+    });
+    expect(transaction.ok).toBeFalse();
+    expect(store.serialize()).toBe(beforeTransaction);
+    expect(store.selectedNode()?.id).toBe('normalize');
+    expect(store.dirty()).toBeFalse();
+  });
+
+  it('rejects function commands for task nodes', () => {
+    expect(store.load(createEmptyGraphV2()).status).toBe('ok');
+    const created = store.createTaskNode({
+      label: 'Task',
+      base_task: {kind: 'task-id', task_id: 'base-task'},
+      ports: [],
+      configuration: {},
+      visual: {position: {x: 0, y: 0}},
+    });
+    const taskId = created.id;
+    if (!taskId) throw new Error('task must be created');
+    expect(store.markSaved()).toEqual(jasmine.objectContaining({ok: true}));
+    const before = store.serialize();
+
+    expect(store.updateFunctionDescription(taskId, 'Not a function')).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'node_not_function'})],
+    }));
+    expect(store.updateFunctionConfiguration(taskId, {retry_on_failure: 1})).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'node_not_function'})],
+    }));
+    expect(store.serialize()).toBe(before);
     expect(store.dirty()).toBeFalse();
   });
 

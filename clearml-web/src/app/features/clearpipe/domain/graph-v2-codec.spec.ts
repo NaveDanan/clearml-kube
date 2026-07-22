@@ -60,6 +60,76 @@ describe('ClearPipe canonical graph v2 codec', () => {
     expect(roundTrippedNode.configuration.retry_on_failure).toBe(2);
   });
 
+  it('round-trips declarative function description, packages, and retry settings', () => {
+    const configured = clone(functionFixture);
+    (configured.nodes[0] as Record<string, unknown>).description = 'Normalize an input value.';
+    const configuration = configured.nodes[0].configuration as Record<string, unknown>;
+    configuration.packages = ['pandas==2.2.3', 'scikit-learn==1.5.2'];
+    configuration.retry_on_failure = 2;
+
+    const graph = decodeFixture(configured);
+    const node = graph.nodes.find((item) => item.id === 'normalize');
+    if (!node || node.kind !== 'function') throw new Error('fixture must contain a function node');
+    expect(node.description).toBe('Normalize an input value.');
+    expect(node.configuration).toEqual(jasmine.objectContaining({
+      packages: ['pandas==2.2.3', 'scikit-learn==1.5.2'],
+      retry_on_failure: 2,
+    }));
+
+    const roundTripped = decodeFixture(JSON.parse(serializeGraphV2(graph)));
+    const roundTrippedNode = roundTripped.nodes.find((item) => item.id === 'normalize');
+    if (!roundTrippedNode || roundTrippedNode.kind !== 'function') throw new Error('fixture must contain a function node');
+    expect(roundTrippedNode).toEqual(jasmine.objectContaining({
+      description: 'Normalize an input value.',
+      configuration: jasmine.objectContaining({
+        packages: ['pandas==2.2.3', 'scikit-learn==1.5.2'],
+        retry_on_failure: 2,
+      }),
+    }));
+  });
+
+  it('rejects invalid and secret function execution settings', () => {
+    const invalidRetry = clone(functionFixture);
+    (invalidRetry.nodes[0].configuration as Record<string, unknown>).retry_on_failure = -1;
+    expect(decodeGraphV2(invalidRetry)).toEqual(jasmine.objectContaining({
+      status: 'invalid',
+      errors: [jasmine.objectContaining({
+        code: 'invalid_integer',
+        path: 'graph.nodes[0].configuration.retry_on_failure',
+      })],
+    }));
+
+    const invalidPackages = clone(functionFixture);
+    (invalidPackages.nodes[0].configuration as Record<string, unknown>).packages = [''];
+    expect(decodeGraphV2(invalidPackages)).toEqual(jasmine.objectContaining({
+      status: 'invalid',
+      errors: [jasmine.objectContaining({
+        code: 'invalid_string',
+        path: 'graph.nodes[0].configuration.packages[0]',
+      })],
+    }));
+
+    const secretPackage = clone(functionFixture);
+    (secretPackage.nodes[0].configuration as Record<string, unknown>).packages = [
+      'https://packages.example.invalid/private?api_key=must-not-persist',
+    ];
+    const secretResult = decodeGraphV2(secretPackage);
+    expect(secretResult.status).toBe('invalid');
+    if (secretResult.status !== 'invalid') throw new Error('secret package must be invalid');
+    expect(secretResult.errors[0].code).toBe('secret_not_allowed');
+    expect(JSON.stringify(secretResult.errors)).not.toContain('must-not-persist');
+
+    const unknown = clone(functionFixture);
+    (unknown.nodes[0].configuration as Record<string, unknown>).unsupported_option = true;
+    expect(decodeGraphV2(unknown)).toEqual(jasmine.objectContaining({
+      status: 'unsupported',
+      unsupported: jasmine.objectContaining({
+        reason: 'unsupported_field',
+        path: 'graph.nodes[0].configuration.unsupported_option',
+      }),
+    }));
+  });
+
   it('rejects invalid, unknown, and secret task configuration fields', () => {
     [-1, 1.5, true, '2'].forEach((retry) => {
       const invalid = clone(taskFixture);

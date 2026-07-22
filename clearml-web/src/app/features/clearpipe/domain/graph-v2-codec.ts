@@ -331,13 +331,27 @@ const taskConfiguration = (value: JsonValue | undefined, path: string): TaskConf
 
 const functionConfiguration = (value: JsonValue | undefined, path: string): FunctionConfiguration => {
   const raw = record(value, path);
-  assertAllowed(raw, ['task_type', 'cache', 'queue_resource_id'], path);
+  assertAllowed(raw, ['task_type', 'cache', 'queue_resource_id', 'packages', 'retry_on_failure'], path);
   const result: FunctionConfiguration = {
     task_type: generatedName(requiredString(raw, 'task_type', path), `${path}.task_type`),
     cache: optionalBoolean(raw, 'cache', path, false),
   };
   const queue = optionalString(raw, 'queue_resource_id', path);
   if (queue !== undefined) result.queue_resource_id = stableId(queue, `${path}.queue_resource_id`);
+  if (has(raw, 'packages')) {
+    result.packages = array(raw.packages, `${path}.packages`).map((item, index) => {
+      if (typeof item !== 'string' || !item) {
+        throw new CodecError('invalid_string', `${path}.packages[${index}]`, 'expected a non-empty string');
+      }
+      if (isSensitiveUrl(item)) {
+        throw new CodecError('secret_not_allowed', `${path}.packages[${index}]`, 'secret-bearing fields are not allowed');
+      }
+      return item;
+    });
+  }
+  if (has(raw, 'retry_on_failure')) {
+    result.retry_on_failure = requiredInteger(raw, 'retry_on_failure', path);
+  }
   return result;
 };
 
@@ -368,7 +382,7 @@ const node = (value: JsonValue, index: number): GraphNode => {
     return result;
   }
   if (kind === 'function') {
-    assertAllowed(raw, [...common, 'signature', 'source'], path);
+    assertAllowed(raw, [...common, 'signature', 'source', 'description'], path);
     const source = requiredString(raw, 'source', path);
     if (secretAssignmentPattern.test(source) || secretUrlInSourcePattern.test(source)) {
       throw new CodecError('secret_not_allowed', `${path}.source`, 'secret-bearing source is not allowed');
@@ -380,6 +394,8 @@ const node = (value: JsonValue, index: number): GraphNode => {
       source,
       configuration: functionConfiguration(raw.configuration, `${path}.configuration`),
     };
+    const description = optionalString(raw, 'description', path);
+    if (description !== undefined) result.description = description;
     return result;
   }
   throw new UnsupportedCodecError('unsupported_node_kind', `${path}.kind`);

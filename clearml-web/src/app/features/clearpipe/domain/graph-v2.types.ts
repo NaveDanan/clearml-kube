@@ -105,6 +105,8 @@ export interface FunctionConfiguration {
   task_type: string;
   cache?: boolean;
   queue_resource_id?: string;
+  packages?: string[];
+  retry_on_failure?: number;
 }
 
 interface BaseNode {
@@ -125,6 +127,7 @@ export interface FunctionNode extends BaseNode {
   kind: 'function';
   signature: string;
   source: string;
+  description?: string;
   configuration: FunctionConfiguration;
 }
 

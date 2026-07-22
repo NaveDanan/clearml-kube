@@ -77,6 +77,7 @@ export type TaskNodeInput = Omit<TaskNode, 'id' | 'name' | 'kind'> & {id?: strin
 export type FunctionNodeInput = Omit<FunctionNode, 'id' | 'name' | 'kind'> & {id?: string; name?: string};
 export type GraphPortInput = Omit<GraphPort, 'id'> & {id?: string};
 export type TaskConfigurationPatch = Partial<TaskConfiguration>;
+export type FunctionConfigurationPatch = Partial<FunctionConfiguration>;
 
 interface ActiveTransaction {
   label: string;
@@ -105,6 +106,7 @@ const errorResult = (command: string, code: string, path = 'graph', message = co
 });
 
 const taskConfigurationFields = ['clone_base_task', 'cache', 'queue_resource_id', 'retry_on_failure'] as const;
+const functionConfigurationFields = ['task_type', 'cache', 'queue_resource_id', 'packages', 'retry_on_failure'] as const;
 const hasOwn = (value: object, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key);
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -448,6 +450,48 @@ export class GraphStoreService {
     });
   }
 
+  updateFunctionDescription(nodeId: string, description: string | undefined): GraphCommandResult {
+    return this.command('update-function-description', (graph) => {
+      const node = this.requireFunctionNode(graph, nodeId);
+      if (typeof description === 'undefined') delete node.description;
+      else node.description = clone(description);
+    });
+  }
+
+  updateFunctionConfiguration(nodeId: string, patch: FunctionConfigurationPatch): GraphCommandResult {
+    return this.command('update-function-configuration', (graph) => {
+      const functionNode = this.requireFunctionNode(graph, nodeId);
+      const unsupportedField = Object.keys(patch).find((key) =>
+        !(functionConfigurationFields as readonly string[]).includes(key));
+      if (unsupportedField) {
+        throw errorResult('graph-command', 'unsupported_function_configuration_field',
+          `graph.nodes.${nodeId}.configuration.${unsupportedField}`);
+      }
+      const configuration = {...functionNode.configuration};
+      if (hasOwn(patch, 'task_type')) {
+        if (typeof patch.task_type === 'undefined') delete configuration.task_type;
+        else configuration.task_type = patch.task_type;
+      }
+      if (hasOwn(patch, 'cache')) {
+        if (typeof patch.cache === 'undefined') delete configuration.cache;
+        else configuration.cache = patch.cache;
+      }
+      if (hasOwn(patch, 'queue_resource_id')) {
+        if (typeof patch.queue_resource_id === 'undefined') delete configuration.queue_resource_id;
+        else configuration.queue_resource_id = patch.queue_resource_id;
+      }
+      if (hasOwn(patch, 'packages')) {
+        if (typeof patch.packages === 'undefined') delete configuration.packages;
+        else configuration.packages = clone(patch.packages);
+      }
+      if (hasOwn(patch, 'retry_on_failure')) {
+        if (typeof patch.retry_on_failure === 'undefined') delete configuration.retry_on_failure;
+        else configuration.retry_on_failure = patch.retry_on_failure;
+      }
+      functionNode.configuration = configuration;
+    });
+  }
+
   setNodePosition(nodeId: string, position: Point): GraphCommandResult {
     return this.command('set-node-position', (graph) => {
       this.requireNode(graph, nodeId).visual.position = clone(position);
@@ -750,6 +794,12 @@ export class GraphStoreService {
   private requireTaskNode(graph: GraphV2, nodeId: string): TaskNode {
     const node = this.requireNode(graph, nodeId);
     if (node.kind !== 'task') throw errorResult('graph-command', 'node_not_task', 'graph.nodes');
+    return node;
+  }
+
+  private requireFunctionNode(graph: GraphV2, nodeId: string): FunctionNode {
+    const node = this.requireNode(graph, nodeId);
+    if (node.kind !== 'function') throw errorResult('graph-command', 'node_not_function', 'graph.nodes');
     return node;
   }
 
