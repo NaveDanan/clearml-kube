@@ -178,6 +178,13 @@
   line-height: 1.5;
 }
 
+.catalog-action-message {
+  margin: 12px 0 0;
+  color: var(--color-error);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .workspace-canvas {
   grid-column: 2;
   position: relative;

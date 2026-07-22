@@ -28,6 +28,25 @@ export interface ClearpipeCatalogAddRequest {
   readonly method: 'click' | 'keyboard';
 }
 
+/**
+ * Catalog actions are feature-owned creation handoffs. The extension host only
+ * routes an intent; an action decides whether and how to issue graph commands.
+ */
+export interface ClearpipeCatalogActionRegistration {
+  readonly catalogEntryId: string;
+  readonly availability?: () => ClearpipeCatalogActionAvailability;
+  readonly execute: (request: ClearpipeCatalogAddRequest) => void | Promise<void>;
+}
+
+export interface ClearpipeCatalogActionAvailability {
+  readonly available: boolean;
+  readonly reason?: string;
+}
+
+export type ClearpipeCatalogActionDispatchResult =
+  | {readonly status: 'dispatched'}
+  | {readonly status: 'missing' | 'disabled' | 'failed'; readonly message: string};
+
 export interface ClearpipeCatalogDragRequest {
   readonly entry: ClearpipeCatalogEntry;
   readonly dataTransfer: DataTransfer | null;

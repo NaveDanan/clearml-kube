@@ -73,8 +73,16 @@
         </button>
       </header>
       <div class="workspace-panel__body" smClearpipeWorkspaceSlot="workspace.palette">
-        <p class="slot-empty">Registered task and function authoring capabilities appear here. Unsupported legacy node choices are intentionally unavailable.</p>
-        <button mat-stroked-button type="button" (click)="focusCanvas()">Focus canvas</button>
+        <sm-clearpipe-catalog
+          [entries]="catalogEntries()"
+          [presentation]="catalogPresentation()"
+          [readOnly]="readOnly()"
+          (addRequested)="dispatchCatalogAction($event)"
+          (focusCanvasRequested)="focusCanvas()">
+        </sm-clearpipe-catalog>
+        @if (catalogActionMessage(); as message) {
+          <p class="catalog-action-message" role="alert">{{ message }}</p>
+        }
       </div>
     </aside>
 
@@ -188,11 +196,12 @@
         </button>
       </header>
       <div class="workspace-panel__body" smClearpipeWorkspaceSlot="workspace.inspector">
-        @if (state.selectedNodeId()) {
-          <p class="slot-empty">The registered inspector extension will show this item’s safe configuration and diagnostics.</p>
-        } @else {
-          <p class="slot-empty">Select a graph item to inspect its configuration and diagnostics.</p>
-        }
+        <sm-clearpipe-config-panel
+          [presentation]="inspectorPresentation()"
+          [extensionRegistry]="extensionRegistry"
+          (closeRequested)="state.selectedNodeId.set(null)"
+          (collapseRequested)="togglePanel('inspector')">
+        </sm-clearpipe-config-panel>
       </div>
     </aside>
 

@@ -18,6 +18,16 @@ import {ClearpipeToolbarComponent} from './clearpipe-toolbar.component';
 import {ClearpipeWorkspaceSlotDirective, WorkspacePanel, WorkspaceRouteSurface} from './clearpipe-workspace-slots';
 import {ClearpipeAdapterService} from '../platform/clearpipe-adapter.service';
 import {ClearpipeValidationResult} from '../clearpipe.models';
+import {ClearpipeCatalogComponent} from './framework/clearpipe-catalog.component';
+import {ClearpipeExtensionRegistry} from './framework/clearpipe-extension-registry';
+import {
+  ClearpipeCatalogAddRequest,
+  ClearpipeCatalogEntry,
+  ClearpipeCatalogPresentation,
+  ClearpipeInspectorPresentation,
+  ClearpipeValidationPresentation,
+} from './framework/clearpipe-ui.types';
+import {ClearpipeConfigPanelComponent} from './clearpipe-config-panel.component';
 
 @Component({
   selector: 'sm-clearpipe-editor',
@@ -28,6 +38,8 @@ import {ClearpipeValidationResult} from '../clearpipe.models';
     RouterLink,
     ClearpipeCanvasComponent,
     ClearpipeCodePreviewComponent,
+    ClearpipeCatalogComponent,
+    ClearpipeConfigPanelComponent,
     ClearpipeToolbarComponent,
     ClearpipeWorkspaceSlotDirective,
     MatButtonModule,
@@ -37,6 +49,7 @@ import {ClearpipeValidationResult} from '../clearpipe.models';
 export class ClearpipeEditorComponent {
   protected readonly lifecycle = inject(ClearpipeLifecycleService);
   protected readonly state = this.lifecycle.graphStore;
+  protected readonly extensionRegistry = inject(ClearpipeExtensionRegistry);
   private readonly adapter = inject(ClearpipeAdapterService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -59,6 +72,7 @@ export class ClearpipeEditorComponent {
   protected readonly inspectorWidth = signal(360);
   protected readonly isNarrow = signal(typeof window !== 'undefined' && window.innerWidth < 960);
   protected readonly announcement = signal('');
+  protected readonly catalogActionMessage = signal('');
   protected readonly readOnly = this.lifecycle.readOnly;
   protected readonly canEdit = computed(() => this.routeSurface() === 'ready' && !this.readOnly());
   protected readonly firstUse = computed(() => this.routeSurface() === 'ready' && !this.readOnly() && !this.graph()?.nodes.length);
@@ -66,6 +80,37 @@ export class ClearpipeEditorComponent {
     palette: this.paletteOpen() ? `${this.paletteWidth()}px` : '0px',
     inspector: this.inspectorOpen() ? `${this.inspectorWidth()}px` : '0px',
   }));
+  protected readonly catalogEntries = computed<readonly ClearpipeCatalogEntry[]>(() =>
+    this.extensionRegistry.catalogEntries().map((entry) => {
+      if (entry.disabled) return entry;
+      if (this.readOnly()) {
+        return {...entry, disabled: true, disabledReason: 'This definition is read-only.'};
+      }
+      const availability = this.extensionRegistry.catalogActionAvailability(entry.id);
+      return availability.available
+        ? entry
+        : {...entry, disabled: true, disabledReason: availability.reason};
+    }));
+  protected readonly catalogPresentation = computed<ClearpipeCatalogPresentation>(() =>
+    this.catalogEntries().length
+      ? {state: 'ready'}
+      : {state: 'empty', message: 'Task and function capabilities appear here when their feature registrations are available.'});
+  protected readonly inspectorPresentation = computed<ClearpipeInspectorPresentation | null>(() => {
+    const node = this.state.selectedNode();
+    if (!node) return null;
+    const extension = this.extensionRegistry.get(node.kind);
+    const catalog = this.extensionRegistry.catalogEntries().find((entry) => entry.nodeKind === node.kind);
+    return {
+      node,
+      title: node.label || node.name,
+      typeLabel: catalog?.label ?? `${node.kind[0].toUpperCase()}${node.kind.slice(1)} node`,
+      summary: extension?.summarize?.(node as never)?.text,
+      readOnly: this.readOnly(),
+      readOnlyReason: this.readOnly() ? 'This definition is read-only. Values remain available for review.' : undefined,
+      statuses: extension?.statusPresentation,
+      validations: this.inspectorValidations(node.id),
+    };
+  });
   private requestedTaskId: string | null = null;
   private resizingPanel: WorkspacePanel | null = null;
   private focusReturnTarget: HTMLElement | null = null;
@@ -180,6 +225,17 @@ export class ClearpipeEditorComponent {
     this.canvasRegion()?.nativeElement.focus();
   }
 
+  protected async dispatchCatalogAction(request: ClearpipeCatalogAddRequest): Promise<void> {
+    this.catalogActionMessage.set('');
+    const result = await this.extensionRegistry.dispatchCatalogAction(request, {readOnly: this.readOnly()});
+    if (result.status === 'dispatched') {
+      this.announce(`${request.entry.label} authoring started`);
+      return;
+    }
+    this.catalogActionMessage.set(result.message);
+    this.announce(result.message);
+  }
+
   protected retryLoad(): void {
     if (this.requestedTaskId) this.load(this.requestedTaskId);
   }
@@ -241,6 +297,19 @@ export class ClearpipeEditorComponent {
     const clamped = Math.max(240, Math.min(480, Math.round(width)));
     if (panel === 'palette') this.paletteWidth.set(clamped);
     else this.inspectorWidth.set(clamped);
+  }
+
+  private inspectorValidations(nodeId: string): readonly ClearpipeValidationPresentation[] {
+    const validation = this.validation();
+    if (!validation) return [];
+    return [...validation.errors, ...validation.warnings]
+      .filter((issue) => !issue.node_id || issue.node_id === nodeId)
+      .map((issue) => ({
+        severity: issue.severity === 'warning' ? 'warning' : 'error',
+        message: issue.message,
+        code: issue.code,
+        targetId: issue.node_id,
+      }));
   }
 
   private announce(message: string): void {
