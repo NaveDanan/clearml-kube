@@ -1,0 +1,13 @@
+{
+  "extends": "../../../../../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../../../../../out-tsc/cp21-datasets-spec",
+    "types": ["jasmine", "node"]
+  },
+  "files": ["../../../../../test.ts", "../../../../../polyfills.ts"],
+  "include": [
+    "./*.spec.ts",
+    "../../resources/datasets/*.spec.ts",
+    "../../../../../**/*.d.ts"
+  ]
+}
