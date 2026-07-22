@@ -1,0 +1,44 @@
+{
+  "generator": "PipelineController.add_function_step",
+  "diagnostics": {
+    "CPSEM003": [
+      "non-module-level source",
+      "signature/source mismatch",
+      "decorators, closures, async, generators, dynamic import, eval, or exec"
+    ],
+    "CPSEM004": [
+      "signature arguments unsupported by function_kwargs",
+      "input ports that do not exactly match the signature",
+      "missing required input or non-JSON default"
+    ],
+    "CPSEM005": [
+      "missing, duplicate, unsafe, or arity-incompatible named outputs"
+    ],
+    "CPSEM006": [
+      "data source is not a declared function output",
+      "artifact binding used as function object transport"
+    ],
+    "CPSEM007": [
+      "unknown binding reference",
+      "missing canonical reference-derived parent",
+      "inferred binding that conflicts with its data binding"
+    ],
+    "CPSEM008": [
+      "no effective queue"
+    ],
+    "CPSEM009": [
+      "unsupported task type, execution setting, or launch request"
+    ],
+    "CPSEM010": [
+      "secret-bearing source, defaults, packages, or URL"
+    ]
+  },
+  "never_generated": [
+    "PipelineController.start",
+    "PipelineController.start_locally",
+    "PipelineDecorator.run_locally",
+    "PipelineDecorator.debug_pipeline",
+    "runtime source introspection",
+    "runtime source evaluation"
+  ]
+}
