@@ -17,7 +17,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-11](./cp_11_validation-engine.md) | 3 | 8 | cp-11-validation-engine | Done | b92afe9 | Deterministic validation/preflight engine with authorization and legacy-secret fixes integrated. |
 | [x] | [CP-12](./cp_12_task-code-generator.md) | 3 | 5 | cp-12-task-generator | Done | 0994507 | Deterministic task compiler and resource source-map coverage integrated. |
 | [x] | [CP-13](./cp_13_function-code-generator.md) | 3 | 5 | cp-13-function-generator | Done | 546746b | Deterministic function-step lowerer integrated. |
-| [x] | [CP-14](./cp_14_service-adapters-route-integration.md) | 3 | 8 | cp-14-service-adapters | Done | 697f5d5 | Single typed platform adapter and guarded route handoffs integrated. |
+| [x] | [CP-14](./cp_14_service-adapters-route-integration.md) | 3 | 8 | cp-14-service-adapters | Done | 1c01651 | Typed task eligibility/pagination, secret-safe retry validation, schema parity, and recoverable server-enforced idempotent v2 submission integrated. |
 | [x] | [CP-15](./cp_15_workspace-shell-first-use.md) | 3 | 5 | cp-15-workspace-shell | Done | c87f234 | Slot-based three-region workspace shell integrated. |
 | [x] | [CP-16](./cp_16_canvas-foundation.md) | 4 | 8 | cp-16-canvas | Done | fab3dbb | Canonical canvas foundation integrated with zoom-safe drag, minimap mapping, and pointer-accessible keyboard controls. |
 | [x] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | Done | 99744f9 | Generic catalog, cards, ports, registry, and inspector framework integrated with isolated focused coverage. |
@@ -27,9 +27,9 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 | cp-21-dataset-browser | Done | fb42e53 | CP-18-backed dataset browser and safe artifact-binding handoff integrated. |
 | [x] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 | cp-22-import-export | Done | 99377c9 | Versioned safe transfer and unsaved-change guards integrated; unsupported generated source fails closed. |
 | [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
-| [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | Blocked | 508b921 | Awaiting server task-retry/secret/base-eligibility parity and paginated authorized task inventory; local stale handling returned to owner. |
+| [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | In progress | copilot/cp-24-final | CP-14 task eligibility/retry/secret/pagination contract integrated; rebasing the local authoring and stale-state follow-up. |
 | [x] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 | cp-25-function-authoring | Done | 715effc | Constrained function authoring is host-wired with typed persistence, explicit source fallback, and protected bound ports. |
-| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | Blocked | dfd0e5a | Awaiting route-scope/polling remediation and server-enforced idempotent submission before execution UI can be accepted. |
+| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | In progress | copilot/cp-26-final | CP-14 recoverable idempotent submission integrated; rebasing route, polling, and reconciliation follow-up. |
 | [x] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Done | f9e579b | Advanced history, clipboard, keyboard, selection, and layout operations integrated with atomic restore safety. |
 | [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 |  | Not started |  |  |
 | [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 |  | Not started |  |  |
