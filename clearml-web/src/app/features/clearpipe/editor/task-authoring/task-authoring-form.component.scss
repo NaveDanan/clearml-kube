@@ -1,0 +1,23 @@
+.clearpipe-task-form {
+  display: grid;
+  gap: 12px;
+
+  section,
+  fieldset {
+    display: grid;
+    gap: 8px;
+  }
+
+  fieldset {
+    border: 1px solid var(--color-border, #ccd);
+  }
+
+  &__notice,
+  &__context {
+    color: var(--color-text-secondary, #667);
+  }
+
+  &__error {
+    color: var(--color-error, #b00020);
+  }
+}

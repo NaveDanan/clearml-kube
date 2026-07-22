@@ -1,0 +1,129 @@
+<form class="clearpipe-task-form" [formGroup]="form">
+  <p class="clearpipe-task-form__notice">Task ports come only from the authorized task descriptor. Connections are created and removed through ClearPipe’s semantic edge controller.</p>
+  <section>
+    <h3>Task resource</h3>
+    @if (selectedTask(); as selected) {
+      <p>{{ selected.project ?? 'No project name supplied' }} · {{ selected.name }} · {{ selected.id }}</p>
+    } @else if (node().base_task.kind === 'task-name') {
+      <p class="clearpipe-task-form__error" role="alert">This step has a project/name reference. Select an authorized immutable task ID before editing or running it.</p>
+    } @else if (taskAvailability().status === 'selected') {
+      <p>{{ taskAvailability().resource?.project ?? 'No project name supplied' }} · {{ taskAvailability().resource?.name }} · {{ node().base_task.kind === 'task-id' ? node().base_task.task_id : 'project/name reference' }}</p>
+    } @else if (taskAvailability().status === 'stale') {
+      <p role="status">Task inventory information is stale. Refresh the task descriptor before running.</p>
+    } @else if (taskAvailability().status === 'deleted' || taskAvailability().status === 'denied') {
+      <p class="clearpipe-task-form__error" role="alert">The configured base task is no longer available. Select another authorized task.</p>
+    } @else if (taskAvailability().status === 'unavailable') {
+      <p class="clearpipe-task-form__error" role="alert">Task availability cannot be verified through the authorized resource service.</p>
+    } @else {
+      <p role="status">Checking authorized task availability…</p>
+    }
+    @if (!clearpipeInspectorContext().readOnly) {
+      <sm-clearpipe-resource-selector [controller]="taskController"
+                                      [selectedId]="selectedTask()?.id ?? (node().base_task.kind === 'task-id' ? node().base_task.task_id : null)"
+                                      (resourceSelected)="selectTask($event)"></sm-clearpipe-resource-selector>
+    }
+    @if (selectedTask() || node().base_task.kind === 'task-id') {
+      <button mat-stroked-button type="button" (click)="refreshDescriptor()">Refresh task descriptor</button>
+    }
+  </section>
+
+  @if (descriptor().status === 'loading') {
+    <p role="status">Loading safe task parameter and artifact metadata…</p>
+  } @else if (descriptor().status === 'unavailable') {
+    <p class="clearpipe-task-form__error" role="alert">{{ descriptor().message }}</p>
+  } @else if (descriptor().status === 'stale') {
+    <p role="alert">The selected task changed since inventory data was loaded. Review the refreshed descriptor before applying it.</p>
+    @if (!clearpipeInspectorContext().readOnly) { <button mat-stroked-button type="button" (click)="confirmStaleDescriptor()">Use refreshed descriptor</button> }
+  }
+
+  <mat-form-field appearance="outline"><mat-label>Step name</mat-label><input matInput formControlName="name" required></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Card label</mat-label><input matInput formControlName="label" required></mat-form-field>
+  <mat-checkbox formControlName="cloneBaseTask">Clone base task before running</mat-checkbox>
+  <mat-checkbox formControlName="cache">Cache executed step</mat-checkbox>
+  <mat-form-field appearance="outline"><mat-label>Retry on failure</mat-label><input matInput formControlName="retryOnFailure" inputmode="numeric"></mat-form-field>
+
+  <section>
+    <h3>Queue override</h3>
+    @if (clearpipeInspectorContext().readOnly) {
+      <p>{{ currentQueueSelectionId() ?? 'Pipeline default queue' }}</p>
+    } @else {
+      <sm-clearpipe-resource-selector [controller]="queueController" [selectedId]="selectedQueue()?.id ?? currentQueueSelectionId()"
+                                      (resourceSelected)="selectQueue($event)"></sm-clearpipe-resource-selector>
+    }
+  </section>
+
+  @if (descriptor().status === 'available' || descriptor().status === 'stale') {
+    <section formArrayName="parameters">
+      <h3>Parameter overrides and bindings</h3>
+      @for (parameter of form.controls.parameters.controls; track parameter.controls.portId.value; let index = $index) {
+        <fieldset [formGroupName]="index">
+          <legend>{{ parameter.controls.name.value }}</legend>
+          <mat-form-field appearance="outline"><mat-label>JSON default override</mat-label><input matInput formControlName="defaultJson"></mat-form-field>
+          @if (!clearpipeInspectorContext().readOnly) {
+            <label>Pipeline parameter
+              <select #pipelineParameter>
+                <option value="">Choose a compatible pipeline parameter</option>
+                @for (candidate of pipelineParameters(parameter.controls.portId.value); track candidate.id) {
+                  <option [value]="candidate.id">{{ candidate.name }}</option>
+                }
+              </select>
+            </label>
+            <button mat-stroked-button type="button" (click)="bindPipelineParameter(parameter.controls.portId.value, pipelineParameter.value)"
+                    [disabled]="!pipelineParameter.value">Bind pipeline parameter</button>
+            <label>Task artifact
+              <select #artifact>
+                <option value="">Choose a compatible upstream artifact</option>
+                @for (candidate of artifacts(parameter.controls.portId.value); track candidate.nodeId + candidate.portId) {
+                  <option [value]="candidate.nodeId + '\u0000' + candidate.portId">{{ candidate.label }}</option>
+                }
+              </select>
+            </label>
+            <button mat-stroked-button type="button" (click)="bindArtifact(parameter.controls.portId.value, artifact.value)"
+                    [disabled]="!artifact.value">Bind artifact</button>
+          }
+          @for (binding of bindingsForPort(node().id, parameter.controls.portId.value); track binding.id) {
+            <p>{{ binding.kind }} binding · {{ binding.id }}
+              @if (!clearpipeInspectorContext().readOnly) { <button mat-stroked-button type="button" (click)="disconnect(binding.id)">Disconnect</button> }
+            </p>
+          }
+        </fieldset>
+      } @empty {
+        <p>No safe task parameter metadata was supplied by this descriptor.</p>
+      }
+    </section>
+    <section>
+      <h3>Artifact outputs</h3>
+      @for (artifact of descriptor().descriptor.artifacts; track artifact.id) {
+        @if (artifact.direction === 'output') {
+          <p>{{ artifact.name }} · {{ artifact.id }}@if (artifact.type) { · {{ artifact.type }} }</p>
+        } @else if (artifact.direction === 'input') {
+          <p>{{ artifact.name }} is an input artifact. Use a declared task parameter for a compatible binding.</p>
+        }
+      } @empty {
+        <p>No safe artifact metadata was supplied by this descriptor.</p>
+      }
+    </section>
+  }
+  <section>
+    <h3>Execution-only parents</h3>
+    @if (!clearpipeInspectorContext().readOnly) {
+      <label>Add parent
+        <select #parent>
+          <option value="">Choose a compatible upstream step</option>
+          @for (candidate of executionParents(); track candidate.nodeId) {
+            <option [value]="candidate.nodeId">{{ candidate.label }}</option>
+          }
+        </select>
+      </label>
+      <button mat-stroked-button type="button" (click)="addExecutionParent(parent.value)" [disabled]="!parent.value">Add execution parent</button>
+    }
+    @for (binding of executionBindings(); track binding.id) {
+      <p>{{ binding.id }} · {{ binding.source.node_id === node().id ? 'This step precedes another step' : 'Upstream execution parent' }}
+        @if (!clearpipeInspectorContext().readOnly) { <button mat-stroked-button type="button" (click)="disconnect(binding.id)">Disconnect</button> }
+      </p>
+    }
+  </section>
+  @if (saveMessage(); as message) { <p class="clearpipe-task-form__error" role="alert">{{ message }}</p> }
+  <button mat-flat-button type="button" (click)="save()"
+          [disabled]="clearpipeInspectorContext().readOnly || (descriptor().status !== 'available' && (descriptor().status !== 'stale' || !staleConfirmed()))">Save task configuration</button>
+</form>
