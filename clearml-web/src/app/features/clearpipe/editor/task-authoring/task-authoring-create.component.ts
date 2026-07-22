@@ -14,6 +14,7 @@ import {
   isStaleDescriptorConfirmed,
   TaskAuthoringDescriptorState,
   taskDescriptorConfirmationToken,
+  isEligibleTaskSummary,
   taskParameterPortId,
   taskStepName,
 } from './task-authoring.models';
@@ -68,6 +69,17 @@ export class ClearpipeTaskAuthoringCreateComponent implements OnDestroy {
   });
 
   selectTask(selection: ClearpipeResourceSelection): void {
+    if (!isEligibleTaskSummary(selection.resource)) {
+      this.selectedTask.set(null);
+      this.selectedQueue.set(null);
+      this.descriptor.set({
+        status: 'unavailable',
+        message: 'This task is not eligible as a stable base task. Select a root non-controller task from the authorized task inventory.',
+        retryable: false,
+      });
+      this.error.set('This task cannot be used as a base task.');
+      return;
+    }
     this.selectedTask.set(selection.resource);
     this.selectedQueue.set(null);
     this.error.set(null);

@@ -37,6 +37,15 @@ export type TaskAuthoringDescriptorState =
   | {readonly status: 'available' | 'stale'; readonly descriptor: ClearpipeTaskDescriptor}
   | {readonly status: 'unavailable'; readonly message: string; readonly retryable: boolean};
 
+/** CP-14 designates this server-projected flag as the base-task authority. */
+export const isEligibleTaskDescriptor = (descriptor: ClearpipeTaskDescriptor): boolean =>
+  descriptor.base_task_eligible === true && Boolean(descriptor.identity.task_id.trim());
+
+/** Inventory pages contain only eligible tasks; fail closed for any other source. */
+export const isEligibleTaskSummary = (
+  resource: Pick<ClearpipeResourceSummary, 'kind' | 'taskBaseEligible'>,
+): boolean => resource.kind === 'task' && resource.taskBaseEligible === true;
+
 /**
  * A stale descriptor is usable only after the user acknowledges this exact
  * server-returned timestamp. Missing timestamps fail closed for stale input.

@@ -14,6 +14,7 @@ import {
   TaskAuthoringDefinition,
   TaskAuthoringDescriptorState,
   TaskExecutionParentSuggestion,
+  isEligibleTaskDescriptor,
   taskQueueResourceId,
 } from './task-authoring.models';
 import {taskAuthoringPorts, validateTaskAuthoringDefinition} from './task-authoring.validation';
@@ -52,6 +53,13 @@ export class ClearpipeTaskAuthoringService {
         const response = outcome.data;
         if ((response.status === 'available' || response.status === 'stale')
           && response.descriptor?.identity.task_id === taskId) {
+          if (!isEligibleTaskDescriptor(response.descriptor)) {
+            return {
+              status: 'unavailable',
+              message: 'The selected task is not eligible as a stable base task. Select a root non-controller task from the authorized task inventory.',
+              retryable: false,
+            } as TaskAuthoringDescriptorState;
+          }
           return {status: response.status, descriptor: response.descriptor} as TaskAuthoringDescriptorState;
         }
       }
@@ -91,16 +99,17 @@ export class ClearpipeTaskAuthoringService {
   }
 
   update(node: TaskNode, definition: TaskAuthoringDefinition): GraphCommandResult {
-    if (node.kind !== 'task') return graphError('update-task-node', 'CPSEM003', 'A task node is required.');
+    const current = this.graphStore.node(node.id);
+    if (!current || current.kind !== 'task') return graphError('update-task-node', 'CPSEM003', 'A task node is required.');
     const validation = validateTaskAuthoringDefinition(definition);
     if (!validation.valid) {
       const first = validation.diagnostics[0];
       return graphError('update-task-node', first.code, first.message);
     }
     const ports = taskAuthoringPorts(definition.descriptor, definition.parameterDefaults);
-    const boundPort = node.ports.find(existing => {
+    const boundPort = current.ports.find(existing => {
       const desired = ports.find(candidate => candidate.id === existing.id);
-      return this.graphStore.bindingsForPort(node.id, existing.id).length
+      return this.graphStore.bindingsForPort(current.id, existing.id).length
         && (!desired || !samePortMetadata(existing, desired));
     });
     if (boundPort) {
@@ -112,9 +121,9 @@ export class ClearpipeTaskAuthoringService {
     }
     return this.graphStore.transaction('update task authoring node', () => {
       const queueResourceId = this.materializeQueue(definition);
-      this.graphStore.updateNodeMetadata(node.id, {name: definition.name.trim(), label: definition.label.trim()});
-      this.graphStore.replaceTaskBaseTask(node.id, {kind: 'task-id', task_id: definition.descriptor.identity.task_id});
-      this.graphStore.updateTaskConfiguration(node.id, {
+      this.graphStore.updateNodeMetadata(current.id, {name: definition.name.trim(), label: definition.label.trim()});
+      this.graphStore.replaceTaskBaseTask(current.id, {kind: 'task-id', task_id: definition.descriptor.identity.task_id});
+      this.graphStore.updateTaskConfiguration(current.id, {
         clone_base_task: definition.cloneBaseTask,
         cache: definition.cache,
         queue_resource_id: queueResourceId,
@@ -123,15 +132,15 @@ export class ClearpipeTaskAuthoringService {
       const desiredIds = new Set(ports.map(port => port.id));
       // Remove only ports proven unbound before assigning descriptor orders so a
       // replacement cannot transiently violate CP-06's unique-order invariant.
-      node.ports.filter(port => !desiredIds.has(port.id)).forEach(port => this.graphStore.removePort(node.id, port.id));
-      const currentIds = new Set(node.ports.filter(port => desiredIds.has(port.id)).map(port => port.id));
+      current.ports.filter(port => !desiredIds.has(port.id)).forEach(port => this.graphStore.removePort(current.id, port.id));
+      const currentIds = new Set(current.ports.filter(port => desiredIds.has(port.id)).map(port => port.id));
       ports.forEach(port => {
         if (currentIds.has(port.id)) {
           const patch: Omit<GraphPort, 'id'> = {...port};
           delete (patch as Partial<GraphPort>).id;
-          this.graphStore.updatePort(node.id, port.id, patch);
+          this.graphStore.updatePort(current.id, port.id, patch);
         } else {
-          this.graphStore.createPort(node.id, port);
+          this.graphStore.createPort(current.id, port);
         }
       });
     });

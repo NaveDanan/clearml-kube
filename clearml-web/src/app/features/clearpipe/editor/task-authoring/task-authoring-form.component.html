@@ -2,7 +2,11 @@
   <p class="clearpipe-task-form__notice">Task ports come only from the authorized task descriptor. Connections are created and removed through ClearPipe’s semantic edge controller.</p>
   <section>
     <h3>Task resource</h3>
-    @if (taskAvailability().status === 'selected') {
+    @if (selectedTask(); as selected) {
+      <p>{{ selected.project ?? 'No project name supplied' }} · {{ selected.name }} · {{ selected.id }}</p>
+    } @else if (node().base_task.kind === 'task-name') {
+      <p class="clearpipe-task-form__error" role="alert">This step has a project/name reference. Select an authorized immutable task ID before editing or running it.</p>
+    } @else if (taskAvailability().status === 'selected') {
       <p>{{ taskAvailability().resource?.project ?? 'No project name supplied' }} · {{ taskAvailability().resource?.name }} · {{ node().base_task.kind === 'task-id' ? node().base_task.task_id : 'project/name reference' }}</p>
     } @else if (taskAvailability().status === 'stale') {
       <p role="status">Task inventory information is stale. Refresh the task descriptor before running.</p>
@@ -18,7 +22,9 @@
                                       [selectedId]="selectedTask()?.id ?? (node().base_task.kind === 'task-id' ? node().base_task.task_id : null)"
                                       (resourceSelected)="selectTask($event)"></sm-clearpipe-resource-selector>
     }
-    <button mat-stroked-button type="button" (click)="refreshDescriptor()">Refresh task descriptor</button>
+    @if (selectedTask() || node().base_task.kind === 'task-id') {
+      <button mat-stroked-button type="button" (click)="refreshDescriptor()">Refresh task descriptor</button>
+    }
   </section>
 
   @if (descriptor().status === 'loading') {

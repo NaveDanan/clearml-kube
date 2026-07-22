@@ -5,6 +5,7 @@ import {
   TaskAuthoringDiagnostic,
   TaskAuthoringValidation,
   taskArtifactPortId,
+  isEligibleTaskDescriptor,
   taskParameterPortId,
   taskParameterPortName,
 } from './task-authoring.models';
@@ -12,7 +13,7 @@ import {
 const generatedName = /^[A-Za-z][A-Za-z0-9_]*$/;
 const sectionedParameter = /^[^/\r\n]+\/[^/\r\n]+$/;
 const artifactReference = /^[A-Za-z0-9_.-]+$/;
-const credentialUrl = /https?:\/\/[^/\s:@]+:[^@\s]+@|[?&](?:password|passwd|secret|token|api[_-]?key|access[_-]?key)=/i;
+const credentialUrl = /https?:\/\/[^/\s:@]+:[^@\s]+@|(?:^|[?&\s])(?:password|passwd|secret|token|api[_-]?key|access[_-]?key)\s*=/i;
 const secretKey = /(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credential)/i;
 const secretParameterComponent = /(?:^|_)(?:password|passwd|secret|token|api_?key|access_?key|private_?key|credential)(?:_|$)/i;
 
@@ -99,6 +100,13 @@ export const validateTaskAuthoringDefinition = (
   if (definition.selectedTaskId !== definition.descriptor.identity.task_id) {
     diagnostics.push(diagnostic('CP24IDENTITY001', 'baseTask', 'The selected authorized task and descriptor identity do not match. Select the base task again.'));
   }
+  if (!isEligibleTaskDescriptor(definition.descriptor)) {
+    diagnostics.push(diagnostic(
+      'CP24ELIGIBILITY001',
+      'baseTask',
+      'The selected task is not an eligible base task. Select a root non-controller task from the authorized task inventory.',
+    ));
+  }
   diagnostics.push(...descriptorIssues(definition.descriptor));
   if (definition.retryOnFailure !== undefined
     && (!Number.isInteger(definition.retryOnFailure) || definition.retryOnFailure < 0)) {
@@ -110,6 +118,7 @@ export const validateTaskAuthoringDefinition = (
   const parametersByPortId = new Map(definition.descriptor.parameters.map(parameter =>
     [taskParameterPortId(parameter.section, parameter.name), parameter] as const));
   Object.entries(definition.parameterDefaults).forEach(([portId, value]) => {
+    if (typeof value === 'undefined') return;
     const parameter = parametersByPortId.get(portId);
     if (!parameter) {
       diagnostics.push(diagnostic('CP24PORT001', 'parameterDefaults', 'An override targets a task parameter that is not present in the selected descriptor.'));

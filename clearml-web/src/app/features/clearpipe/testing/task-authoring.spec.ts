@@ -35,10 +35,12 @@ const resource = (id: string, name = 'Train model'): ClearpipeResourceSummary =>
   status: 'completed',
   tags: ['approved'],
   updatedAt: '2026-07-22T12:00:00Z',
+  taskBaseEligible: true,
 });
 
 const descriptor = (id: string, overrides: Partial<ClearpipeTaskDescriptor> = {}): ClearpipeTaskDescriptor => ({
   identity: {task_id: id},
+  base_task_eligible: true,
   context: {
     name: `Task ${id}`,
     type: 'training',
@@ -147,15 +149,20 @@ describe('CP-24 task-backed authoring', () => {
       status: 'ready',
       data: {status: 'available', descriptor: descriptor('different-task')},
     };
+    const ineligible: ClearpipeAdapterOutcome<ClearpipeTaskDescriptorResponse> = {
+      status: 'ready',
+      data: {status: 'available', descriptor: descriptor('base-task-a', {base_task_eligible: false})},
+    };
     adapter.taskDescriptor.and.returnValues(
       of(loading, available),
       of(loading, stale),
       of(loading, unavailable),
       of(loading, mismatched),
+      of(loading, ineligible),
     );
     const states: string[][] = [];
 
-    [available, stale, unavailable, mismatched].forEach(() => {
+    [available, stale, unavailable, mismatched, ineligible].forEach(() => {
       const values: string[] = [];
       authoring.describeTask('base-task-a', resource('base-task-a').updatedAt).subscribe(state => values.push(state.status));
       states.push(values);
@@ -166,13 +173,38 @@ describe('CP-24 task-backed authoring', () => {
       ['loading', 'stale'],
       ['loading', 'unavailable'],
       ['loading', 'unavailable'],
+      ['loading', 'unavailable'],
     ]);
     expect(adapter.taskDescriptor.calls.allArgs()).toEqual([
       ['base-task-a', '2026-07-22T12:00:00Z'],
       ['base-task-a', '2026-07-22T12:00:00Z'],
       ['base-task-a', '2026-07-22T12:00:00Z'],
       ['base-task-a', '2026-07-22T12:00:00Z'],
+      ['base-task-a', '2026-07-22T12:00:00Z'],
     ]);
+  });
+
+  it('fails closed for ineligible inventory selections and descriptor identities', () => {
+    const fixture = TestBed.createComponent(ClearpipeTaskAuthoringCreateComponent);
+    const component = fixture.componentInstance;
+    const ineligibleResource = {...resource('runtime-child'), taskBaseEligible: false};
+
+    component.selectTask({
+      resource: ineligibleResource,
+      reference: {kind: 'task', resource_id: ineligibleResource.id},
+    });
+
+    expect(component.selectedTask()).toBeNull();
+    expect(component.descriptor()).toEqual(jasmine.objectContaining({status: 'unavailable', retryable: false}));
+    expect(adapter.taskDescriptor).not.toHaveBeenCalled();
+    expect(authoring.create(definition('runtime-child', {
+      descriptor: descriptor('runtime-child', {base_task_eligible: false}),
+    }))).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'CP24ELIGIBILITY001'})],
+    }));
+    expect(store.nodes()).toEqual([]);
+    fixture.destroy();
   });
 
   it('rejects literal overrides for secret-named descriptor parameters without retaining their values', () => {
@@ -200,6 +232,22 @@ describe('CP-24 task-backed authoring', () => {
     }));
     expect(store.nodes()).toEqual([]);
     expect(JSON.stringify(result.errors)).not.toContain('must-not-persist');
+  });
+
+  it('rejects secret-shaped literal parameter values before graph persistence', () => {
+    const literal = 'token=must-not-persist';
+    const result = authoring.create(definition('base-task-a', {
+      parameterDefaults: {
+        [taskParameterPortId('General', 'threshold')]: literal,
+      },
+    }));
+
+    expect(result).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'CPSEM010'})],
+    }));
+    expect(store.nodes()).toEqual([]);
+    expect(JSON.stringify(result.errors)).not.toContain(literal);
   });
 
   it('requires stale confirmation for the exact returned descriptor timestamp and resets it before refresh', () => {
@@ -307,6 +355,23 @@ describe('CP-24 task-backed authoring', () => {
       ok: false,
       errors: [jasmine.objectContaining({code: 'CP24IDENTITY001'})],
     }));
+  });
+
+  it('replaces a legacy project/name reference only after selecting an eligible immutable descriptor identity', () => {
+    const legacy = store.createTaskNode({
+      name: 'legacy_step',
+      label: 'Legacy step',
+      base_task: {kind: 'task-name', project: 'Research', name: 'Train model'},
+      ports: [],
+      configuration: {},
+      visual: {position: {x: 0, y: 0}},
+    });
+    const legacyNode = store.node(legacy.id!) as TaskNode;
+
+    const update = authoring.update(legacyNode, definition('base-task-a'));
+
+    expect(update.ok).withContext(JSON.stringify(update.errors)).toBeTrue();
+    expect((store.node(legacy.id!) as TaskNode).base_task).toEqual({kind: 'task-id', task_id: 'base-task-a'});
   });
 
   it('blocks invalid semantic edges and descriptor port removals until explicit CP-20 disconnection', () => {

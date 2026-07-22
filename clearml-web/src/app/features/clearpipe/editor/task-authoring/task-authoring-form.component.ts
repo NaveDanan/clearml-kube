@@ -14,6 +14,7 @@ import {
   isStaleDescriptorConfirmed,
   TaskAuthoringDescriptorState,
   taskDescriptorConfirmationToken,
+  isEligibleTaskSummary,
   taskParameterPortId,
 } from './task-authoring.models';
 import {ClearpipeTaskAuthoringService} from './task-authoring.service';
@@ -81,6 +82,18 @@ export class ClearpipeTaskAuthoringFormComponent implements ClearpipeInspectorFo
 
   protected selectTask(selection: ClearpipeResourceSelection): void {
     if (this.clearpipeInspectorContext().readOnly) return;
+    if (!isEligibleTaskSummary(selection.resource)) {
+      this.selectedTask.set(null);
+      this.selectedQueue.set(null);
+      this.staleConfirmationToken.set(null);
+      this.descriptor.set({
+        status: 'unavailable',
+        message: 'This task is not eligible as a stable base task. Select a root non-controller task from the authorized task inventory.',
+        retryable: false,
+      });
+      this.saveMessage.set('This task cannot be used as a base task.');
+      return;
+    }
     this.selectedTask.set(selection.resource);
     this.selectedQueue.set(null);
     this.loadDescriptor(selection.resource.id, selection.resource.updatedAt);
@@ -106,6 +119,7 @@ export class ClearpipeTaskAuthoringFormComponent implements ClearpipeInspectorFo
     const knownUpdatedAt = this.selectedTask()?.updatedAt
       ?? (this.taskAvailability().status === 'selected' ? this.taskAvailability().resource?.updatedAt : undefined);
     if (taskId) this.loadDescriptor(taskId, knownUpdatedAt);
+    else this.saveMessage.set('Select an authorized immutable task ID before refreshing a project/name reference.');
   }
 
   protected save(): void {
@@ -188,6 +202,7 @@ export class ClearpipeTaskAuthoringFormComponent implements ClearpipeInspectorFo
     this.selectedTask.set(null);
     this.selectedQueue.set(null);
     this.staleConfirmationToken.set(null);
+    this.form.controls.parameters.clear({emitEvent: false});
     if (this.clearpipeInspectorContext().readOnly) this.form.disable({emitEvent: false});
     else this.form.enable({emitEvent: false});
     if (node.base_task.kind === 'task-id') this.loadDescriptor(node.base_task.task_id);
