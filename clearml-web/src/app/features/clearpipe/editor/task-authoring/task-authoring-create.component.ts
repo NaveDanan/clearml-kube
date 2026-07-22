@@ -10,7 +10,13 @@ import {ClearpipeResourceSelection, ClearpipeResourceSummary} from '../../resour
 import {ClearpipeResourceQueryService} from '../../resources/clearpipe-resource-query.service';
 import {ClearpipeResourceSelectorComponent} from '../../resources/clearpipe-resource-selector.component';
 import {JsonValue, Point} from '../../domain/graph-v2.types';
-import {TaskAuthoringDescriptorState, taskParameterPortId, taskStepName} from './task-authoring.models';
+import {
+  isStaleDescriptorConfirmed,
+  TaskAuthoringDescriptorState,
+  taskDescriptorConfirmationToken,
+  taskParameterPortId,
+  taskStepName,
+} from './task-authoring.models';
 import {ClearpipeTaskAuthoringService} from './task-authoring.service';
 
 type ParameterOverrideForm = FormGroup<{
@@ -47,7 +53,8 @@ export class ClearpipeTaskAuthoringCreateComponent implements OnDestroy {
   readonly selectedTask = signal<ClearpipeResourceSummary | null>(null);
   readonly selectedQueue = signal<ClearpipeResourceSummary | null>(null);
   readonly descriptor = signal<TaskAuthoringDescriptorState>({status: 'idle'});
-  readonly staleConfirmed = signal(false);
+  private readonly staleConfirmationToken = signal<string | null>(null);
+  readonly staleConfirmed = () => isStaleDescriptorConfirmed(this.descriptor(), this.staleConfirmationToken());
   readonly error = signal<string | null>(null);
   private descriptorRequest?: Subscription;
   private descriptorRequestVersion = 0;
@@ -63,7 +70,6 @@ export class ClearpipeTaskAuthoringCreateComponent implements OnDestroy {
   selectTask(selection: ClearpipeResourceSelection): void {
     this.selectedTask.set(selection.resource);
     this.selectedQueue.set(null);
-    this.staleConfirmed.set(false);
     this.error.set(null);
     this.createForm.patchValue({
       name: taskStepName(selection.resource.name),
@@ -77,7 +83,13 @@ export class ClearpipeTaskAuthoringCreateComponent implements OnDestroy {
   }
 
   confirmStaleDescriptor(): void {
-    this.staleConfirmed.set(true);
+    const state = this.descriptor();
+    const token = state.status === 'stale' ? taskDescriptorConfirmationToken(state.descriptor) : null;
+    if (!token) {
+      this.error.set('The refreshed task descriptor has no update timestamp. Refresh the authorized task list and select the task again.');
+      return;
+    }
+    this.staleConfirmationToken.set(token);
   }
 
   retryDescriptor(): void {
@@ -123,6 +135,7 @@ export class ClearpipeTaskAuthoringCreateComponent implements OnDestroy {
   }
 
   private loadDescriptor(resource: ClearpipeResourceSummary): void {
+    this.staleConfirmationToken.set(null);
     this.descriptorRequest?.unsubscribe();
     const version = ++this.descriptorRequestVersion;
     this.descriptor.set({status: 'loading'});

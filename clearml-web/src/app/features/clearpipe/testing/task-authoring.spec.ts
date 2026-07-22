@@ -1,5 +1,5 @@
 import {TestBed} from '@angular/core/testing';
-import {of} from 'rxjs';
+import {of, Subject} from 'rxjs';
 import {ClearpipeTaskDescriptor, ClearpipeTaskDescriptorResponse} from '../clearpipe-api.service';
 import {clearpipeRoutes} from '../clearpipe.routes';
 import {decodeGraphV2} from '../domain/graph-v2-codec';
@@ -10,11 +10,21 @@ import {
   clearpipeTaskAuthoringCatalogAction,
   clearpipeTaskAuthoringExtension,
 } from '../editor/task-authoring/task-authoring.extension';
-import {TaskAuthoringDefinition, taskArtifactPortId, taskParameterPortId, taskQueueResourceId} from '../editor/task-authoring/task-authoring.models';
+import {ClearpipeTaskAuthoringCreateComponent} from '../editor/task-authoring/task-authoring-create.component';
+import {
+  isStaleDescriptorConfirmed,
+  TaskAuthoringDefinition,
+  TaskAuthoringDescriptorState,
+  taskArtifactPortId,
+  taskDescriptorConfirmationToken,
+  taskParameterPortId,
+  taskQueueResourceId,
+} from '../editor/task-authoring/task-authoring.models';
 import {ClearpipeTaskAuthoringService} from '../editor/task-authoring/task-authoring.service';
 import {ClearpipeExtensionRegistry} from '../editor/framework/clearpipe-extension-registry';
 import {ClearpipeAdapterOutcome, ClearpipeAdapterService} from '../platform/clearpipe-adapter.service';
 import {ClearpipeResourceSummary} from '../resources/clearpipe-resource.models';
+import {ClearpipeResourceQueryService} from '../resources/clearpipe-resource-query.service';
 
 const resource = (id: string, name = 'Train model'): ClearpipeResourceSummary => ({
   id,
@@ -66,15 +76,19 @@ describe('CP-24 task-backed authoring', () => {
   let store: GraphStoreService;
   let authoring: ClearpipeTaskAuthoringService;
   let adapter: jasmine.SpyObj<Pick<ClearpipeAdapterService, 'taskDescriptor'>>;
+  let resourceQueries: jasmine.SpyObj<Pick<ClearpipeResourceQueryService, 'for'>>;
 
   beforeEach(() => {
     adapter = jasmine.createSpyObj<Pick<ClearpipeAdapterService, 'taskDescriptor'>>('ClearpipeAdapterService', ['taskDescriptor']);
+    resourceQueries = jasmine.createSpyObj<Pick<ClearpipeResourceQueryService, 'for'>>('ClearpipeResourceQueryService', ['for']);
+    resourceQueries.for.and.returnValue({} as ReturnType<ClearpipeResourceQueryService['for']>);
     TestBed.configureTestingModule({
       providers: [
         GraphStoreService,
         ClearpipeSemanticEdgeController,
         ClearpipeTaskAuthoringService,
         {provide: ClearpipeAdapterService, useValue: adapter},
+        {provide: ClearpipeResourceQueryService, useValue: resourceQueries},
       ],
     });
     store = TestBed.inject(GraphStoreService);
@@ -159,6 +173,79 @@ describe('CP-24 task-backed authoring', () => {
       ['base-task-a', '2026-07-22T12:00:00Z'],
       ['base-task-a', '2026-07-22T12:00:00Z'],
     ]);
+  });
+
+  it('rejects literal overrides for secret-named descriptor parameters without retaining their values', () => {
+    const secretParameters = [
+      {section: 'General', name: 'api_key'},
+      {section: 'Credentials', name: 'password'},
+      {section: 'General', name: 'token'},
+    ];
+    const parameterDefaults = Object.fromEntries(secretParameters.map(parameter => [
+      taskParameterPortId(parameter.section, parameter.name),
+      'must-not-persist',
+    ]));
+    const candidate = definition('base-task-a', {
+      descriptor: descriptor('base-task-a', {parameters: secretParameters}),
+      parameterDefaults,
+    });
+    const result = authoring.create(candidate);
+
+    expect(result).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({
+        code: 'CPSEM010',
+        message: jasmine.stringMatching(/secret-named.*Remove.*pipeline parameter/i),
+      })],
+    }));
+    expect(store.nodes()).toEqual([]);
+    expect(JSON.stringify(result.errors)).not.toContain('must-not-persist');
+  });
+
+  it('requires stale confirmation for the exact returned descriptor timestamp and resets it before refresh', () => {
+    const first = descriptor('base-task-a', {
+      context: {...descriptor('base-task-a').context, updated_at: '2026-07-22T12:01:00Z'},
+    });
+    const newer = descriptor('base-task-a', {
+      context: {...descriptor('base-task-a').context, updated_at: '2026-07-22T12:02:00Z'},
+    });
+    const firstToken = taskDescriptorConfirmationToken(first);
+    const firstState: TaskAuthoringDescriptorState = {status: 'stale', descriptor: first};
+    const newerState: TaskAuthoringDescriptorState = {status: 'stale', descriptor: newer};
+    const firstRequest = new Subject<TaskAuthoringDescriptorState>();
+    const refreshRequest = new Subject<TaskAuthoringDescriptorState>();
+    const createAuthoring = jasmine.createSpyObj<Pick<ClearpipeTaskAuthoringService, 'describeTask'>>(
+      'ClearpipeTaskAuthoringService',
+      ['describeTask'],
+    );
+    createAuthoring.describeTask.and.returnValues(firstRequest, refreshRequest);
+
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [ClearpipeTaskAuthoringCreateComponent],
+      providers: [
+        {provide: ClearpipeTaskAuthoringService, useValue: createAuthoring},
+        {provide: ClearpipeResourceQueryService, useValue: resourceQueries},
+      ],
+    });
+    const fixture = TestBed.createComponent(ClearpipeTaskAuthoringCreateComponent);
+    const component = fixture.componentInstance;
+    component.selectTask({resource: resource('base-task-a'), reference: {kind: 'task', resource_id: 'base-task-a'}});
+    firstRequest.next(firstState);
+    component.confirmStaleDescriptor();
+    expect(component.staleConfirmed()).toBeTrue();
+    expect(isStaleDescriptorConfirmed(newerState, firstToken)).toBeFalse();
+
+    component.retryDescriptor();
+    expect(component.staleConfirmed()).toBeFalse();
+    refreshRequest.next(newerState);
+    expect(component.staleConfirmed()).toBeFalse();
+    component.confirmStaleDescriptor();
+    expect(component.staleConfirmed()).toBeTrue();
+    expect(taskDescriptorConfirmationToken(descriptor('base-task-a', {
+      context: {...descriptor('base-task-a').context, updated_at: undefined},
+    }))).toBeNull();
+    fixture.destroy();
   });
 
   it('creates two canonical task nodes with descriptor-derived ports and connects parameter, artifact, and execution semantics', () => {

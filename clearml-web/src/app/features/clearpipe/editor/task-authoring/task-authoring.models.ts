@@ -37,6 +37,22 @@ export type TaskAuthoringDescriptorState =
   | {readonly status: 'available' | 'stale'; readonly descriptor: ClearpipeTaskDescriptor}
   | {readonly status: 'unavailable'; readonly message: string; readonly retryable: boolean};
 
+/**
+ * A stale descriptor is usable only after the user acknowledges this exact
+ * server-returned timestamp. Missing timestamps fail closed for stale input.
+ */
+export const taskDescriptorConfirmationToken = (descriptor: ClearpipeTaskDescriptor): string | null => {
+  const updatedAt = descriptor.context.updated_at?.trim();
+  return updatedAt ? `${descriptor.identity.task_id}\u0000${updatedAt}` : null;
+};
+
+export const isStaleDescriptorConfirmed = (
+  state: TaskAuthoringDescriptorState,
+  confirmationToken: string | null,
+): boolean => state.status === 'stale'
+  && confirmationToken !== null
+  && confirmationToken === taskDescriptorConfirmationToken(state.descriptor);
+
 export interface TaskArtifactSuggestion {
   readonly nodeId: string;
   readonly portId: string;

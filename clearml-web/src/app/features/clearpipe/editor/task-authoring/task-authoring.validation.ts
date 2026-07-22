@@ -14,6 +14,7 @@ const sectionedParameter = /^[^/\r\n]+\/[^/\r\n]+$/;
 const artifactReference = /^[A-Za-z0-9_.-]+$/;
 const credentialUrl = /https?:\/\/[^/\s:@]+:[^@\s]+@|[?&](?:password|passwd|secret|token|api[_-]?key|access[_-]?key)=/i;
 const secretKey = /(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credential)/i;
+const secretParameterComponent = /(?:^|_)(?:password|passwd|secret|token|api_?key|access_?key|private_?key|credential)(?:_|$)/i;
 
 const diagnostic = (code: string, field: string, message: string): TaskAuthoringDiagnostic => ({code, field, message});
 
@@ -23,6 +24,9 @@ const containsSecret = (value: JsonValue | undefined): boolean => {
   if (!value || typeof value !== 'object') return false;
   return Object.entries(value).some(([key, nested]) => secretKey.test(key) || containsSecret(nested));
 };
+
+const isSecretNamedParameter = (section: string, name: string): boolean =>
+  secretParameterComponent.test(`${section}_${name}`.replace(/[^A-Za-z0-9]+/g, '_'));
 
 const descriptorIssues = (descriptor: ClearpipeTaskDescriptor): TaskAuthoringDiagnostic[] => {
   const issues: TaskAuthoringDiagnostic[] = [];
@@ -103,11 +107,18 @@ export const validateTaskAuthoringDefinition = (
   if (definition.queue && definition.queue.kind !== 'queue') {
     diagnostics.push(diagnostic('CPSEM008', 'queue', 'Choose a queue through the authorized queue selector.'));
   }
-  const allowedPortIds = new Set(definition.descriptor.parameters.map(parameter =>
-    taskParameterPortId(parameter.section, parameter.name)));
+  const parametersByPortId = new Map(definition.descriptor.parameters.map(parameter =>
+    [taskParameterPortId(parameter.section, parameter.name), parameter] as const));
   Object.entries(definition.parameterDefaults).forEach(([portId, value]) => {
-    if (!allowedPortIds.has(portId)) {
+    const parameter = parametersByPortId.get(portId);
+    if (!parameter) {
       diagnostics.push(diagnostic('CP24PORT001', 'parameterDefaults', 'An override targets a task parameter that is not present in the selected descriptor.'));
+    } else if (isSecretNamedParameter(parameter.section, parameter.name)) {
+      diagnostics.push(diagnostic(
+        'CPSEM010',
+        `parameterDefaults.${portId}`,
+        'This task parameter is secret-named. Remove its literal override and bind a safe pipeline parameter instead.',
+      ));
     } else if (containsSecret(value)) {
       diagnostics.push(diagnostic('CPSEM010', 'parameterDefaults', 'Task parameter overrides must not contain credentials or secrets.'));
     }
