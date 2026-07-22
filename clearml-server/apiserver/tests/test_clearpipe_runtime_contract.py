@@ -67,6 +67,21 @@ def signed_run(runtime, *, run_id="run-1", company_id="company-a", pipeline=None
 
 
 class ClearPipeRuntimeContractTests(unittest.TestCase):
+    def setUp(self):
+        self.key_ring = patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=(
+                "test-current",
+                "test-secret",
+                {"test-current": "test-secret"},
+            ),
+        )
+        self.key_ring.start()
+
+    def tearDown(self):
+        self.key_ring.stop()
+
     def test_visible_task_lookup_never_probes_unscoped_task_existence(self):
         query = Mock()
         query.only.return_value.first.return_value = None
@@ -192,6 +207,34 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
         for prohibited in ("items.v.value", "items.v.uri", "script", "configuration"):
             self.assertNotIn(prohibited, projection)
 
+    def test_runtime_artifact_projection_is_bounded_and_marks_partial_records(self):
+        task_model = Mock()
+        task_model.aggregate.return_value = iter(
+            [
+                {
+                    "_id": "child-1",
+                    "truncated": True,
+                    "artifacts": [
+                        {"id": f"artifact-{index}", "type": "json", "direction": "output"}
+                        for index in range(clearpipe.MAX_RUNTIME_ARTIFACTS_PER_NODE)
+                    ],
+                }
+            ]
+        )
+        with patch.object(clearpipe, "Task", task_model):
+            artifacts = clearpipe._visible_run_artifacts(
+                "company-a", "run-1", {"child-1"}
+            )
+
+        self.assertTrue(artifacts["child-1"]["truncated"])
+        self.assertEqual(
+            len(artifacts["child-1"]["artifacts"]),
+            clearpipe.MAX_RUNTIME_ARTIFACTS_PER_NODE,
+        )
+        projection = json.dumps(task_model.aggregate.call_args.args[0])
+        self.assertIn('"$slice"', projection)
+        self.assertNotIn("uri", projection)
+
     def test_execution_snapshot_uses_signed_provenance_and_bulk_child_maps(self):
         runtime = runtime_configuration(("node-a", "stage_a"), ("node-b", "stage_b"))
         run = signed_run(
@@ -233,7 +276,14 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
         ), patch.object(
             clearpipe, "_visible_models_by_id", models
         ), patch.object(
-            clearpipe, "_visible_run_artifacts", return_value={"child-a": [{"id": "result", "name": "result", "type": "json", "direction": "output"}]}
+            clearpipe,
+            "_visible_run_artifacts",
+            return_value={
+                "child-a": {
+                    "artifacts": [{"id": "result", "name": "result", "type": "json", "direction": "output"}],
+                    "truncated": False,
+                }
+            },
         ):
             clearpipe.execution_snapshot(
                 call,
@@ -399,7 +449,40 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
                 source_map=(),
             )
 
+    def test_execution_snapshot_clamps_explicit_zero_node_limit_to_one(self):
+        runtime = runtime_configuration(
+            ("node-a", "stage_a"), ("node-b", "stage_b")
+        )
+        run = signed_run(runtime)
+        call = endpoint_call()
+        with patch.object(clearpipe, "_visible_task", return_value=run), patch.object(
+            clearpipe, "_visible_definition", return_value=SimpleNamespace(id="definition-1")
+        ), patch.object(
+            clearpipe, "_visible_run_children", return_value={}
+        ), patch.object(
+            clearpipe, "_visible_run_artifacts", return_value={}
+        ), patch.object(
+            clearpipe, "_visible_models_by_id", return_value={}
+        ):
+            clearpipe.execution_snapshot(
+                call,
+                "company-a",
+                SimpleNamespace(
+                    run="run-1",
+                    definition_revision=None,
+                    graph_digest=None,
+                    node_offset=0,
+                    node_limit=0,
+                ),
+            )
+
+        snapshot = call.result.data["snapshot"]
+        self.assertEqual(len(snapshot["nodes"]), 1)
+        self.assertTrue(snapshot["truncated"])
+        self.assertEqual(snapshot["next_node_offset"], 1)
+
     def test_provenance_key_ring_supports_transition_and_retires_unknown_keys(self):
+        self.key_ring.stop()
         runtime = runtime_configuration(("node-a", "stage_a"))
         run = SimpleNamespace(
             id="run-1",
@@ -425,6 +508,7 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
         transition_ring = {
             "current_key_id": "clearpipe-current",
             "transition_key_ids": [clearpipe.CLEARPIPE_LEGACY_PROVENANCE_KEY_ID],
+            "allow_legacy_auth_token_verification": True,
             "keys": {"clearpipe-current": "current-secret"},
         }
         def config_value(path, default=None):

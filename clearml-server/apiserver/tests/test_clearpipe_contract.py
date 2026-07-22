@@ -216,12 +216,17 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
         return (
             patch.object(clearpipe, "_resource_checker", return_value=lambda *_: True),
             patch.object(clearpipe, "_queue_checker", return_value=lambda _: True),
+            patch.object(
+                clearpipe,
+                "_runtime_provenance_key_ring",
+                return_value=("test-current", "test-secret", {"test-current": "test-secret"}),
+            ),
         )
 
     def test_server_capabilities_distinguish_public_read_from_origin_mutation(self):
         public = stored_definition(company="", origin="company-a")
-        resource_check, queue_check = self._authorized_definition_checks()
-        with resource_check, queue_check:
+        resource_check, queue_check, key_ring = self._authorized_definition_checks()
+        with resource_check, queue_check, key_ring:
             definition = clearpipe._definition(public, "company-b", project_name="Pipelines")
         self.assertEqual(definition["representation"], "clearpipe_graph_v2")
         self.assertTrue(definition["capabilities"]["view"])
@@ -237,8 +242,8 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
         stored.configuration["ClearPipeRuntime"] = SimpleNamespace(
             value=json.dumps(clearpipe._runtime_configuration(generated, 7).to_dict())
         )
-        resource_check, queue_check = self._authorized_definition_checks()
-        with resource_check, queue_check:
+        resource_check, queue_check, key_ring = self._authorized_definition_checks()
+        with resource_check, queue_check, key_ring:
             definition = clearpipe._definition(stored, "company-a", project_name="Pipelines")
 
         self.assertTrue(definition["capabilities"]["compilation"])
@@ -253,6 +258,20 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
             ],
         )
 
+    def test_v2_definition_disables_execution_without_dedicated_provenance_key(self):
+        stored = stored_definition()
+        resource_check, queue_check, _ = self._authorized_definition_checks()
+        with resource_check, queue_check, patch.object(
+            clearpipe, "_runtime_provenance_key_ring", return_value=(None, None, {})
+        ):
+            definition = clearpipe._definition(
+                stored, "company-a", project_name="Pipelines"
+            )
+
+        self.assertTrue(definition["capabilities"]["compilation"])
+        self.assertFalse(definition["capabilities"]["execution"])
+        self.assertFalse(definition["capabilities"]["run"])
+
     def test_compiler_diagnostic_disables_v2_execution_without_hiding_the_definition(self):
         definition = stored_definition()
         graph = cp06_fixture("task-graph.v2.json")
@@ -261,8 +280,8 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
         ] = "unsectioned"
         definition.configuration["ClearPipe"].value = json.dumps(graph)
 
-        resource_check, queue_check = self._authorized_definition_checks()
-        with resource_check, queue_check:
+        resource_check, queue_check, key_ring = self._authorized_definition_checks()
+        with resource_check, queue_check, key_ring:
             response = clearpipe._definition(definition, "company-a", project_name="Pipelines")
 
         self.assertFalse(response["capabilities"]["compilation"])
@@ -285,6 +304,10 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
                     clearpipe, "_resource_checker", return_value=lambda *_: resource_allowed
                 ), patch.object(
                     clearpipe, "_queue_checker", return_value=lambda _: queue_allowed
+                ), patch.object(
+                    clearpipe,
+                    "_runtime_provenance_key_ring",
+                    return_value=("test-current", "test-secret", {"test-current": "test-secret"}),
                 ):
                     response = clearpipe._definition(
                         definition,

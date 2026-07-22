@@ -244,6 +244,10 @@ class ServiceFailurePolicyTests(unittest.TestCase):
 
 class V2StartTests(unittest.TestCase):
     @staticmethod
+    def _provenance_key_ring():
+        return "test-current", "test-secret", {"test-current": "test-secret"}
+
+    @staticmethod
     def _definition(graph, revision=7):
         return SimpleNamespace(
             id="definition",
@@ -286,7 +290,11 @@ class V2StartTests(unittest.TestCase):
             clearpipe.task_bll, "clone_task", return_value=(run, None)
         ) as clone, patch.object(
             clearpipe, "enqueue_task", return_value=(True, None)
-        ) as enqueue:
+        ) as enqueue, patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
+        ):
             clearpipe.start(call, "company-a", request)
 
         self.assertEqual(call.result.data, {"task": "run-1", "enqueued": True})
@@ -309,7 +317,7 @@ class V2StartTests(unittest.TestCase):
         self.assertEqual(run_runtime["clearpipe_revision"], 7)
         self.assertEqual(run_runtime["_pipeline_hash"], runtime["graph_digest"])
         provenance = run_runtime["clearpipe_runtime_provenance"]
-        key_id, signing_secret, _ = clearpipe._runtime_provenance_key_ring()
+        key_id, signing_secret, _ = self._provenance_key_ring()
         self.assertEqual(
             {
                 key: value
@@ -384,6 +392,10 @@ class V2StartTests(unittest.TestCase):
             clearpipe.task_bll, "clone_task", return_value=(run, None)
         ) as clone, patch.object(
             clearpipe, "enqueue_task", return_value=(True, None)
+        ), patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
         ):
             clearpipe.start(call, "company-a", request)
 
@@ -443,6 +455,38 @@ class V2StartTests(unittest.TestCase):
 
         clone.assert_not_called()
         self.assertIsNone(call.result.data)
+
+    def test_start_requires_a_dedicated_provenance_signing_key_before_clone(self):
+        definition = self._definition(
+            json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        )
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+        )
+        clone = Mock()
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_resource_checker", return_value=lambda *_: True
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
+        ), patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=(None, None, {}),
+        ), patch.object(clearpipe.task_bll, "clone_task", clone):
+            with self.assertRaises(errors.bad_request.ValidationError) as error:
+                clearpipe.start(call, "company-a", request)
+
+        clone.assert_not_called()
+        self.assertIn("provenance signing key", str(error.exception).lower())
 
     def test_start_rejects_stale_v2_revision_before_creating_a_clone(self):
         definition = SimpleNamespace(id="definition", system_tags=[])

@@ -195,6 +195,7 @@ describe('ClearpipeApiService', () => {
             result: 'success',
             log_task_id: 'child-1',
             artifacts: [{id: 'result', name: 'result', direction: 'output', uri: 'https://example.invalid?token=token-value'}],
+            artifacts_truncated: true,
             output_error: 'token-value',
             source: 'must-not-be-retained',
           }],
@@ -251,6 +252,7 @@ describe('ClearpipeApiService', () => {
           task_id: 'child-1',
           record_status: 'available',
           result: 'success',
+          artifacts_truncated: true,
         })],
       }),
     }));

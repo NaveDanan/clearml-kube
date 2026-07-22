@@ -90,6 +90,7 @@ CLEARPIPE_LEGACY_PROVENANCE_VERSION = 1
 CLEARPIPE_LEGACY_PROVENANCE_KEY_ID = "legacy-auth-token-v1"
 MAX_RUNTIME_SNAPSHOT_PAGE_SIZE = 100
 MAX_RUNTIME_SNAPSHOT_MODELS = 500
+MAX_RUNTIME_ARTIFACTS_PER_NODE = 5
 DESCRIPTOR_TASK_FIELDS = ("id", "name", "type", "status", "project", "last_update")
 SNAPSHOT_RUN_FIELDS = (
     "id",
@@ -332,36 +333,32 @@ def _runtime_configuration_digest(task: Task) -> Optional[str]:
     )
 
 
-def _runtime_provenance_key_ring() -> Optional[tuple]:
+def _runtime_provenance_key_ring() -> tuple:
     """
     Return the configured signing key plus explicitly active verification keys.
-    Deployments without the optional ClearPipe ring retain the v1 auth-secret
-    behavior long enough to migrate existing signed runs.
+    New v2 runs require a dedicated current ClearPipe key. The legacy auth
+    secret participates only when migration explicitly opts it into transition
+    verification.
     """
 
     configured = config.get("secure.clearpipe.provenance_keys", None)
     legacy_secret = config.get("secure.auth.token_secret", None)
-    if configured is None:
-        if not isinstance(legacy_secret, str) or not legacy_secret:
-            return None
-        return (
-            CLEARPIPE_LEGACY_PROVENANCE_KEY_ID,
-            legacy_secret,
-            {CLEARPIPE_LEGACY_PROVENANCE_KEY_ID: legacy_secret},
-        )
     if not isinstance(configured, Mapping):
-        return None
+        return None, None, {}
     current_key_id = configured.get("current_key_id")
     keys = configured.get("keys")
     transition_key_ids = configured.get("transition_key_ids", ())
+    allow_legacy = configured.get("allow_legacy_auth_token_verification", False)
     if (
         not isinstance(current_key_id, str)
         or not current_key_id
+        or current_key_id == CLEARPIPE_LEGACY_PROVENANCE_KEY_ID
         or not isinstance(keys, Mapping)
         or not isinstance(transition_key_ids, (list, tuple))
         or not all(isinstance(key_id, str) and key_id for key_id in transition_key_ids)
+        or type(allow_legacy) is not bool
     ):
-        return None
+        return None, None, {}
     active_key_ids = {current_key_id, *transition_key_ids}
     active_keys = {
         key_id: secret
@@ -369,17 +366,19 @@ def _runtime_provenance_key_ring() -> Optional[tuple]:
         if key_id in active_key_ids and isinstance(secret, str) and secret
     }
     if (
-        CLEARPIPE_LEGACY_PROVENANCE_KEY_ID in active_key_ids
+        allow_legacy
+        and CLEARPIPE_LEGACY_PROVENANCE_KEY_ID in active_key_ids
         and isinstance(legacy_secret, str)
         and legacy_secret
     ):
         active_keys.setdefault(CLEARPIPE_LEGACY_PROVENANCE_KEY_ID, legacy_secret)
     signing_secret = active_keys.get(current_key_id)
-    return (
-        (current_key_id, signing_secret, active_keys)
-        if isinstance(signing_secret, str) and signing_secret
-        else None
-    )
+    return current_key_id, signing_secret, active_keys
+
+
+def _runtime_provenance_signing_key() -> Optional[tuple]:
+    key_id, secret, _ = _runtime_provenance_key_ring()
+    return (key_id, secret) if isinstance(secret, str) and secret else None
 
 
 def _runtime_provenance_signature(payload: Mapping, secret: str) -> str:
@@ -398,12 +397,12 @@ def _runtime_provenance(
     runtime: ClearPipeRuntimeConfiguration,
     runtime_configuration_value: str,
 ) -> dict:
-    key_ring = _runtime_provenance_key_ring()
-    if key_ring is None:
+    signing_key = _runtime_provenance_signing_key()
+    if signing_key is None:
         raise errors.server_error.InternalError(
             "ClearPipe runtime provenance signing is unavailable"
         )
-    key_id, signing_secret, _ = key_ring
+    key_id, signing_secret = signing_key
     payload = {
         "schema_version": CLEARPIPE_RUNTIME_PROVENANCE_VERSION,
         "key_id": key_id,
@@ -449,10 +448,9 @@ def _verified_runtime_provenance(
         if schema_version == CLEARPIPE_LEGACY_PROVENANCE_VERSION
         else None
     )
-    key_ring = _runtime_provenance_key_ring()
     verification_secret = (
-        key_ring[2].get(key_id)
-        if key_ring is not None and isinstance(key_id, str)
+        _runtime_provenance_key_ring()[2].get(key_id)
+        if isinstance(key_id, str)
         else None
     )
     if (
@@ -645,7 +643,12 @@ def _definition(
         and stored_runtime.source_map == runtime_configuration.source_map
     ):
         runtime_configuration = stored_runtime
-    v2_execution_available = bool(generated) and can_edit and not archived
+    v2_execution_available = (
+        bool(generated)
+        and can_edit
+        and not archived
+        and _runtime_provenance_signing_key() is not None
+    )
     legacy_compilation_available = schema_version != 2
     representation = (
         "clearpipe_graph_v2"
@@ -906,8 +909,9 @@ def _safe_models(task: Task, visible_models: Mapping[str, Model]) -> dict:
 def _safe_node_snapshot(
     task: Task,
     visible_models: Mapping[str, Model],
-    artifacts_by_task_id: Mapping[str, list],
+    artifacts_by_task_id: Mapping[str, Mapping],
 ) -> dict:
+    artifact_page = artifacts_by_task_id.get(task.id, {})
     result = {
         "task_id": task.id,
         "status": task.status,
@@ -915,7 +919,8 @@ def _safe_node_snapshot(
         # This is an authorized task-detail/log handoff identifier, not log
         # content or a URL.
         "log_task_id": task.id,
-        "artifacts": artifacts_by_task_id.get(task.id, []),
+        "artifacts": artifact_page.get("artifacts", []),
+        "artifacts_truncated": bool(artifact_page.get("truncated")),
         "models": _safe_models(task, visible_models),
     }
     for name, value in (
@@ -960,7 +965,7 @@ def _visible_run_children(
 
 def _visible_run_artifacts(
     company_id: str, run_id: str, task_ids
-) -> Mapping[str, list]:
+) -> Mapping[str, Mapping]:
     task_ids = tuple(dict.fromkeys(task_ids))
     if not task_ids:
         return {}
@@ -974,35 +979,53 @@ def _visible_run_artifacts(
         },
         {
             "$project": {
-                "items": {
+                "artifact_items": {
                     "$objectToArray": {"$ifNull": ["$execution.artifacts", {}]}
                 }
             }
         },
-        {"$unwind": "$items"},
         {
             "$project": {
                 "id": "$_id",
-                "artifact": {
-                    "id": {"$ifNull": ["$items.v.key", "$items.k"]},
-                    "type": "$items.v.type",
-                    "direction": "$items.v.mode",
+                "truncated": {
+                    "$gt": [
+                        {"$size": "$artifact_items"},
+                        MAX_RUNTIME_ARTIFACTS_PER_NODE,
+                    ]
+                },
+                "artifacts": {
+                    "$map": {
+                        "input": {
+                            "$slice": [
+                                "$artifact_items",
+                                MAX_RUNTIME_ARTIFACTS_PER_NODE,
+                            ]
+                        },
+                        "as": "item",
+                        "in": {
+                            "id": {"$ifNull": ["$$item.v.key", "$$item.k"]},
+                            "type": "$$item.v.type",
+                            "direction": "$$item.v.mode",
+                        },
+                    }
                 },
             }
         },
-        {"$group": {"_id": "$id", "artifacts": {"$push": "$artifact"}}},
     ]
     result = {}
     for item in Task.aggregate(pipeline):
         task_id = item.get("_id")
         if not isinstance(task_id, str):
             continue
-        result[task_id] = [
-            descriptor
-            for artifact in item.get("artifacts", ())
-            if isinstance(artifact, Mapping)
-            if (descriptor := _safe_artifact_descriptor(artifact)) is not None
-        ]
+        result[task_id] = {
+            "artifacts": [
+                descriptor
+                for artifact in item.get("artifacts", ())
+                if isinstance(artifact, Mapping)
+                if (descriptor := _safe_artifact_descriptor(artifact)) is not None
+            ],
+            "truncated": bool(item.get("truncated")),
+        }
     return result
 
 
@@ -1476,6 +1499,17 @@ def start(call: APICall, company_id: str, request: StartRequest):
             "ClearPipe graph cannot be executed",
             issues=[issue.to_dict() for issue in result.issues],
         )
+    if v2_graph and _runtime_provenance_signing_key() is None:
+        raise errors.bad_request.ValidationError(
+            "ClearPipe graph v2 execution requires a configured dedicated provenance signing key",
+            issues=[
+                {
+                    "code": "provenance_signing_unavailable",
+                    "path": "runtime",
+                    "message": "Configure secure.clearpipe.provenance_keys.current_key_id and its dedicated key before starting a v2 run.",
+                }
+            ],
+        )
     # Resolve and authorize the controller queue before creating a run so an
     # invalid queue cannot leave an orphaned clone.
     if request.queue:
@@ -1612,11 +1646,13 @@ def execution_snapshot(
     if run is None:
         call.result.data = {"status": "unavailable"}
         return
+    node_offset = getattr(request, "node_offset", None)
+    node_limit = getattr(request, "node_limit", None)
     snapshot = _execution_snapshot(
         run,
         company_id,
-        getattr(request, "node_offset", None) or 0,
-        getattr(request, "node_limit", None) or MAX_RUNTIME_SNAPSHOT_PAGE_SIZE,
+        0 if node_offset is None else node_offset,
+        MAX_RUNTIME_SNAPSHOT_PAGE_SIZE if node_limit is None else node_limit,
     )
     if snapshot is None:
         call.result.data = {"status": "unavailable"}

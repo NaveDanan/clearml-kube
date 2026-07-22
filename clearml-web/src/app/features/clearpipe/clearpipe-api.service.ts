@@ -153,6 +153,7 @@ export interface ClearpipeExecutionNodeSnapshot {
   result?: 'success' | 'failure';
   log_task_id?: string;
   artifacts?: ClearpipeTaskArtifactDescriptor[];
+  artifacts_truncated?: boolean;
   models?: {
     input?: {id: string; name?: string}[];
     output?: {id: string; name?: string}[];
@@ -593,6 +594,7 @@ export class ClearpipeApiService {
       ...(result ? {result} : {}),
       ...(this.text(node?.log_task_id) ? {log_task_id: this.text(node?.log_task_id)!} : {}),
       ...(this.array(node?.artifacts).length ? {artifacts: this.array(node?.artifacts).flatMap(item => this.safeArtifactDescriptor(item))} : {}),
+      ...(node?.artifacts_truncated === true ? {artifacts_truncated: true} : {}),
       ...(models ? {models} : {}),
       ...(this.array(node?.datasets).length ? {datasets: this.array(node?.datasets).flatMap(item => this.safeDataset(item))} : {}),
     }];
