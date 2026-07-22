@@ -214,6 +214,8 @@ class TaskBLL:
         new_project_name: str = None,
         hyperparams_overrides: Optional[dict] = None,
         configuration_overrides: Optional[dict] = None,
+        new_task_id: Optional[str] = None,
+        runtime: Optional[dict] = None,
     ) -> Tuple[Task, dict]:
         validate_tags(tags, system_tags)
         task: Task = cls.get_by_id(
@@ -332,7 +334,7 @@ class TaskBLL:
             else task.id
         )
         new_task = Task(
-            id=create_id(),
+            id=new_task_id if new_task_id is not None else create_id(),
             user=user_id,
             company=company_id,
             created=now,
@@ -353,6 +355,7 @@ class TaskBLL:
             execution=ensure_int_labels(execution_dict),
             configuration=params_dict.get("configuration") or task.configuration,
             hyperparams=params_dict.get("hyperparams") or task.hyperparams,
+            runtime=runtime if runtime is not None else {},
         )
         cls.validate(
             new_task,

@@ -11,6 +11,7 @@
     "src/app/features/clearpipe/clearpipe-api.service.spec.ts",
     "src/app/features/clearpipe/platform/clearpipe-adapter.service.spec.ts",
     "src/app/features/clearpipe/resources/clearpipe-resource-query.service.spec.ts",
+    "src/app/features/clearpipe/editor/datasets/clearpipe-dataset-browser.component.spec.ts",
     "src/app/features/clearpipe/platform/clearpipe-route-integration.spec.ts",
     "src/**/*.d.ts"
   ]

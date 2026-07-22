@@ -36,6 +36,13 @@ assert (
         "properties"
     ]
 )
+assert "base_task_eligible" in service.definitions["task_descriptor"]["properties"]
+assert (
+    "base_task_eligible"
+    not in service.definitions["task_descriptor"]["properties"]["identity"][
+        "properties"
+    ]
+)
 assert service.endpoint_groups["task_descriptor"].get_for_version(
     PartialVersion("2.35")
 ).response_schema["properties"]["status"]["enum"] == [

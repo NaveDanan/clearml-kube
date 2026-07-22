@@ -191,6 +191,40 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
         with patch.object(clearpipe, "Task", task_model):
             self.assertFalse(clearpipe._resource_checker("company-a")("task", "child-task"))
 
+    def test_name_task_lookup_rejects_the_same_ineligible_task_forms_as_id_lookup(self):
+        project = SimpleNamespace(id="project-a")
+        for task in (
+            SimpleNamespace(parent="controller-run", type="training", runtime={}),
+            SimpleNamespace(parent=None, type=TaskType.controller, runtime={}),
+            SimpleNamespace(
+                parent=None,
+                type="training",
+                runtime={clearpipe.CLEARPIPE_RUNTIME_PROVENANCE: {"signed": "run"}},
+            ),
+        ):
+            with self.subTest(task=task):
+                project_query = Mock()
+                project_query.only.return_value.first.return_value = project
+                task_query = Mock()
+                task_query.only.return_value.first.return_value = task
+                project_model = Mock()
+                project_model.objects.return_value = project_query
+                task_model = Mock()
+                task_model.objects.return_value = task_query
+                with patch.object(clearpipe, "Project", project_model), patch.object(
+                    clearpipe, "Task", task_model
+                ):
+                    self.assertFalse(
+                        clearpipe._resource_checker("company-a")(
+                            "task",
+                            "display-only-id",
+                            (("name", "Base task"), ("project", "Project A")),
+                        )
+                    )
+                task_query.only.assert_called_once_with(
+                    "id", "parent", "type", "runtime"
+                )
+
     def test_task_descriptor_uses_one_non_enumerating_unavailable_result(self):
         for task_id in ("missing-task", "private-task"):
             with self.subTest(task_id=task_id):

@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from mongoengine.errors import NotUniqueError
+
 from apiserver.apierrors import errors
 from apiserver.apimodels.clearpipe import GetAllRequest
 from apiserver.services import clearpipe
@@ -262,6 +264,15 @@ class V2StartTests(unittest.TestCase):
             configuration={"ClearPipe": SimpleNamespace(value=json.dumps(graph))},
         )
 
+    @staticmethod
+    def _reservation(run_id="run-1", state="reserved", queue_id="default"):
+        return {
+            "key_hash": "a" * 64,
+            "run_id": run_id,
+            "queue_id": queue_id,
+            "state": state,
+        }
+
     def test_start_clones_and_enqueues_compiled_controller_with_persisted_runtime_mapping(self):
         graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
         definition = self._definition(graph)
@@ -297,7 +308,15 @@ class V2StartTests(unittest.TestCase):
             "_runtime_provenance_key_ring",
             return_value=self._provenance_key_ring(),
         ), patch.object(
+            clearpipe, "_idempotency_reservation", return_value=None
+        ), patch.object(
+            clearpipe, "_reserve_idempotency", return_value=self._reservation()
+        ), patch.object(
             clearpipe, "_idempotent_run", return_value=None
+        ), patch.object(
+            clearpipe, "_update_idempotency_reservation"
+        ), patch.object(
+            clearpipe, "_commit_idempotent_run", side_effect=lambda _, __, record, enqueued: record
         ):
             clearpipe.start(call, "company-a", request)
 
@@ -317,7 +336,7 @@ class V2StartTests(unittest.TestCase):
         self.assertIn("pipe.add_function_step", script)
         self.assertNotIn("DagRunner", script)
         self.assertTrue(script.endswith('if __name__ == "__main__":\n    pipe.start()\n'))
-        run_runtime = runtime_update.update_one.call_args.kwargs["set__runtime"]
+        run_runtime = clone_kwargs["runtime"]
         self.assertEqual(run_runtime["clearpipe_revision"], 7)
         self.assertEqual(run_runtime["_pipeline_hash"], runtime["graph_digest"])
         provenance = run_runtime["clearpipe_runtime_provenance"]
@@ -348,6 +367,8 @@ class V2StartTests(unittest.TestCase):
                 signing_secret,
             ),
         )
+        self.assertEqual(clone_kwargs["new_task_id"], "run-1")
+        self.assertNotIn(request.idempotency_key, json.dumps(run_runtime))
         enqueue.assert_called_once_with(
             task_id="run-1",
             company_id="company-a",
@@ -402,7 +423,15 @@ class V2StartTests(unittest.TestCase):
             "_runtime_provenance_key_ring",
             return_value=self._provenance_key_ring(),
         ), patch.object(
+            clearpipe, "_idempotency_reservation", return_value=None
+        ), patch.object(
+            clearpipe, "_reserve_idempotency", return_value=self._reservation()
+        ), patch.object(
             clearpipe, "_idempotent_run", return_value=None
+        ), patch.object(
+            clearpipe, "_update_idempotency_reservation"
+        ), patch.object(
+            clearpipe, "_commit_idempotent_run", side_effect=lambda _, __, record, enqueued: record
         ):
             clearpipe.start(call, "company-a", request)
 
@@ -454,14 +483,18 @@ class V2StartTests(unittest.TestCase):
             idempotency_key="00000000-0000-4000-8000-000000000004",
         )
         clone = Mock()
+        reserve = Mock()
 
         with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
             clearpipe.task_bll, "clone_task", clone
+        ), patch.object(
+            clearpipe, "_reserve_idempotency", reserve
         ):
             with self.assertRaises(errors.bad_request.ValidationError):
                 clearpipe.start(call, "company-a", request)
 
         clone.assert_not_called()
+        reserve.assert_not_called()
         self.assertIsNone(call.result.data)
 
     def test_start_requires_a_dedicated_provenance_signing_key_before_clone(self):
@@ -497,6 +530,222 @@ class V2StartTests(unittest.TestCase):
         clone.assert_not_called()
         self.assertIn("provenance signing key", str(error.exception).lower())
 
+    def test_idempotency_reservation_is_atomic_opaque_and_request_bound(self):
+        key = "00000000-0000-4000-8000-000000000006"
+        fingerprint = "b" * 64
+        stored = {}
+
+        def add_value(setting_key, value):
+            if setting_key in stored:
+                return False
+            stored[setting_key] = value
+            return True
+
+        with patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe.Settings, "add_value", side_effect=add_value
+        ) as add, patch.object(
+            clearpipe.Settings, "get_by_key", side_effect=stored.get
+        ) as get, patch.object(
+            clearpipe, "create_id", side_effect=["reserved-run", "unused-run", "unused-run-2"]
+        ):
+            first = clearpipe._reserve_idempotency(
+                "company-a", "user-a", key, "definition", 7, fingerprint, "queue-a"
+            )
+            second = clearpipe._reserve_idempotency(
+                "company-a", "user-a", key, "definition", 7, fingerprint, "queue-b"
+            )
+            with self.assertRaises(errors.bad_request.ValidationError):
+                clearpipe._reserve_idempotency(
+                    "company-a", "user-a", key, "definition", 7, "c" * 64, "queue-a"
+                )
+
+        self.assertEqual(first, second)
+        self.assertEqual(first["run_id"], "reserved-run")
+        self.assertEqual(first["queue_id"], "queue-a")
+        self.assertEqual(add.call_count, 3)
+        get.assert_called()
+        persisted = json.dumps(next(iter(stored.values())))
+        self.assertNotIn(key, persisted)
+        self.assertNotIn("parameters", persisted)
+        self.assertNotIn("key\"", persisted)
+        self.assertEqual(first["key_hash"], clearpipe._idempotency_slot("company-a", "user-a", key))
+
+    def test_start_recovers_a_pending_reserved_run_by_enqueuing_it_once(self):
+        graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        definition = self._definition(graph)
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000007",
+        )
+        reservation = self._reservation("reserved-run")
+        pending = {
+            **reservation,
+            "state": "pending",
+        }
+        run = SimpleNamespace(id="reserved-run", status=clearpipe.TaskStatus.created)
+        clone = Mock()
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_resource_checker", return_value=lambda *_: True
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
+        ), patch.object(
+            clearpipe.queue_bll, "get_default", return_value=SimpleNamespace(id="default")
+        ), patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe, "_idempotency_reservation", return_value=None
+        ), patch.object(
+            clearpipe, "_reserve_idempotency", return_value=reservation
+        ), patch.object(
+            clearpipe, "_idempotent_run", return_value=(run, pending)
+        ), patch.object(
+            clearpipe.task_bll, "clone_task", clone
+        ), patch.object(
+            clearpipe, "enqueue_task", return_value=(True, None)
+        ) as enqueue, patch.object(
+            clearpipe, "_commit_idempotent_run", return_value={**pending, "state": "committed", "enqueued": True}
+        ), patch.object(
+            clearpipe, "_update_idempotency_reservation"
+        ):
+            clearpipe.start(call, "company-a", request)
+
+        self.assertEqual(call.result.data, {"task": "reserved-run", "enqueued": True})
+        clone.assert_not_called()
+        enqueue.assert_called_once()
+
+    def test_retry_resumes_pending_default_queue_from_durable_reservation(self):
+        graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        definition = self._definition(graph)
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000008",
+        )
+        reservation = self._reservation(
+            "reserved-run", state="pending", queue_id="original-default"
+        )
+        pending = {**reservation, "state": "pending"}
+        run = SimpleNamespace(id="reserved-run", status=clearpipe.TaskStatus.created)
+        original_queue = SimpleNamespace(id="original-default")
+        replacement_default = SimpleNamespace(id="replacement-default")
+        clone = Mock()
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_resource_checker", return_value=lambda *_: True
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
+        ), patch.object(
+            clearpipe, "_idempotency_reservation", return_value=reservation
+        ), patch.object(
+            clearpipe.queue_bll, "get_by_id", return_value=original_queue
+        ) as get_queue, patch.object(
+            clearpipe.queue_bll, "get_default", return_value=replacement_default
+        ) as get_default, patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe, "_idempotent_run", return_value=(run, pending)
+        ), patch.object(
+            clearpipe.task_bll, "clone_task", clone
+        ), patch.object(
+            clearpipe, "enqueue_task", return_value=(True, None)
+        ) as enqueue, patch.object(
+            clearpipe,
+            "_commit_idempotent_run",
+            return_value={**pending, "state": "committed", "enqueued": True},
+        ), patch.object(
+            clearpipe, "_update_idempotency_reservation"
+        ):
+            clearpipe.start(call, "company-a", request)
+
+        self.assertEqual(call.result.data, {"task": "reserved-run", "enqueued": True})
+        clone.assert_not_called()
+        get_queue.assert_called_once_with(
+            "company-a", "original-default", only=("id",)
+        )
+        get_default.assert_not_called()
+        self.assertEqual(enqueue.call_args.kwargs["queue_id"], "original-default")
+
+    def test_concurrent_clone_collision_recovers_the_single_reserved_run(self):
+        graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        definition = self._definition(graph)
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000009",
+        )
+        reservation = self._reservation("reserved-run")
+        pending = {**reservation, "state": "pending"}
+        concurrent_run = SimpleNamespace(
+            id="reserved-run", status=clearpipe.TaskStatus.created
+        )
+        clone = Mock(side_effect=NotUniqueError("duplicate task ID"))
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_resource_checker", return_value=lambda *_: True
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
+        ), patch.object(
+            clearpipe, "_idempotency_reservation", return_value=None
+        ), patch.object(
+            clearpipe, "_reserve_idempotency", return_value=reservation
+        ), patch.object(
+            clearpipe.queue_bll, "get_default", return_value=SimpleNamespace(id="default")
+        ), patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe,
+            "_idempotent_run",
+            side_effect=[None, (concurrent_run, pending)],
+        ), patch.object(
+            clearpipe.task_bll, "clone_task", clone
+        ), patch.object(
+            clearpipe, "enqueue_task", return_value=(True, None)
+        ) as enqueue, patch.object(
+            clearpipe,
+            "_commit_idempotent_run",
+            return_value={**pending, "state": "committed", "enqueued": True},
+        ), patch.object(
+            clearpipe, "_update_idempotency_reservation"
+        ):
+            clearpipe.start(call, "company-a", request)
+
+        self.assertEqual(call.result.data, {"task": "reserved-run", "enqueued": True})
+        clone.assert_called_once()
+        enqueue.assert_called_once()
+
     def test_start_reuses_committed_idempotent_run_without_cloning(self):
         definition = self._definition(
             json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
@@ -527,9 +776,15 @@ class V2StartTests(unittest.TestCase):
             "_runtime_provenance_key_ring",
             return_value=self._provenance_key_ring(),
         ), patch.object(
+            clearpipe, "_idempotency_reservation", return_value=None
+        ), patch.object(
+            clearpipe,
+            "_reserve_idempotency",
+            return_value=self._reservation("committed-run", state="committed"),
+        ), patch.object(
             clearpipe,
             "_idempotent_run",
-            return_value=(existing, {"enqueued": True}),
+            return_value=(existing, {"state": "committed", "enqueued": True}),
         ) as idempotent, patch.object(
             clearpipe.task_bll, "clone_task", clone
         ):
@@ -568,8 +823,10 @@ class V2StartTests(unittest.TestCase):
             "_runtime_provenance_key_ring",
             return_value=self._provenance_key_ring(),
         ), patch.object(
+            clearpipe, "_idempotency_reservation", return_value=None
+        ), patch.object(
             clearpipe,
-            "_idempotent_run",
+            "_reserve_idempotency",
             side_effect=errors.bad_request.ValidationError(
                 "ClearPipe idempotency key is already bound to a different request"
             ),

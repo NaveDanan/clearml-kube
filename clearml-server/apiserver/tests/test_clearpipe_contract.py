@@ -154,6 +154,11 @@ class ClearPipeContractSchemaTests(unittest.TestCase):
                 "items"
             ]["properties"],
         )
+        descriptor = service.definitions["task_descriptor"]
+        self.assertIn("base_task_eligible", descriptor["properties"])
+        self.assertNotIn(
+            "base_task_eligible", descriptor["properties"]["identity"]["properties"]
+        )
         self.assertEqual(
             service.endpoint_groups["task_descriptor"]
             .get_for_version(PartialVersion("2.35"))

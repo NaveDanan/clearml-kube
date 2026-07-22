@@ -78,7 +78,7 @@ describe('ClearpipeDatasetBrowserComponent', () => {
     };
     controller.state.set({
       kind: 'dataset', status: 'ready', filter: {pageSize: 50}, items: [metadata],
-      total: 1, page: 0, pageSize: 50, hasMore: false,
+      total: 1, page: 0, pageSize: 50, hasMore: false, complete: true,
     });
     fixture.detectChanges();
 
