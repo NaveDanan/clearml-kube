@@ -4,6 +4,7 @@ import {ClearpipeApiService} from './clearpipe-api.service';
 import {SmApiRequestsService} from '~/business-logic/api-services/api-requests.service';
 import {HTTP} from '~/app.constants';
 import {emptyClearpipeDefinition} from './clearpipe.models';
+import {GraphV2} from './domain/graph-v2.types';
 
 describe('ClearpipeApiService', () => {
   let api: ClearpipeApiService;
@@ -46,5 +47,68 @@ describe('ClearpipeApiService', () => {
     expect(requests.post.calls.argsFor(0)[1]).toEqual({task: 'p1', revision: 4});
     expect(requests.post.calls.argsFor(1)[1]).toEqual({task: 'p1', revision: 5});
     expect(requests.post.calls.argsFor(2)[1]).toEqual({script: 'print(1)', filename: 'train.py'});
+  });
+
+  it('covers each typed CP-07 operation with the v2.35 contract envelopes', () => {
+    const graph: GraphV2 = {
+      schema_version: 2,
+      document: {name: 'Pipe', project: '.pipelines/Pipe', tags: []},
+      settings: {},
+      parameters: [],
+      resources: [],
+      outputs: [],
+      nodes: [],
+      bindings: [],
+      visual: {viewport: {x: 0, y: 0}, zoom: 1},
+    };
+    const responseDefinition = {
+      id: 'p1',
+      name: 'Pipe',
+      revision: 2,
+      graph,
+      representation: 'clearpipe_graph_v2',
+      capabilities: {view: true, edit: true, run: true},
+    };
+    requests.post.and.returnValues(
+      of({definitions: [responseDefinition], total: 1}),
+      of({id: 'p1', revision: 1, definition: responseDefinition}),
+      of({updated: 1, revision: 3, definition: responseDefinition}),
+      of({valid: true, issues: [], pipeline: {steps: []}}),
+      of({task: 'run-1', enqueued: true, queue_watched: false}),
+      of({updated: 1, revision: 4}),
+      of({deleted: true}),
+      of({valid: true, parameters: [], environment: ['python=3.11'], imports: ['clearml'], line_count: 1}),
+    );
+
+    api.listDefinitions({page: -1, page_size: 1000, tags: ['clearpipe']}).subscribe(result => {
+      expect(result.total).toBe(1);
+      expect(result.definitions[0].representation).toBe('clearpipe_graph_v2');
+    });
+    api.createDefinition({name: 'Pipe', graph}).subscribe(result => expect(result.definition.task_id).toBe('p1'));
+    api.updateDefinition({task: 'p1', revision: 2, name: 'Pipe', graph}).subscribe();
+    api.validateDefinition({task: 'p1'}).subscribe(result => expect(result.pipeline).toEqual({steps: []}));
+    api.startDefinition({task: 'p1', revision: 3, node_queues: {node: 'queue'}, parameters: {epochs: 5}}).subscribe(result => {
+      expect(result).toEqual({run_task_id: 'run-1', enqueued: true, queue_watched: false});
+    });
+    api.archiveDefinition('p1', 3).subscribe(result => expect(result.revision).toBe(4));
+    api.deleteDefinition('p1', 4, true).subscribe(result => expect(result.deleted).toBeTrue());
+    api.parseScriptDefinition('print(1)', 'pipe.py').subscribe(result => expect(result.environment).toEqual(['python=3.11']));
+
+    expect(requests.post.calls.argsFor(0)).toEqual([
+      '/service/1/api/v2.35/clearpipe.get_all',
+      jasmine.objectContaining({page: 0, page_size: 500, tags: ['clearpipe']}),
+    ]);
+    expect(requests.post.calls.argsFor(1)[0]).toBe('/service/1/api/v2.35/clearpipe.create');
+    expect(requests.post.calls.argsFor(2)[1]).toEqual(jasmine.objectContaining({task: 'p1', revision: 2, graph}));
+    expect(requests.post.calls.argsFor(3)[1]).toEqual({task: 'p1'});
+    expect(requests.post.calls.argsFor(4)[1]).toEqual(jasmine.objectContaining({
+      task: 'p1',
+      revision: 3,
+      node_queues: {node: 'queue'},
+      parameters: {epochs: 5},
+    }));
+    expect(requests.post.calls.argsFor(5)[1]).toEqual({task: 'p1', revision: 3});
+    expect(requests.post.calls.argsFor(6)[1]).toEqual({task: 'p1', revision: 4, force: true});
+    expect(requests.post.calls.argsFor(7)[1]).toEqual({script: 'print(1)', filename: 'pipe.py'});
   });
 });

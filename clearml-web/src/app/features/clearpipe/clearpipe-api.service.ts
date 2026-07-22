@@ -11,6 +11,98 @@ import {
   normalizeDefinition
 } from './clearpipe.models';
 import {map} from 'rxjs/operators';
+import {GraphV2} from './domain/graph-v2.types';
+
+export type ClearpipeRepresentation =
+  | 'clearpipe_graph_v2'
+  | 'legacy_clearpipe_graph'
+  | 'unsupported_clearpipe_graph';
+
+export interface ClearpipeCapabilities {
+  view: boolean;
+  edit: boolean;
+  save_as: boolean;
+  version: boolean;
+  run: boolean;
+  compilation: boolean;
+  execution: boolean;
+  import: boolean;
+  export: boolean;
+  source: boolean;
+  archive: boolean;
+  delete: boolean;
+}
+
+export interface ClearpipeDefinitionResponse {
+  definition: ClearpipeDefinition;
+  graph: unknown;
+  representation?: ClearpipeRepresentation;
+  capabilities?: Partial<ClearpipeCapabilities>;
+}
+
+export interface ClearpipeListRequest {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  project?: string[];
+  tags?: string[];
+  include_archived?: boolean;
+  allow_public?: boolean;
+}
+
+export interface ClearpipeListResponse {
+  definitions: ClearpipeDefinitionResponse[];
+  total: number;
+}
+
+export interface ClearpipeCreateRequest {
+  name: string;
+  graph: GraphV2;
+  description?: string;
+  tags?: string[];
+  public?: boolean;
+}
+
+export interface ClearpipeUpdateRequest extends ClearpipeCreateRequest {
+  task: string;
+  revision: number;
+}
+
+export type ClearpipeValidateRequest = {task: string} | {graph: GraphV2};
+
+export interface ClearpipeValidationResponse {
+  valid: boolean;
+  issues: ClearpipeValidationResult['errors'];
+  pipeline?: unknown;
+}
+
+export interface ClearpipeStartRequest {
+  task: string;
+  revision?: number;
+  queue?: string;
+  parameters?: Record<string, unknown>;
+  node_queues?: Record<string, string>;
+  verify_watched_queue?: boolean;
+}
+
+export interface ClearpipeStartResponse {
+  run_task_id: string;
+  enqueued: boolean;
+  queue_watched?: boolean;
+}
+
+export interface ClearpipeArchiveResponse {
+  updated: number;
+  revision: number;
+}
+
+export interface ClearpipeParseScriptResponse {
+  valid: boolean;
+  parameters: unknown[];
+  environment: string[];
+  imports: string[];
+  line_count: number;
+}
 
 @Injectable({providedIn: 'root'})
 export class ClearpipeApiService {
@@ -21,21 +113,12 @@ export class ClearpipeApiService {
   }
 
   getAll(search = '', archived = false): Observable<ClearpipeDefinition[]> {
-    return this.requests.post<any>(this.endpoint('get_all'), {
-      search,
-      include_archived: archived,
-      page: 0,
-      page_size: 500,
-      order_by: ['-last_update']
-    }).pipe(map(response => {
-      const items = response?.definitions ?? response?.pipelines ?? response?.tasks ?? response ?? [];
-      return (Array.isArray(items) ? items : []).map(normalizeDefinition);
-    }));
+    return this.listDefinitions({search, include_archived: archived, page: 0, page_size: 500})
+      .pipe(map(response => response.definitions.map(item => item.definition)));
   }
 
   getById(taskId: string): Observable<ClearpipeDefinition> {
-    return this.requests.post<any>(this.endpoint('get_by_id'), {task: taskId})
-      .pipe(map(normalizeDefinition));
+    return this.loadDefinition(taskId).pipe(map(response => response.definition));
   }
 
   create(definition: ClearpipeDefinition): Observable<ClearpipeDefinition> {
@@ -85,8 +168,100 @@ export class ClearpipeApiService {
   }
 
   parseScript(script: string, filename?: string): Observable<{parameters: unknown[]}> {
-    return this.requests.post<any>(this.endpoint('parse_script'), {script, filename})
-      .pipe(map(response => ({parameters: response?.parameters ?? response?.detected_parameters ?? []})));
+    return this.parseScriptDefinition(script, filename).pipe(map(response => ({parameters: response.parameters})));
+  }
+
+  /**
+   * Typed CP-07 transport methods. The platform adapter is the only production
+   * consumer of these methods; the compatibility methods above remain for the
+   * pre-existing shell while its replacement is delivered independently.
+   */
+  listDefinitions(request: ClearpipeListRequest = {}): Observable<ClearpipeListResponse> {
+    const page = Math.max(0, request.page ?? 0);
+    const pageSize = Math.min(500, Math.max(1, request.page_size ?? 50));
+    return this.requests.post<any>(this.endpoint('get_all'), {
+      page,
+      page_size: pageSize,
+      search: request.search,
+      project: request.project,
+      tags: request.tags,
+      include_archived: request.include_archived ?? false,
+      allow_public: request.allow_public ?? true,
+    }).pipe(map(response => ({
+      definitions: (Array.isArray(response?.definitions) ? response.definitions : [])
+        .map(item => this.definitionResponse(item)),
+      total: Number(response?.total ?? 0),
+    })));
+  }
+
+  loadDefinition(task: string): Observable<ClearpipeDefinitionResponse> {
+    return this.requests.post<any>(this.endpoint('get_by_id'), {task})
+      .pipe(map(response => this.definitionResponse(response?.definition ?? response)));
+  }
+
+  createDefinition(request: ClearpipeCreateRequest): Observable<ClearpipeDefinitionResponse> {
+    return this.requests.post<any>(this.endpoint('create'), {
+      name: request.name,
+      description: request.description,
+      tags: request.tags,
+      public: request.public,
+      graph: request.graph,
+    }).pipe(map(response => this.definitionResponse(response)));
+  }
+
+  updateDefinition(request: ClearpipeUpdateRequest): Observable<ClearpipeDefinitionResponse> {
+    return this.requests.post<any>(this.endpoint('update'), {
+      task: request.task,
+      revision: request.revision,
+      name: request.name,
+      description: request.description,
+      tags: request.tags,
+      public: request.public,
+      graph: request.graph,
+    }).pipe(map(response => this.definitionResponse(response)));
+  }
+
+  validateDefinition(request: ClearpipeValidateRequest): Observable<ClearpipeValidationResponse> {
+    return this.requests.post<any>(this.endpoint('validate'), request).pipe(map(response => ({
+      valid: Boolean(response?.valid),
+      issues: Array.isArray(response?.issues) ? response.issues.map(this.normalizeIssue) : [],
+      pipeline: response?.pipeline,
+    })));
+  }
+
+  startDefinition(request: ClearpipeStartRequest): Observable<ClearpipeStartResponse> {
+    return this.requests.post<any>(this.endpoint('start'), {
+      task: request.task,
+      revision: request.revision,
+      queue: request.queue,
+      parameters: request.parameters ?? {},
+      node_queues: request.node_queues,
+      verify_watched_queue: request.verify_watched_queue ?? true,
+    }).pipe(map(response => ({
+      run_task_id: response?.task,
+      enqueued: Boolean(response?.enqueued),
+      queue_watched: response?.queue_watched,
+    })));
+  }
+
+  archiveDefinition(task: string, revision?: number): Observable<ClearpipeArchiveResponse> {
+    return this.requests.post<any>(this.endpoint('archive'), {task, revision})
+      .pipe(map(response => ({updated: Number(response?.updated ?? 0), revision: Number(response?.revision ?? revision ?? 0)})));
+  }
+
+  deleteDefinition(task: string, revision?: number, force = false): Observable<{deleted: boolean}> {
+    return this.requests.post<any>(this.endpoint('delete'), {task, revision, force})
+      .pipe(map(response => ({deleted: Boolean(response?.deleted)})));
+  }
+
+  parseScriptDefinition(script: string, filename?: string): Observable<ClearpipeParseScriptResponse> {
+    return this.requests.post<any>(this.endpoint('parse_script'), {script, filename}).pipe(map(response => ({
+      valid: Boolean(response?.valid),
+      parameters: Array.isArray(response?.parameters) ? response.parameters : [],
+      environment: Array.isArray(response?.environment) ? response.environment : [],
+      imports: Array.isArray(response?.imports) ? response.imports : [],
+      line_count: Number(response?.line_count ?? 0),
+    })));
   }
 
   getResources(type: ClearpipeResourceOption['type']): Observable<ClearpipeResourceOption[]> {
@@ -124,6 +299,7 @@ export class ClearpipeApiService {
 
   private graphPayload(definition: ClearpipeDefinition): Record<string, unknown> {
     return {
+      schema_version: definition.schema_version,
       nodes: definition.nodes,
       edges: definition.edges,
       viewport: definition.viewport,
@@ -133,5 +309,15 @@ export class ClearpipeApiService {
 
   private normalizeIssue(issue: unknown) {
     return typeof issue === 'string' ? {message: issue} : issue;
+  }
+
+  private definitionResponse(response: any): ClearpipeDefinitionResponse {
+    const definition = response?.definition ?? response ?? {};
+    return {
+      definition: normalizeDefinition(response),
+      graph: definition.graph ?? definition.configuration?.ClearPipe?.value ?? definition.configuration?.ClearPipe ?? {},
+      representation: definition.representation,
+      capabilities: definition.capabilities,
+    };
   }
 }
