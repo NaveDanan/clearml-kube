@@ -20,6 +20,8 @@ import {GraphBindingInput, GraphStoreService} from '../domain/graph-store.servic
 import {ClearpipeSemanticEdgeController, SemanticEdgeCommandResult} from './edges/clearpipe-semantic-edge.controller';
 import {compatiblePortBindingKinds, SemanticPortLocation} from './edges/clearpipe-port-compatibility';
 import {semanticCanvasEdges} from './edges/clearpipe-semantic-edge.renderer';
+import {ClearpipeAdvancedEditorOperationsService} from './advanced/clearpipe-advanced-editor-operations.service';
+import {canvasShortcut, isShortcutSuppressed, shortcutModifierLabel} from './advanced/shortcut-scope';
 import {
   canvasGraphPointFromMinimapClientPoint,
   canvasGraphTransform,
@@ -69,6 +71,7 @@ const DEFAULT_CANVAS_SIZE: CanvasSize = {width: 800, height: 600};
 export class ClearpipeCanvasComponent {
   protected readonly commands = inject(GraphStoreService);
   private readonly semanticEdgesController = inject(ClearpipeSemanticEdgeController);
+  protected readonly advanced = inject(ClearpipeAdvancedEditorOperationsService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly canvas = viewChild<ElementRef<HTMLDivElement>>('canvas');
   private readonly minimapContent = viewChild<ElementRef<HTMLSpanElement>>('minimapContent');
@@ -89,10 +92,13 @@ export class ClearpipeCanvasComponent {
   readonly profiler = input<CanvasProfiler | null>(null);
 
   protected readonly gridVisible = signal(true);
+  protected readonly snapEnabled = signal(false);
   protected readonly panning = signal(false);
   protected readonly graph = this.commands.graph;
   protected readonly nodes = this.commands.nodes;
   protected readonly selectedNodeId = this.commands.selectedNodeId;
+  protected readonly selectedNodeIds = this.advanced.selectedNodeIds;
+  protected readonly shortcutModifier = shortcutModifierLabel();
   protected readonly hoveredNodeId = this.commands.hoveredNodeId;
   protected readonly draggingNodeId = this.commands.draggingNodeId;
   protected readonly canEdit = computed(() => !this.readonly() && !this.commands.readOnly());
@@ -141,8 +147,9 @@ export class ClearpipeCanvasComponent {
    */
   placeNode(placement: CanvasNodePlacement, clientPoint: CanvasClientPoint): void {
     if (!this.canEdit()) return;
-    const result = placementResult(placement, this.clientPointToGraphPoint(clientPoint), this.commands);
-    if (result.ok && result.id) this.commands.selectNode(result.id);
+    const result = this.advanced.perform('add-node', () =>
+      placementResult(placement, this.clientPointToGraphPoint(clientPoint), this.commands));
+    if (result.ok && result.id) this.advanced.select(result.id);
     this.markProfile('placement');
   }
 
@@ -167,27 +174,29 @@ export class ClearpipeCanvasComponent {
 
   protected selectNode(event: Event, nodeId: string): void {
     event.stopPropagation();
-    this.commands.selectNode(nodeId);
+    const modifier = event as MouseEvent;
+    this.advanced.select(nodeId, modifier.ctrlKey || modifier.metaKey || modifier.shiftKey);
     this.focusCanvasAfterNodeSelection(event.target);
   }
 
   /** Public CP-24/25 handoff: extensions can issue semantic edge creation without visual adjacency. */
   createSemanticBinding(candidate: GraphBindingInput): SemanticEdgeCommandResult {
-    const result = this.semanticEdgesController.create(candidate);
+    const result = this.advanced.performSemantic('create-binding', () => this.semanticEdgesController.create(candidate));
     this.reportEdgeResult(result);
     return result;
   }
 
   /** Public CP-24/25 handoff: reconnects an existing canonical binding by its immutable ID. */
   reconnectSemanticBinding(bindingId: string, candidate: Omit<GraphBindingInput, 'id'>): SemanticEdgeCommandResult {
-    const result = this.semanticEdgesController.reconnect(bindingId, candidate);
+    const result = this.advanced.performSemantic('reconnect-binding', () =>
+      this.semanticEdgesController.reconnect(bindingId, candidate));
     this.reportEdgeResult(result);
     return result;
   }
 
   /** Public CP-24/25 handoff: removes only the selected canonical binding. */
   removeSemanticBinding(bindingId: string): SemanticEdgeCommandResult {
-    const result = this.semanticEdgesController.remove(bindingId);
+    const result = this.advanced.performSemantic('remove-binding', () => this.semanticEdgesController.remove(bindingId));
     if (result.eligible && this.selectedBindingId() === bindingId) this.selectedBindingId.set(null);
     this.reportEdgeResult(result);
     return result;
@@ -334,7 +343,15 @@ export class ClearpipeCanvasComponent {
     event.source.reset();
     this.commands.setDraggingNode(null);
     if (!this.canEdit()) return;
-    this.commands.setNodePosition(node.id, canvasPositionAfterDrag(node.visual.position, distance, this.viewport().zoom));
+    const position = canvasPositionAfterDrag(node.visual.position, distance, this.viewport().zoom);
+    this.advanced.moveNodes(
+      [node.id],
+      {
+        x: position.x - node.visual.position.x,
+        y: position.y - node.visual.position.y,
+      },
+      this.snapEnabled(),
+    );
     this.markProfile('move');
   }
 
@@ -391,8 +408,8 @@ export class ClearpipeCanvasComponent {
     if (!this.canEdit()) return;
     const visual = fitCanvasVisual(this.nodeViews(), this.surfaceBounds());
     if (!visual) return;
-    this.previewViewport.set(visual);
-    this.commitPreviewViewport('fit');
+    this.advanced.setViewport(visual, 'fit-graph');
+    this.markProfile('fit');
   }
 
   protected resetViewport(event: Event): void {
@@ -407,9 +424,14 @@ export class ClearpipeCanvasComponent {
     this.gridVisible.update((visible) => !visible);
   }
 
+  protected toggleSnap(event: Event): void {
+    event.stopPropagation();
+    this.snapEnabled.update(enabled => !enabled);
+  }
+
   protected clearSelection(event?: Event): void {
     event?.stopPropagation();
-    this.commands.selectNode(null);
+    this.advanced.clearSelection();
     this.selectedBindingId.set(null);
     this.cancelEdgeGesture();
   }
@@ -422,14 +444,24 @@ export class ClearpipeCanvasComponent {
   protected deleteSelectedNode(event: Event): void {
     event.stopPropagation();
     if (!this.canEdit()) return;
-    const selected = this.selectedNode();
-    if (!selected) return;
-    this.commands.removeNode(selected.id);
+    if (!this.selectedNodeIds().length && this.selectedNode()) this.advanced.select(this.selectedNode()!.id);
+    this.advanced.deleteSelected();
     this.markProfile('delete');
   }
 
   protected handleCanvasKeydown(event: KeyboardEvent): void {
-    if (event.target !== event.currentTarget) return;
+    if (isShortcutSuppressed(event.target)) return;
+    const shortcut = canvasShortcut(event);
+    if (shortcut) {
+      event.preventDefault();
+      if (shortcut === 'undo') this.advanced.undo();
+      else if (shortcut === 'redo') this.advanced.redo();
+      else if (shortcut === 'select-all') this.advanced.selectAll();
+      else if (shortcut === 'copy') this.advanced.copy();
+      else if (shortcut === 'paste') this.advanced.paste();
+      else this.advanced.duplicate();
+      return;
+    }
     if (event.key === 'Escape') {
       this.clearSelection();
       return;
@@ -444,6 +476,17 @@ export class ClearpipeCanvasComponent {
       this.deleteSelectedNode(event);
       return;
     }
+    const move = event.key === 'ArrowLeft' ? {x: -24, y: 0}
+      : event.key === 'ArrowRight' ? {x: 24, y: 0}
+        : event.key === 'ArrowUp' ? {x: 0, y: -24}
+          : event.key === 'ArrowDown' ? {x: 0, y: 24}
+            : null;
+    if (move && this.selectedNodeIds().length && this.canEdit()) {
+      event.preventDefault();
+      this.advanced.moveNodes(this.selectedNodeIds(), move, this.snapEnabled(), 'keyboard-move');
+      this.markProfile('move');
+      return;
+    }
     const pan = event.key === 'ArrowLeft' ? {x: 24, y: 0}
       : event.key === 'ArrowRight' ? {x: -24, y: 0}
         : event.key === 'ArrowUp' ? {x: 0, y: 24}
@@ -451,14 +494,12 @@ export class ClearpipeCanvasComponent {
             : null;
     if (!pan || !this.canEdit()) return;
     event.preventDefault();
-    this.previewViewport.set({
+    const visual = {
       ...this.viewport(),
-      viewport: {
-        x: this.viewport().viewport.x + pan.x,
-        y: this.viewport().viewport.y + pan.y,
-      },
-    });
-    this.commitPreviewViewport('pan');
+      viewport: {x: this.viewport().viewport.x + pan.x, y: this.viewport().viewport.y + pan.y},
+    };
+    this.advanced.setViewport(visual, 'pan-canvas', 'keyboard-pan');
+    this.markProfile('pan');
   }
 
   protected minimapNavigate(event: MouseEvent): void {
@@ -512,7 +553,7 @@ export class ClearpipeCanvasComponent {
     const visual = this.previewViewport();
     this.previewViewport.set(null);
     if (!visual || !this.canEdit()) return;
-    this.commands.setViewport(visual);
+    this.advanced.setViewport(visual, `canvas-${phase}`, phase === 'pan' ? 'pan' : undefined);
     this.markProfile(phase);
   }
 

@@ -17,7 +17,8 @@
      (keydown)="handleCanvasKeydown($event)">
   <p id="clearpipe-canvas-instructions" class="visually-hidden">
     Select a node to inspect it. Drag nodes to move them. Use the canvas controls to zoom, fit, and pan.
-    Press Delete to remove the selected node and Escape to clear selection.
+    Press {{ shortcutModifier }}+A to select all, {{ shortcutModifier }}+D to duplicate, and Delete to remove selected nodes.
+    Arrow keys move selected nodes; without a selection they pan the canvas. Press Escape to clear selection.
   </p>
 
   @if (graphLoaded()) {
@@ -55,7 +56,7 @@
                tabindex="0"
                role="button"
                [attr.aria-label]="nodeAriaLabel()(view.node)"
-               [class.canvas-node-position--selected]="selectedNodeId() === view.node.id"
+               [class.canvas-node-position--selected]="selectedNodeIds().includes(view.node.id)"
                [class.canvas-node-position--hovered]="hoveredNodeId() === view.node.id"
                (click)="selectNode($event, view.node.id)"
                (mouseenter)="hoverNode(view.node.id)"
@@ -110,8 +111,23 @@
       <button mat-icon-button type="button" (click)="toggleGrid($event)" [attr.aria-pressed]="gridVisible()" aria-label="Toggle canvas grid">
         <mat-icon>grid_on</mat-icon>
       </button>
-      @if (selectedNode()) {
-        <button mat-icon-button type="button" (click)="deleteSelectedNode($event)" [disabled]="!canEdit()" aria-label="Delete selected node">
+      <button mat-icon-button type="button" (click)="toggleSnap($event)" [attr.aria-pressed]="snapEnabled()" aria-label="Toggle snap to grid">
+        <mat-icon>apps</mat-icon>
+      </button>
+      <button mat-icon-button type="button" (click)="advanced.undo()" [disabled]="!canEdit() || !advanced.canUndo()" aria-label="Undo">
+        <mat-icon>undo</mat-icon>
+      </button>
+      <button mat-icon-button type="button" (click)="advanced.redo()" [disabled]="!canEdit() || !advanced.canRedo()" aria-label="Redo">
+        <mat-icon>redo</mat-icon>
+      </button>
+      <button mat-icon-button type="button" (click)="advanced.layout()" [disabled]="!canEdit() || !nodes().length" aria-label="Arrange graph">
+        <mat-icon>account_tree</mat-icon>
+      </button>
+      @if (selectedNodeIds().length) {
+        <button mat-icon-button type="button" (click)="advanced.duplicate()" [disabled]="!canEdit()" aria-label="Duplicate selected nodes">
+          <mat-icon>content_copy</mat-icon>
+        </button>
+        <button mat-icon-button type="button" (click)="deleteSelectedNode($event)" [disabled]="!canEdit()" aria-label="Delete selected nodes">
           <mat-icon>delete</mat-icon>
         </button>
       }
@@ -136,6 +152,15 @@
     @if (edgeFeedback()) {
       <p class="canvas-edge-feedback" role="status" aria-live="polite">{{ edgeFeedback() }}</p>
     }
+    <details class="canvas-shortcuts">
+      <summary>Keyboard shortcuts</summary>
+      <dl>
+        <dt>{{ shortcutModifier }}+Z / {{ shortcutModifier }}+Shift+Z</dt><dd>Undo / redo</dd>
+        <dt>{{ shortcutModifier }}+A, C, V, D</dt><dd>Select all, copy, paste, duplicate</dd>
+        <dt>Arrow keys</dt><dd>Move selection or pan canvas</dd>
+        <dt>Delete / Escape</dt><dd>Delete selection / clear selection</dd>
+      </dl>
+    </details>
 
     @if (nodes().length) {
       <button

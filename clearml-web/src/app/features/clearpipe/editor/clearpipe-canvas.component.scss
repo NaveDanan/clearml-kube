@@ -28,6 +28,11 @@
 .canvas-connection-controls button {border:1px solid var(--color-outline); border-radius:3px; background:var(--color-surface-container-low); color:var(--color-on-surface); cursor:pointer;}
 .canvas-connection-controls button[aria-pressed="true"] {border-width:2px; font-weight:700;}
 .canvas-edge-feedback {position:absolute; top:12px; left:50%; max-width:calc(100% - 32px); margin:0; padding:6px 10px; border:1px solid var(--color-outline); border-radius:4px; background:var(--color-surface); color:var(--color-on-surface); font-size:12px; transform:translateX(-50%); text-align:center;}
+.canvas-shortcuts {position:absolute; top:12px; right:16px; max-width:250px; padding:6px 8px; border:1px solid var(--color-outline-variant); border-radius:4px; background:var(--color-surface); color:var(--color-on-surface); font-size:12px;}
+.canvas-shortcuts summary {cursor:pointer;}
+.canvas-shortcuts dl {display:grid; grid-template-columns:auto 1fr; gap:4px 8px; margin:8px 0 0;}
+.canvas-shortcuts dt {font-weight:700;}
+.canvas-shortcuts dd {margin:0;}
 .canvas-minimap {position:absolute; right:16px; bottom:16px; display:block; box-sizing:content-box; width:152px; height:96px; padding:0; overflow:hidden; border:1px solid var(--color-outline-variant); border-radius:4px; background:color-mix(in srgb,var(--color-surface) 92%,transparent); color:var(--color-on-surface-variant); cursor:pointer;}
 .canvas-minimap:focus-visible {outline:2px solid var(--color-primary); outline-offset:2px;}
 .canvas-minimap>span:last-child {position:absolute; left:7px; top:6px; font-size:10px; pointer-events:none;}
