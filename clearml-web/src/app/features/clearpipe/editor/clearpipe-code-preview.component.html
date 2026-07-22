@@ -1,0 +1,30 @@
+@if (open() && !closed()) {
+  <aside class="preview" aria-labelledby="clearpipe-code-preview-title" smClearpipeWorkspaceSlot="workspace.preview">
+    <header>
+      <div>
+        <h2 id="clearpipe-code-preview-title">Code preview</h2>
+        <span>Read-only source derived from the canonical graph</span>
+      </div>
+      <button mat-stroked-button type="button" (click)="close()">Close</button>
+    </header>
+    <p class="preview__notice">Generated code is not editable and never becomes a second graph source of truth.</p>
+    @if (generating()) {
+      <p role="status">Generating code preview…</p>
+    } @else if (source()) {
+      <div class="preview__actions">
+        <button mat-stroked-button type="button" (click)="copy()">{{ copied() ? 'Copied' : 'Copy' }}</button>
+        <button mat-stroked-button type="button" (click)="download()">Download .py</button>
+        <button mat-stroked-button type="button" (click)="regenerate()">Regenerate</button>
+      </div>
+      <pre><code aria-label="Generated ClearPipe Python source" [innerHTML]="highlightedSource()"></code></pre>
+    }
+    @if (unavailable()) {
+      <section class="preview__diagnostics" role="alert" aria-label="Code generation diagnostics">
+        <h3>Code generation diagnostics</h3>
+        @for (diagnostic of diagnostics(); track diagnostic.code + diagnostic.message) {
+          <p><strong>{{ diagnostic.code ?? 'generation' }}</strong> {{ diagnostic.message }}</p>
+        }
+      </section>
+    }
+  </aside>
+}

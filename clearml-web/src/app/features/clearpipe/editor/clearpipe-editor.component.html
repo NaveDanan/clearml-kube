@@ -11,8 +11,8 @@
         <mat-icon>arrow_back</mat-icon>
       </a>
       <div>
-        <strong [attr.aria-label]="state.definition().name">{{ state.definition().name }}</strong>
-        <span>Revision {{ state.definition().revision }} @if (isDirty()) { · Unsaved changes }</span>
+        <strong [attr.aria-label]="graph()?.document?.name">{{ graph()?.document?.name ?? 'Untitled ClearPipe' }}</strong>
+        <span>Revision {{ lifecycle.identity()?.revision ?? 0 }} @if (isDirty()) { · Unsaved changes }</span>
       </div>
       @if (readOnly()) {
         <span class="readonly-badge">{{ routeSurface() === 'unsupported' ? 'UNSUPPORTED' : 'READ ONLY' }}</span>
@@ -42,58 +42,12 @@
 
   <div class="workspace-toolbar" role="toolbar" aria-label="ClearPipe toolbar">
     <div class="toolbar-primary" smClearpipeWorkspaceSlot="workspace.toolbar.primary">
-      <button mat-icon-button type="button" (click)="state.undo()" [disabled]="!state.canUndo() || !canEdit()" aria-label="Undo">
-        <mat-icon>undo</mat-icon>
-      </button>
-      <button mat-icon-button type="button" (click)="state.redo()" [disabled]="!state.canRedo() || !canEdit()" aria-label="Redo">
-        <mat-icon>redo</mat-icon>
-      </button>
-      <span class="divider" aria-hidden="true"></span>
-      <button mat-stroked-button type="button" (click)="validate()" [disabled]="routeSurface() !== 'ready'">
-        <mat-icon fontSet="al" fontIcon="al-ico-check"></mat-icon>
-        <span>Validate</span>
-      </button>
-      <button mat-stroked-button type="button" (click)="save()" [disabled]="!canEdit() || saving()">
-        <mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>
-        <span>{{ saving() ? 'Saving…' : 'Save' }}</span>
-      </button>
-      <span class="run-unavailable" id="clearpipe-run-unavailable">
-        Run is unavailable until the approved ClearML Agent path is proven.
-      </span>
-      <button mat-flat-button type="button" disabled aria-describedby="clearpipe-run-unavailable">
-        <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>
-        <span>Run</span>
-      </button>
-    </div>
-    <div class="toolbar-overflow" smClearpipeWorkspaceSlot="workspace.toolbar.overflow">
-      <button mat-icon-button type="button" [matMenuTriggerFor]="more" aria-label="More ClearPipe actions">
-        <mat-icon fontSet="al" fontIcon="al-ico-more"></mat-icon>
-      </button>
-      <mat-menu #more="matMenu">
-        <button mat-menu-item type="button" (click)="saveAs()" [disabled]="!canEdit()">
-          <mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>
-          Save as
-        </button>
-        <button mat-menu-item type="button" (click)="importInput.click()" [disabled]="!canEdit()">
-          <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
-          Import approved definition
-        </button>
-        <button mat-menu-item type="button" (click)="exportJson()" [disabled]="routeSurface() !== 'ready'">
-          <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
-          Export definition
-        </button>
-        @if (state.definition().id || state.definition().task_id) {
-          <button mat-menu-item type="button" (click)="archive()" [disabled]="!canEdit()">
-            <mat-icon fontSet="al" fontIcon="al-ico-archive"></mat-icon>
-            Archive
-          </button>
-          <button mat-menu-item type="button" (click)="delete()" [disabled]="!canEdit()">
-            <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
-            Delete
-          </button>
-        }
-      </mat-menu>
-      <input #importInput hidden type="file" accept="application/json,.json" (change)="importJson($event)">
+      <sm-clearpipe-toolbar
+        (openRequested)="openLibrary()"
+        (validateRequested)="validate()"
+        (previewRequested)="previewOpen.set(true)"
+        (settingsRequested)="openPanel('inspector', $any($event.currentTarget))">
+      </sm-clearpipe-toolbar>
     </div>
   </div>
 
@@ -198,7 +152,7 @@
         }
 
         @if (readOnly()) {
-          <p class="read-only-notice" role="status">This definition is read-only. Values remain available for review; edit actions are disabled.</p>
+          <p class="read-only-notice" role="status">{{ lifecycle.problem()?.message ?? 'This definition is read-only. Values remain available for review; edit actions are disabled.' }}</p>
         }
       }
     </main>
@@ -241,6 +195,10 @@
         }
       </div>
     </aside>
+
+    @if (previewOpen()) {
+      <sm-clearpipe-code-preview [graph]="graph()" [open]="previewOpen()" (closeRequested)="previewOpen.set(false)"></sm-clearpipe-code-preview>
+    }
 
     @if (validationOpen() && validation(); as result) {
       <aside class="validation-panel" smClearpipeWorkspaceSlot="workspace.status" aria-labelledby="clearpipe-validation-title">
