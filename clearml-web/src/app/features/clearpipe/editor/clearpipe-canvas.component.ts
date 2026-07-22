@@ -15,11 +15,12 @@ import {CdkDrag, CdkDragEnd, CdkDragStart} from '@angular/cdk/drag-drop';
 import {DecimalPipe, NgTemplateOutlet} from '@angular/common';
 import {MatButtonModule} from '@angular/material/button';
 import {MatIconModule} from '@angular/material/icon';
-import {GraphNode, GraphVisual, Point} from '../domain/graph-v2.types';
-import {GraphStoreService} from '../domain/graph-store.service';
+import {GraphBinding, GraphNode, GraphPort, GraphVisual, Point} from '../domain/graph-v2.types';
+import {GraphBindingInput, GraphStoreService} from '../domain/graph-store.service';
+import {ClearpipeSemanticEdgeController, SemanticEdgeCommandResult} from './edges/clearpipe-semantic-edge.controller';
+import {compatiblePortBindingKinds, SemanticPortLocation} from './edges/clearpipe-port-compatibility';
+import {semanticCanvasEdges} from './edges/clearpipe-semantic-edge.renderer';
 import {
-  basicCanvasBindingPath,
-  basicCanvasBindings,
   canvasGraphPointFromMinimapClientPoint,
   canvasGraphTransform,
   canvasMinimapLayout,
@@ -42,6 +43,12 @@ export interface ClearpipeCanvasNodeContext {
   selected: boolean;
   hovered: boolean;
   dragging: boolean;
+  edge: ClearpipeCanvasEdgeInteraction;
+}
+
+export interface ClearpipeCanvasEdgeInteraction {
+  selectPort(nodeId: string, portId: string): void;
+  compatibility(nodeId: string, portId: string): string;
 }
 
 interface CanvasSize {
@@ -61,6 +68,7 @@ const DEFAULT_CANVAS_SIZE: CanvasSize = {width: 800, height: 600};
 })
 export class ClearpipeCanvasComponent {
   protected readonly commands = inject(GraphStoreService);
+  private readonly semanticEdgesController = inject(ClearpipeSemanticEdgeController);
   private readonly destroyRef = inject(DestroyRef);
   private readonly canvas = viewChild<ElementRef<HTMLDivElement>>('canvas');
   private readonly minimapContent = viewChild<ElementRef<HTMLSpanElement>>('minimapContent');
@@ -95,9 +103,17 @@ export class ClearpipeCanvasComponent {
     const dimensions = this.nodeDimensions();
     return this.nodes().map((node) => ({node, dimensions: normalizeCanvasDimensions(dimensions(node))}));
   });
-  protected readonly bindings = computed(() => basicCanvasBindings(this.nodeViews(), this.commands.bindings()));
+  protected readonly semanticEdges = computed(() =>
+    semanticCanvasEdges(this.nodeViews(), this.commands.bindings(), this.nodeDimensions()));
   protected readonly selectedNode = computed(() =>
     this.nodes().find((node) => node.id === this.selectedNodeId()) ?? null);
+  protected readonly selectedBindingId = signal<string | null>(null);
+  protected readonly selectedBinding = computed(() =>
+    this.commands.bindings().find((binding) => binding.id === this.selectedBindingId()) ?? null);
+  protected readonly selectedSourcePort = signal<SemanticPortLocation | null>(null);
+  protected readonly selectedBindingKind = signal<Extract<GraphBinding['kind'], 'data' | 'artifact'> | null>(null);
+  protected readonly reconnectingBindingId = signal<string | null>(null);
+  protected readonly edgeFeedback = signal('');
   protected readonly gridSize = computed(() => `${24 * this.viewport().zoom}px ${24 * this.viewport().zoom}px`);
   protected readonly gridPosition = computed(() => `${this.viewport().viewport.x}px ${this.viewport().viewport.y}px`);
   protected readonly minimapLayout = computed(() => canvasMinimapLayout(this.nodeViews()));
@@ -138,6 +154,10 @@ export class ClearpipeCanvasComponent {
       selected: this.selectedNodeId() === nodeId,
       hovered: this.hoveredNodeId() === nodeId,
       dragging: this.draggingNodeId() === nodeId,
+      edge: {
+        selectPort: (selectedNodeId, portId) => this.selectPortForEdge(selectedNodeId, portId),
+        compatibility: (selectedNodeId, portId) => this.portCompatibilityText(selectedNodeId, portId),
+      },
     };
   }
 
@@ -145,14 +165,157 @@ export class ClearpipeCanvasComponent {
     return canvasNodeTransform(view.node.visual.position);
   }
 
-  protected bindingPath(binding: ReturnType<typeof basicCanvasBindings>[number]): string {
-    return basicCanvasBindingPath(binding);
-  }
-
   protected selectNode(event: Event, nodeId: string): void {
     event.stopPropagation();
     this.commands.selectNode(nodeId);
     this.focusCanvasAfterNodeSelection(event.target);
+  }
+
+  /** Public CP-24/25 handoff: extensions can issue semantic edge creation without visual adjacency. */
+  createSemanticBinding(candidate: GraphBindingInput): SemanticEdgeCommandResult {
+    const result = this.semanticEdgesController.create(candidate);
+    this.reportEdgeResult(result);
+    return result;
+  }
+
+  /** Public CP-24/25 handoff: reconnects an existing canonical binding by its immutable ID. */
+  reconnectSemanticBinding(bindingId: string, candidate: Omit<GraphBindingInput, 'id'>): SemanticEdgeCommandResult {
+    const result = this.semanticEdgesController.reconnect(bindingId, candidate);
+    this.reportEdgeResult(result);
+    return result;
+  }
+
+  /** Public CP-24/25 handoff: removes only the selected canonical binding. */
+  removeSemanticBinding(bindingId: string): SemanticEdgeCommandResult {
+    const result = this.semanticEdgesController.remove(bindingId);
+    if (result.eligible && this.selectedBindingId() === bindingId) this.selectedBindingId.set(null);
+    this.reportEdgeResult(result);
+    return result;
+  }
+
+  protected activatePort(event: Event, nodeId: string, portId: string): void {
+    event.stopPropagation();
+    this.selectPortForEdge(nodeId, portId);
+  }
+
+  protected selectPortForEdge(nodeId: string, portId: string): void {
+    if (!this.canEdit()) return;
+    const port = this.commands.port(nodeId, portId);
+    if (!port) {
+      this.edgeFeedback.set('The selected port no longer exists.');
+      return;
+    }
+    const location = {node_id: nodeId, port_id: portId};
+    const source = this.selectedSourcePort();
+    if (!source) {
+      if (port.direction !== 'output') {
+        this.edgeFeedback.set('Select an output port before selecting an input port.');
+        return;
+      }
+      this.commands.selectPort(nodeId, portId);
+      this.selectedSourcePort.set(location);
+      this.selectedBindingKind.set(null);
+      this.edgeFeedback.set(`Output ${port.name} selected. Choose a binding kind, then select a target input port.`);
+      return;
+    }
+    if (source.node_id === nodeId && source.port_id === portId) {
+      this.cancelEdgeGesture();
+      return;
+    }
+    if (port.direction !== 'input') {
+      this.edgeFeedback.set('Select an input port as the connection target.');
+      return;
+    }
+    const replacementId = this.reconnectingBindingId() ?? undefined;
+    const kinds = compatiblePortBindingKinds(this.graph(), source, location, replacementId);
+    const selectedKind = this.selectedBindingKind();
+    if (!kinds.length) {
+      const result = this.semanticEdgesController.evaluate({
+        kind: selectedKind ?? 'data',
+        source: {kind: 'port', ...source},
+        target: {kind: 'port', ...location},
+      }, replacementId);
+      this.edgeFeedback.set(result.message);
+      return;
+    }
+    const kind = selectedKind && kinds.includes(selectedKind) ? selectedKind : kinds.length === 1 ? kinds[0] : null;
+    if (!kind) {
+      this.edgeFeedback.set('More than one binding kind is valid. Explicitly choose data or artifact, then select this input again.');
+      return;
+    }
+    const result = this.semanticEdgesController.connectPorts(source, location, kind, replacementId);
+    if (result.eligible) {
+      this.selectedBindingId.set(result.id ?? replacementId ?? null);
+      this.cancelEdgeGesture();
+    }
+    this.reportEdgeResult(result);
+  }
+
+  protected portCompatibilityText(nodeId: string, portId: string): string {
+    const source = this.selectedSourcePort();
+    if (!source) return 'Select this output port to start a semantic connection.';
+    if (source.node_id === nodeId && source.port_id === portId) return 'Selected source output. Select a target input port.';
+    const port = this.commands.port(nodeId, portId);
+    if (!port) return 'This port is unavailable.';
+    if (port.direction !== 'input') return 'Connections require an input target port.';
+    const kinds = compatiblePortBindingKinds(this.graph(), source, {node_id: nodeId, port_id: portId}, this.reconnectingBindingId() ?? undefined);
+    return kinds.length
+      ? `Compatible for ${kinds.join(' or ')} binding.`
+      : this.semanticEdgesController.evaluate({
+        kind: this.selectedBindingKind() ?? 'data',
+        source: {kind: 'port', ...source},
+        target: {kind: 'port', node_id: nodeId, port_id: portId},
+      }, this.reconnectingBindingId() ?? undefined).message;
+  }
+
+  protected portAriaLabel(nodeId: string, port: GraphPort): string {
+    const selected = this.selectedSourcePort();
+    const status = this.portCompatibilityText(nodeId, port.id);
+    return `${port.direction === 'output' ? 'Output' : 'Input'} ${port.name}; ${port.role}; accepts ${
+      port.accepted_binding_kinds.join(', ')}; ${selected?.node_id === nodeId && selected.port_id === port.id ? 'selected; ' : ''}${status}`;
+  }
+
+  protected chooseBindingKind(kind: Extract<GraphBinding['kind'], 'data' | 'artifact'>): void {
+    this.selectedBindingKind.set(kind);
+    this.edgeFeedback.set(`${kind} binding selected. Select a target input port.`);
+  }
+
+  protected canChooseBindingKind(kind: Extract<GraphBinding['kind'], 'data' | 'artifact'>): boolean {
+    const source = this.selectedSourcePort();
+    return !!source && !!this.commands.port(source.node_id, source.port_id)?.accepted_binding_kinds.includes(kind);
+  }
+
+  protected selectBinding(event: Event, bindingId: string): void {
+    event.stopPropagation();
+    if (!this.commands.bindings().some((binding) => binding.id === bindingId)) return;
+    this.selectedBindingId.set(bindingId);
+    this.commands.selectNode(null);
+    this.edgeFeedback.set(`Connection ${bindingId} selected. Use Delete to remove it or reconnect it.`);
+  }
+
+  protected selectBindingKeydown(event: KeyboardEvent, bindingId: string): void {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    this.selectBinding(event, bindingId);
+  }
+
+  protected removeSelectedBinding(event: Event): void {
+    event.stopPropagation();
+    const binding = this.selectedBinding();
+    if (binding) this.removeSemanticBinding(binding.id);
+  }
+
+  protected beginReconnectSelectedBinding(event: Event): void {
+    event.stopPropagation();
+    const binding = this.selectedBinding();
+    if (!binding || (binding.kind !== 'data' && !(binding.kind === 'artifact' && binding.source.kind === 'port'))) {
+      this.edgeFeedback.set('Only port-to-port data and artifact bindings can be reconnected on the canvas.');
+      return;
+    }
+    this.reconnectingBindingId.set(binding.id);
+    this.selectedSourcePort.set(null);
+    this.selectedBindingKind.set(binding.kind);
+    this.edgeFeedback.set(`Reconnect ${binding.kind} binding: select a replacement output port, then an input port.`);
   }
 
   protected hoverNode(nodeId: string | null): void {
@@ -247,6 +410,8 @@ export class ClearpipeCanvasComponent {
   protected clearSelection(event?: Event): void {
     event?.stopPropagation();
     this.commands.selectNode(null);
+    this.selectedBindingId.set(null);
+    this.cancelEdgeGesture();
   }
 
   protected selectCanvasBackground(event: MouseEvent): void {
@@ -267,6 +432,11 @@ export class ClearpipeCanvasComponent {
     if (event.target !== event.currentTarget) return;
     if (event.key === 'Escape') {
       this.clearSelection();
+      return;
+    }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && this.selectedBinding()) {
+      event.preventDefault();
+      this.removeSelectedBinding(event);
       return;
     }
     if ((event.key === 'Delete' || event.key === 'Backspace') && this.selectedNode()) {
@@ -385,5 +555,16 @@ export class ClearpipeCanvasComponent {
       nodeCount: this.nodes().length,
       bindingCount: this.commands.bindings().length,
     });
+  }
+
+  private cancelEdgeGesture(): void {
+    this.selectedSourcePort.set(null);
+    this.selectedBindingKind.set(null);
+    this.reconnectingBindingId.set(null);
+    this.commands.selectPort(null);
+  }
+
+  private reportEdgeResult(result: SemanticEdgeCommandResult): void {
+    this.edgeFeedback.set(result.message);
   }
 }
