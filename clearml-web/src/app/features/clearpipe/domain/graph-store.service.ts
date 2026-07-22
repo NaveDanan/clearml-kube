@@ -358,6 +358,25 @@ export class GraphStoreService {
     return this.runTransaction(label, operation);
   }
 
+  restoreGraphSnapshot(snapshot: GraphV2): GraphCommandResult {
+    return this.runTransaction('restore-graph-snapshot', () => {
+      this.command('restore-graph-snapshot', (graph) => {
+        const decoded = decodeGraphV2(snapshot);
+        if (decoded.status !== 'ok') throw asResult('restore-graph-snapshot', decoded);
+        graph.schema_version = decoded.graph.schema_version;
+        graph.document = clone(decoded.graph.document);
+        graph.settings = clone(decoded.graph.settings);
+        graph.parameters = clone(decoded.graph.parameters);
+        graph.resources = clone(decoded.graph.resources);
+        graph.outputs = clone(decoded.graph.outputs);
+        graph.nodes = clone(decoded.graph.nodes);
+        graph.bindings = clone(decoded.graph.bindings);
+        graph.visual = clone(decoded.graph.visual);
+        this.reconcileTransientForGraph(graph);
+      });
+    });
+  }
+
   updateDocument(patch: Partial<DocumentMetadata>): GraphCommandResult {
     return this.command('update-document', (graph) => {
       graph.document = {...graph.document, ...clone(patch), tags: [...(patch.tags ?? graph.document.tags)]};
@@ -801,6 +820,20 @@ export class GraphStoreService {
     const node = this.requireNode(graph, nodeId);
     if (node.kind !== 'function') throw errorResult('graph-command', 'node_not_function', 'graph.nodes');
     return node;
+  }
+
+  private reconcileTransientForGraph(graph: GraphV2): void {
+    const hasNode = (nodeId: string | null): boolean => !!nodeId && graph.nodes.some((node) => node.id === nodeId);
+    if (!hasNode(this.selectedNodeId())) this.selectedNodeId.set(null);
+    const selectedPort = this.selectedPortLocation();
+    const selectedPortNode = selectedPort && graph.nodes.find((node) => node.id === selectedPort.node_id);
+    if (!selectedPort || !selectedPortNode?.ports.some((port) => port.id === selectedPort.port_id)) {
+      this.selectedPortLocation.set(null);
+    } else {
+      this.selectedNodeId.set(selectedPort.node_id);
+    }
+    if (!hasNode(this.hoveredNodeId())) this.hoveredNodeId.set(null);
+    if (!hasNode(this.draggingNodeId())) this.draggingNodeId.set(null);
   }
 
   private requirePort(graph: GraphV2, nodeId: string, portId: string): GraphPort {

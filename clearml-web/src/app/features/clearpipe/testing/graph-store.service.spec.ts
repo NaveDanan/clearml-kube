@@ -168,6 +168,115 @@ describe('GraphStoreService', () => {
     });
   });
 
+  it('restores a complete graph snapshot atomically and reconciles transient selection', () => {
+    store.selectPort('normalize', 'out-value');
+    store.setHoveredNode('format');
+    store.setDraggingNode('format');
+    const snapshot = structuredClone(store.graph()!);
+    snapshot.document.description = 'Restored snapshot';
+    snapshot.settings = {};
+    snapshot.parameters = [];
+    snapshot.resources = [];
+    snapshot.outputs = [];
+    snapshot.nodes = [snapshot.nodes.find((node) => node.id === 'normalize')!];
+    snapshot.bindings = [];
+    snapshot.visual = {viewport: {x: 100, y: 200}, zoom: 1.5};
+
+    expect(store.restoreGraphSnapshot(snapshot)).toEqual(jasmine.objectContaining({
+      ok: true,
+      changed: true,
+      command: 'restore-graph-snapshot',
+    }));
+    expect(store.graph()).toEqual(jasmine.objectContaining({
+      document: jasmine.objectContaining({description: 'Restored snapshot'}),
+      settings: {},
+      parameters: [],
+      resources: [],
+      outputs: [],
+      nodes: [jasmine.objectContaining({id: 'normalize'})],
+      bindings: [],
+      visual: {viewport: {x: 100, y: 200}, zoom: 1.5},
+    }));
+    expect(store.selectedNode()?.id).toBe('normalize');
+    expect(store.selectedPort()).toEqual({
+      node_id: 'normalize',
+      port: jasmine.objectContaining({id: 'out-value'}),
+    });
+    expect(store.hoveredNodeId()).toBeNull();
+    expect(store.draggingNodeId()).toBeNull();
+    expect(store.lastCommand()).toEqual({label: 'restore-graph-snapshot', transaction: true});
+    expect(store.dirty()).toBeTrue();
+  });
+
+  it('rejects invalid snapshots without publishing partial graph or transient state', () => {
+    store.selectPort('format', 'in-prefix');
+    const before = store.serialize();
+    const malformed = structuredClone(store.graph()!);
+    malformed.nodes = [malformed.nodes.find((node) => node.id === 'normalize')!];
+    malformed.outputs = [];
+    (malformed.bindings[0].target as {port_id: string}).port_id = 'missing-port';
+
+    expect(store.restoreGraphSnapshot(malformed)).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'unknown_port'})],
+    }));
+
+    const unknown = structuredClone(store.graph()!) as unknown as {nodes: Array<Record<string, unknown>>};
+    unknown.nodes[0].unsupported_snapshot_field = true;
+    expect(store.restoreGraphSnapshot(unknown as unknown as NonNullable<ReturnType<typeof store.graph>>)).toEqual(
+      jasmine.objectContaining({
+        ok: false,
+        errors: [jasmine.objectContaining({code: 'unsupported_field'})],
+      }),
+    );
+
+    const secret = structuredClone(store.graph()!);
+    (secret.nodes[0] as {source: string}).source = 'def normalize():\n    api_key = "must-not-persist"\n';
+    expect(store.restoreGraphSnapshot(secret)).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'secret_not_allowed'})],
+    }));
+
+    const legacy = {schema_version: 1} as unknown as NonNullable<ReturnType<typeof store.graph>>;
+    expect(store.restoreGraphSnapshot(legacy)).toEqual(jasmine.objectContaining({
+      ok: false,
+      errors: [jasmine.objectContaining({code: 'legacy_v1_not_losslessly_representable'})],
+    }));
+    expect(store.serialize()).toBe(before);
+    expect(store.selectedNode()?.id).toBe('format');
+    expect(store.selectedPort()).toEqual({
+      node_id: 'format',
+      port: jasmine.objectContaining({id: 'in-prefix'}),
+    });
+    expect(store.dirty()).toBeFalse();
+  });
+
+  it('rolls a restored snapshot back with an enclosing transaction', () => {
+    store.selectPort('format', 'in-prefix');
+    const before = store.serialize();
+    const snapshot = structuredClone(store.graph()!);
+    snapshot.visual = {viewport: {x: 100, y: 200}, zoom: 1.5};
+
+    const result = store.transaction('restore then fail', () => {
+      store.restoreGraphSnapshot(snapshot);
+      store.addBinding({
+        id: 'bad-binding',
+        kind: 'execution-only',
+        source: {kind: 'node', node_id: 'normalize'},
+        target: {kind: 'node', node_id: 'missing'},
+      });
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(store.serialize()).toBe(before);
+    expect(store.selectedNode()?.id).toBe('format');
+    expect(store.selectedPort()).toEqual({
+      node_id: 'format',
+      port: jasmine.objectContaining({id: 'in-prefix'}),
+    });
+    expect(store.dirty()).toBeFalse();
+  });
+
   it('replaces a task base reference and updates only typed task configuration fields', () => {
     const empty = createEmptyGraphV2({name: 'task_configuration', project: 'examples'});
     expect(store.load(empty).status).toBe('ok');
