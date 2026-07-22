@@ -1,4 +1,6 @@
 import {ComponentFixture, TestBed} from '@angular/core/testing';
+import {By} from '@angular/platform-browser';
+import {CdkDrag} from '@angular/cdk/drag-drop';
 import {ClearpipeCanvasComponent} from './clearpipe-canvas.component';
 import {CanvasNodePlacement} from './clearpipe-canvas.adapter';
 import {createEmptyGraphV2, GraphStoreService} from '../domain/graph-store.service';
@@ -7,6 +9,8 @@ import {GraphNode, GraphV2} from '../domain/graph-v2.types';
 interface CanvasHarness {
   changeZoom(delta: number, event: MouseEvent): void;
   clearSelection(event?: Event): void;
+  handleCanvasKeydown(event: KeyboardEvent): void;
+  minimapNavigate(event: MouseEvent): void;
   nodeDragEnd(node: GraphNode, event: {distance: {x: number; y: number}; source: {reset(): void}}): void;
   selectNode(event: Event, nodeId: string): void;
 }
@@ -89,12 +93,14 @@ describe('ClearpipeCanvasComponent', () => {
     expect(graphStore.serialize()).not.toContain('must-not-persist');
   });
 
-  it('persists movement only when a drag ends and keeps the drag event transient', () => {
+  it('compensates CDK live drag at non-default zoom and commits the matching graph delta', () => {
     fixture.componentInstance.placeNode(functionPlacement, {clientX: 200, clientY: 150});
     const node = graphStore.nodes()[0];
     graphStore.setViewport({viewport: {x: 0, y: 0}, zoom: .5});
+    fixture.detectChanges();
     const reset = jasmine.createSpy('reset');
 
+    expect(fixture.debugElement.query(By.directive(CdkDrag)).injector.get(CdkDrag).scale).toBe(.5);
     (fixture.componentInstance as unknown as CanvasHarness).nodeDragEnd(node, {
       distance: {x: 50, y: 30},
       source: {reset},
@@ -108,6 +114,34 @@ describe('ClearpipeCanvasComponent', () => {
     expect(graphStore.node(node.id)?.visual.position).toEqual({x: 200, y: 160});
   });
 
+  it('maps a click on a rendered minimap node through its content bounds', () => {
+    fixture.componentInstance.placeNode(functionPlacement, {clientX: 200, clientY: 150});
+    fixture.componentInstance.placeNode(functionPlacement, {clientX: 500, clientY: 250});
+    fixture.detectChanges();
+    const minimapContent = fixture.nativeElement.querySelector('.canvas-minimap__content') as HTMLElement;
+    spyOn(minimapContent, 'getBoundingClientRect').and.returnValue({
+      left: 20,
+      top: 30,
+      right: 148,
+      bottom: 102,
+      width: 128,
+      height: 72,
+      x: 20,
+      y: 30,
+      toJSON: () => ({}),
+    });
+    const marker = fixture.nativeElement.querySelectorAll('.canvas-minimap__node')[1] as HTMLElement;
+    const target = graphStore.nodes()[1];
+
+    (fixture.componentInstance as unknown as CanvasHarness).minimapNavigate({
+      clientX: 20 + Number.parseFloat(marker.style.left),
+      clientY: 30 + Number.parseFloat(marker.style.top),
+    } as MouseEvent);
+
+    expect(graphStore.graph()?.visual.viewport.x).toBeCloseTo(400 - target.visual.position.x);
+    expect(graphStore.graph()?.visual.viewport.y).toBeCloseTo(300 - target.visual.position.y);
+  });
+
   it('uses CP-10 transient selection and supports clearing it', () => {
     fixture.componentInstance.placeNode(functionPlacement, {clientX: 200, clientY: 150});
     const node = graphStore.nodes()[0];
@@ -118,6 +152,36 @@ describe('ClearpipeCanvasComponent', () => {
 
     (fixture.componentInstance as unknown as CanvasHarness).clearSelection();
     expect(graphStore.selectedNodeId()).toBeNull();
+  });
+
+  it('returns canvas focus after a pointer node selection without stealing form control focus', () => {
+    fixture.componentInstance.placeNode(functionPlacement, {clientX: 200, clientY: 150});
+    fixture.detectChanges();
+    const surface = fixture.nativeElement.querySelector('.canvas-surface') as HTMLDivElement;
+    const node = fixture.nativeElement.querySelector('.canvas-node-position') as HTMLDivElement;
+    const focus = spyOn(surface, 'focus');
+    const input = document.createElement('input');
+    node.appendChild(input);
+
+    input.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+    expect(focus).not.toHaveBeenCalled();
+    node.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+    expect(focus).toHaveBeenCalledWith({preventScroll: true});
+
+    surface.dispatchEvent(new KeyboardEvent('keydown', {key: 'Delete', bubbles: true, cancelable: true}));
+    expect(graphStore.nodes()).toHaveSize(0);
+  });
+
+  it('returns canvas focus after background panning so arrow keys remain reachable', () => {
+    const surface = fixture.nativeElement.querySelector('.canvas-surface') as HTMLDivElement;
+    const focus = spyOn(surface, 'focus');
+
+    surface.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, button: 0, clientX: 200, clientY: 150}));
+    surface.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, button: 0, clientX: 200, clientY: 150}));
+    expect(focus).toHaveBeenCalledWith({preventScroll: true});
+
+    surface.dispatchEvent(new KeyboardEvent('keydown', {key: 'ArrowLeft', bubbles: true, cancelable: true}));
+    expect(graphStore.graph()?.visual.viewport.x).toBe(24);
   });
 
   it('persists viewport controls through the graph command', () => {

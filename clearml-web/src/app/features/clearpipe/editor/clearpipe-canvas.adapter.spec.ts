@@ -1,5 +1,8 @@
 import {
   basicCanvasBindingPath,
+  canvasGraphPointFromMinimapClientPoint,
+  canvasMinimapLayout,
+  canvasMinimapNode,
   canvasPointFromClientPoint,
   canvasPositionAfterDrag,
   canvasVisualAtClientZoom,
@@ -47,5 +50,18 @@ describe('ClearPipe canvas adapter', () => {
 
     expect(basicCanvasBindingPath({id: 'binding', source, target})).toContain('M 176 36');
     expect(fitCanvasVisual([source, target], {width: 800, height: 600})?.zoom).toBeGreaterThan(.35);
+  });
+
+  it('maps a rendered minimap extremity through the same inset content scale', () => {
+    const source = {node: node('source', 0, 0), dimensions: {width: 176, height: 72}};
+    const target = {node: node('target', 400, 120), dimensions: {width: 176, height: 72}};
+    const layout = canvasMinimapLayout([source, target])!;
+    const marker = canvasMinimapNode(target, layout);
+
+    expect(canvasGraphPointFromMinimapClientPoint(
+      {clientX: 32 + marker.left, clientY: 24 + marker.top},
+      {left: 32, top: 24, width: 128, height: 72},
+      layout,
+    )).toEqual(target.node.visual.position);
   });
 });

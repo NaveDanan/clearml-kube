@@ -13,7 +13,7 @@
      (mousemove)="pan($event)"
      (mouseup)="endPan()"
      (mouseleave)="endPan()"
-     (click)="clearSelection($event)"
+     (click)="selectCanvasBackground($event)"
      (keydown)="handleCanvasKeydown($event)">
   <p id="clearpipe-canvas-instructions" class="visually-hidden">
     Select a node to inspect it. Drag nodes to move them. Use the canvas controls to zoom, fit, and pan.
@@ -34,6 +34,7 @@
         <article class="canvas-node-drag"
                  cdkDrag
                  [cdkDragDisabled]="!canEdit()"
+                 [cdkDragScale]="viewport().zoom"
                  [attr.data-node-id]="view.node.id"
                  (cdkDragStarted)="beginNodeDrag(view.node.id, $event)"
                  (cdkDragEnded)="nodeDragEnd(view.node, $event)">
@@ -94,27 +95,27 @@
     </div>
 
     @if (nodes().length) {
-      <button #minimap
+      <button
               type="button"
               class="canvas-minimap"
               aria-label="Center the canvas from the minimap"
               (click)="minimapNavigate($event)"
               (keydown)="minimapKeyboardNavigate($event)">
-        @for (node of minimapNodes(); track node.id) {
-          <i class="canvas-minimap__node"
-             [style.left.px]="node.left"
-             [style.top.px]="node.top"
-             [style.width.px]="node.width"
-             [attr.aria-hidden]="true"></i>
-        }
-        @if (minimapViewport(); as viewport) {
-          <i class="canvas-minimap__viewport"
-             [style.left.px]="viewport.left"
-             [style.top.px]="viewport.top"
-             [style.width.px]="viewport.width"
-             [style.height.px]="viewport.height"
-             [attr.aria-hidden]="true"></i>
-        }
+        <span #minimapContent class="canvas-minimap__content" aria-hidden="true">
+          @for (node of minimapNodes(); track node.id) {
+            <i class="canvas-minimap__node"
+               [style.left.px]="node.left"
+               [style.top.px]="node.top"
+               [style.width.px]="node.width"></i>
+          }
+          @if (minimapViewport(); as viewport) {
+            <i class="canvas-minimap__viewport"
+               [style.left.px]="viewport.left"
+               [style.top.px]="viewport.top"
+               [style.width.px]="viewport.width"
+               [style.height.px]="viewport.height"></i>
+          }
+        </span>
         <span>Minimap</span>
       </button>
     }

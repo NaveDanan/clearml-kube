@@ -20,18 +20,17 @@ import {GraphStoreService} from '../domain/graph-store.service';
 import {
   basicCanvasBindingPath,
   basicCanvasBindings,
+  canvasGraphPointFromMinimapClientPoint,
   canvasGraphTransform,
+  canvasMinimapLayout,
+  canvasMinimapNode,
+  canvasMinimapViewport,
   canvasNodeTransform,
   canvasPointFromClientPoint,
   canvasPositionAfterDrag,
   canvasVisualAtClientZoom,
-  CanvasClientPoint,
-  CanvasNodeDimensions,
-  CanvasNodePlacement,
-  CanvasNodeView,
-  CanvasProfileMark,
-  CanvasProfiler,
-  CanvasSurfaceBounds,
+  CanvasClientPoint, CanvasMinimapNode, CanvasMinimapViewport, CanvasNodeDimensions, CanvasNodePlacement,
+  CanvasNodeView, CanvasProfileMark, CanvasProfiler, CanvasSurfaceBounds,
   fitCanvasVisual,
   normalizeCanvasDimensions,
   placementResult,
@@ -50,20 +49,6 @@ interface CanvasSize {
   height: number;
 }
 
-interface MinimapNode {
-  id: string;
-  left: number;
-  top: number;
-  width: number;
-}
-
-interface MinimapViewport {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
 const EMPTY_VIEWPORT: GraphVisual = {viewport: {x: 0, y: 0}, zoom: 1};
 const DEFAULT_CANVAS_SIZE: CanvasSize = {width: 800, height: 600};
 
@@ -78,7 +63,7 @@ export class ClearpipeCanvasComponent {
   protected readonly commands = inject(GraphStoreService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly canvas = viewChild<ElementRef<HTMLDivElement>>('canvas');
-  private readonly minimap = viewChild<ElementRef<HTMLButtonElement>>('minimap');
+  private readonly minimapContent = viewChild<ElementRef<HTMLSpanElement>>('minimapContent');
   private readonly previewViewport = signal<GraphVisual | null>(null);
   private readonly canvasSize = signal<CanvasSize>(DEFAULT_CANVAS_SIZE);
   private viewportCommitTimer: ReturnType<typeof setTimeout> | null = null;
@@ -115,37 +100,14 @@ export class ClearpipeCanvasComponent {
     this.nodes().find((node) => node.id === this.selectedNodeId()) ?? null);
   protected readonly gridSize = computed(() => `${24 * this.viewport().zoom}px ${24 * this.viewport().zoom}px`);
   protected readonly gridPosition = computed(() => `${this.viewport().viewport.x}px ${this.viewport().viewport.y}px`);
-  protected readonly minimapNodes = computed<readonly MinimapNode[]>(() => {
-    const views = this.nodeViews();
-    const bounds = this.nodeBoundsFor(views);
-    if (!bounds) return [];
-    const width = Math.max(1, bounds.right - bounds.left);
-    const height = Math.max(1, bounds.bottom - bounds.top);
-    const scale = Math.min(128 / width, 72 / height);
-    return views.map((view) => ({
-      id: view.node.id,
-      left: 12 + (view.node.visual.position.x - bounds.left) * scale,
-      top: 12 + (view.node.visual.position.y - bounds.top) * scale,
-      width: Math.max(6, Math.min(24, view.dimensions.width * scale)),
-    }));
+  protected readonly minimapLayout = computed(() => canvasMinimapLayout(this.nodeViews()));
+  protected readonly minimapNodes = computed<readonly CanvasMinimapNode[]>(() => {
+    const layout = this.minimapLayout();
+    return layout ? this.nodeViews().map((view) => canvasMinimapNode(view, layout)) : [];
   });
-  protected readonly minimapViewport = computed<MinimapViewport | null>(() => {
-    const views = this.nodeViews();
-    const bounds = this.nodeBoundsFor(views);
-    if (!bounds) return null;
-    const width = Math.max(1, bounds.right - bounds.left);
-    const height = Math.max(1, bounds.bottom - bounds.top);
-    const scale = Math.min(128 / width, 72 / height);
-    const visual = this.viewport();
-    const surface = this.canvasSize();
-    const graphLeft = -visual.viewport.x / visual.zoom;
-    const graphTop = -visual.viewport.y / visual.zoom;
-    return {
-      left: 12 + (graphLeft - bounds.left) * scale,
-      top: 12 + (graphTop - bounds.top) * scale,
-      width: Math.max(8, surface.width / visual.zoom * scale),
-      height: Math.max(8, surface.height / visual.zoom * scale),
-    };
+  protected readonly minimapViewport = computed<CanvasMinimapViewport | null>(() => {
+    const layout = this.minimapLayout();
+    return layout ? canvasMinimapViewport(this.viewport(), this.canvasSize(), layout) : null;
   });
 
   constructor() {
@@ -190,6 +152,7 @@ export class ClearpipeCanvasComponent {
   protected selectNode(event: Event, nodeId: string): void {
     event.stopPropagation();
     this.commands.selectNode(nodeId);
+    this.focusCanvasAfterNodeSelection(event.target);
   }
 
   protected hoverNode(nodeId: string | null): void {
@@ -215,6 +178,7 @@ export class ClearpipeCanvasComponent {
   protected beginPan(event: MouseEvent): void {
     if (!this.canEdit() || (event.button !== 1 && !(event.button === 0 && event.target === event.currentTarget))) return;
     event.preventDefault();
+    this.focusCanvas();
     this.panStart = {clientX: event.clientX, clientY: event.clientY, visual: this.viewport()};
     this.panning.set(true);
   }
@@ -285,6 +249,11 @@ export class ClearpipeCanvasComponent {
     this.commands.selectNode(null);
   }
 
+  protected selectCanvasBackground(event: MouseEvent): void {
+    this.clearSelection(event);
+    this.focusCanvas();
+  }
+
   protected deleteSelectedNode(event: Event): void {
     event.stopPropagation();
     if (!this.canEdit()) return;
@@ -324,21 +293,21 @@ export class ClearpipeCanvasComponent {
 
   protected minimapNavigate(event: MouseEvent): void {
     if (!this.canEdit()) return;
-    const minimap = this.minimap()?.nativeElement;
-    if (!minimap) return;
+    const minimap = this.minimapContent()?.nativeElement;
+    const layout = this.minimapLayout();
+    if (!minimap || !layout) return;
     const minimapRect = minimap.getBoundingClientRect();
     const surface = this.surfaceBounds();
-    const relativeX = (event.clientX - minimapRect.left) / minimapRect.width;
-    const relativeY = (event.clientY - minimapRect.top) / minimapRect.height;
-    const nodeBounds = this.nodeBounds();
-    if (!nodeBounds) return;
-    const graphX = nodeBounds.left + relativeX * (nodeBounds.right - nodeBounds.left);
-    const graphY = nodeBounds.top + relativeY * (nodeBounds.bottom - nodeBounds.top);
+    const graphPoint = canvasGraphPointFromMinimapClientPoint(
+      {clientX: event.clientX, clientY: event.clientY},
+      {left: minimapRect.left, top: minimapRect.top, width: minimapRect.width, height: minimapRect.height},
+      layout,
+    );
     this.previewViewport.set({
       ...this.viewport(),
       viewport: {
-        x: surface.width / 2 - graphX * this.viewport().zoom,
-        y: surface.height / 2 - graphY * this.viewport().zoom,
+        x: surface.width / 2 - graphPoint.x * this.viewport().zoom,
+        y: surface.height / 2 - graphPoint.y * this.viewport().zoom,
       },
     });
     this.commitPreviewViewport('pan');
@@ -347,7 +316,7 @@ export class ClearpipeCanvasComponent {
   protected minimapKeyboardNavigate(event: KeyboardEvent): void {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      const minimap = this.minimap()?.nativeElement?.getBoundingClientRect();
+      const minimap = this.minimapContent()?.nativeElement.getBoundingClientRect();
       if (!minimap) return;
       this.minimapNavigate(new MouseEvent('click', {
         clientX: minimap.left + minimap.width / 2,
@@ -398,26 +367,16 @@ export class ClearpipeCanvasComponent {
     this.destroyRef.onDestroy(() => observer.disconnect());
   }
 
-  private nodeBounds(): {left: number; top: number; right: number; bottom: number} | null {
-    return this.nodeBoundsFor(this.nodeViews());
+  private focusCanvasAfterNodeSelection(target: EventTarget | null): void {
+    const element = target instanceof HTMLElement ? target : null;
+    if (element?.closest('a, button, input, select, textarea, [contenteditable="true"], [role="combobox"], [role="slider"], [role="spinbutton"], [role="textbox"]')) {
+      return;
+    }
+    this.focusCanvas();
   }
 
-  private nodeBoundsFor(views: readonly CanvasNodeView[]): {left: number; top: number; right: number; bottom: number} | null {
-    if (!views.length) return null;
-    return views.reduce((bounds, view) => {
-      const {position} = view.node.visual;
-      return {
-        left: Math.min(bounds.left, position.x),
-        top: Math.min(bounds.top, position.y),
-        right: Math.max(bounds.right, position.x + view.dimensions.width),
-        bottom: Math.max(bounds.bottom, position.y + view.dimensions.height),
-      };
-    }, {
-      left: views[0].node.visual.position.x,
-      top: views[0].node.visual.position.y,
-      right: views[0].node.visual.position.x + views[0].dimensions.width,
-      bottom: views[0].node.visual.position.y + views[0].dimensions.height,
-    });
+  private focusCanvas(): void {
+    this.canvas()?.nativeElement.focus({preventScroll: true});
   }
 
   private markProfile(phase: CanvasProfileMark['phase']): void {

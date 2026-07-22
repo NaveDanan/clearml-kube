@@ -14,8 +14,10 @@ assert their sentinel fields do not appear in canonical serialization.
 
 ## Update boundaries
 
-* Node position is committed once on `cdkDragEnded`; CP-10's `draggingNodeId`
-  is transient during the drag.
+* Node position is committed once on `cdkDragEnded`; `cdkDragScale` receives
+  the current viewport zoom so CDK's live transform and the committed
+  screen-distance-to-graph-distance conversion agree. CP-10's
+  `draggingNodeId` is transient during the drag.
 * Hover and single selection use CP-10 transient selectors.
 * Pan and wheel use a component-local preview viewport. Pan commits on release;
   wheel commits after 120 ms. Fit, minimap navigation, and accessible controls
@@ -25,6 +27,12 @@ assert their sentinel fields do not appear in canonical serialization.
   compatibility or offers connection mutation.
 * A `ResizeObserver` updates local surface dimensions only, so CP-15 panel
   collapse/resizing does not affect persisted state.
+* The minimap uses one adapter layout for marker rendering and pointer
+  navigation. Its 12px-inset 128×72 content element is the coordinate source,
+  not the outer button.
+* Canvas selection and background pan explicitly restore canvas focus for
+  Delete/Escape/arrow controls; clicks in rendered form controls retain their
+  own focus.
 
 ## CP-30 profiling handoff
 

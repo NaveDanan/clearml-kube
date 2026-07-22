@@ -8,6 +8,7 @@ import {GraphBinding, GraphNode, GraphVisual, Point} from '../domain/graph-v2.ty
 export const CANVAS_MIN_ZOOM = .35;
 export const CANVAS_MAX_ZOOM = 2;
 export const CANVAS_DEFAULT_NODE_DIMENSIONS = {width: 176, height: 72} as const;
+export const CANVAS_MINIMAP_DRAWING_SIZE = {width: 128, height: 72} as const;
 
 export interface CanvasClientPoint {
   clientX: number;
@@ -35,6 +36,25 @@ export interface CanvasBasicBinding {
   id: string;
   source: CanvasNodeView;
   target: CanvasNodeView;
+}
+
+export interface CanvasMinimapLayout {
+  bounds: CanvasGraphBounds;
+  scale: number;
+}
+
+export interface CanvasMinimapNode {
+  id: string;
+  left: number;
+  top: number;
+  width: number;
+}
+
+export interface CanvasMinimapViewport {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
 }
 
 export type CanvasNodePlacement =
@@ -125,16 +145,16 @@ export const basicCanvasBindingPath = (binding: CanvasBasicBinding): string => {
   return `M ${sourceX} ${sourceY} C ${sourceX + curve} ${sourceY}, ${targetX - curve} ${targetY}, ${targetX} ${targetY}`;
 };
 
-interface GraphBounds {
+export interface CanvasGraphBounds {
   left: number;
   top: number;
   right: number;
   bottom: number;
 }
 
-const canvasBounds = (nodes: readonly CanvasNodeView[]): GraphBounds | null => {
+export const canvasGraphBounds = (nodes: readonly CanvasNodeView[]): CanvasGraphBounds | null => {
   if (!nodes.length) return null;
-  return nodes.reduce<GraphBounds>((bounds, view) => {
+  return nodes.reduce<CanvasGraphBounds>((bounds, view) => {
     const position = view.node.visual.position;
     return {
       left: Math.min(bounds.left, position.x),
@@ -150,12 +170,57 @@ const canvasBounds = (nodes: readonly CanvasNodeView[]): GraphBounds | null => {
   });
 };
 
+export const canvasMinimapLayout = (nodes: readonly CanvasNodeView[]): CanvasMinimapLayout | null => {
+  const bounds = canvasGraphBounds(nodes);
+  if (!bounds) return null;
+  return {
+    bounds,
+    scale: Math.min(
+      CANVAS_MINIMAP_DRAWING_SIZE.width / Math.max(1, bounds.right - bounds.left),
+      CANVAS_MINIMAP_DRAWING_SIZE.height / Math.max(1, bounds.bottom - bounds.top),
+    ),
+  };
+};
+
+export const canvasMinimapNode = (view: CanvasNodeView, layout: CanvasMinimapLayout): CanvasMinimapNode => ({
+  id: view.node.id,
+  left: (view.node.visual.position.x - layout.bounds.left) * layout.scale,
+  top: (view.node.visual.position.y - layout.bounds.top) * layout.scale,
+  width: Math.max(6, Math.min(24, view.dimensions.width * layout.scale)),
+});
+
+export const canvasMinimapViewport = (
+  visual: GraphVisual,
+  surface: Pick<CanvasSurfaceBounds, 'width' | 'height'>,
+  layout: CanvasMinimapLayout,
+): CanvasMinimapViewport => {
+  const graphLeft = -visual.viewport.x / visual.zoom;
+  const graphTop = -visual.viewport.y / visual.zoom;
+  return {
+    left: (graphLeft - layout.bounds.left) * layout.scale,
+    top: (graphTop - layout.bounds.top) * layout.scale,
+    width: Math.max(8, surface.width / visual.zoom * layout.scale),
+    height: Math.max(8, surface.height / visual.zoom * layout.scale),
+  };
+};
+
+export const canvasGraphPointFromMinimapClientPoint = (
+  point: CanvasClientPoint,
+  minimap: CanvasSurfaceBounds,
+  layout: CanvasMinimapLayout,
+): Point => ({
+  x: Math.min(layout.bounds.right, Math.max(layout.bounds.left,
+    layout.bounds.left + (point.clientX - minimap.left) / layout.scale)),
+  y: Math.min(layout.bounds.bottom, Math.max(layout.bounds.top,
+    layout.bounds.top + (point.clientY - minimap.top) / layout.scale)),
+});
+
 export const fitCanvasVisual = (
   nodes: readonly CanvasNodeView[],
   surface: Pick<CanvasSurfaceBounds, 'width' | 'height'>,
   padding = 56,
 ): GraphVisual | null => {
-  const bounds = canvasBounds(nodes);
+  const bounds = canvasGraphBounds(nodes);
   if (!bounds || surface.width <= 0 || surface.height <= 0) return null;
   const graphWidth = Math.max(1, bounds.right - bounds.left);
   const graphHeight = Math.max(1, bounds.bottom - bounds.top);
