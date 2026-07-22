@@ -252,7 +252,10 @@ export class ClearpipeCanvasComponent {
       this.edgeFeedback.set('More than one binding kind is valid. Explicitly choose data or artifact, then select this input again.');
       return;
     }
-    const result = this.semanticEdgesController.connectPorts(source, location, kind, replacementId);
+    const result = this.advanced.performSemantic(
+      replacementId ? 'reconnect-binding' : 'create-binding',
+      () => this.semanticEdgesController.connectPorts(source, location, kind, replacementId),
+    );
     if (result.eligible) {
       this.selectedBindingId.set(result.id ?? replacementId ?? null);
       this.cancelEdgeGesture();

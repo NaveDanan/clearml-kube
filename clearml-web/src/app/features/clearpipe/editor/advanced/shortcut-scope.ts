@@ -7,7 +7,8 @@ const DIALOG_SELECTOR = 'dialog, [role="dialog"], [aria-modal="true"]';
 
 export const isShortcutSuppressed = (target: EventTarget | null): boolean => {
   const element = target instanceof Element ? target : null;
-  return !!element?.closest(`${EDITABLE_SELECTOR}, ${DIALOG_SELECTOR}`);
+  return !!(element as HTMLElement | null)?.isContentEditable
+    || !!element?.closest(`${EDITABLE_SELECTOR}, ${DIALOG_SELECTOR}`);
 };
 
 export const shortcutModifierLabel = (platform = typeof navigator === 'undefined' ? '' : navigator.platform): string =>

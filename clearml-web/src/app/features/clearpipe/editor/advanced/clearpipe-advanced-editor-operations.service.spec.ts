@@ -210,6 +210,9 @@ describe('CP-27 shortcut scope', () => {
     dialog.appendChild(input);
     expect(isShortcutSuppressed(input)).toBeTrue();
     expect(isShortcutSuppressed(document.createElement('textarea'))).toBeTrue();
+    const plaintextEditor = document.createElement('div');
+    plaintextEditor.setAttribute('contenteditable', 'plaintext-only');
+    expect(isShortcutSuppressed(plaintextEditor)).toBeTrue();
     expect(isShortcutSuppressed(document.createElement('div'))).toBeFalse();
     expect(shortcutModifierLabel('MacIntel')).toBe('⌘');
     expect(shortcutModifierLabel('Win32')).toBe('Ctrl');

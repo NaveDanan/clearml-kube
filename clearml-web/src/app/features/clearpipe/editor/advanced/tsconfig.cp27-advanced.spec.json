@@ -1,5 +1,11 @@
 {
   "extends": "../../../../../../tsconfig.clearpipe.spec.json",
   "compilerOptions": {"outDir": "../../../../../../out-tsc/cp27-advanced-spec"},
-  "include": ["**/*.ts", "../../testing/clearpipe-fixtures.ts", "../../domain/**/*.ts", "../edges/**/*.ts"]
+  "include": [
+    "**/*.ts",
+    "../../testing/clearpipe-advanced*.spec.ts",
+    "../../testing/clearpipe-fixtures.ts",
+    "../../domain/**/*.ts",
+    "../edges/**/*.ts"
+  ]
 }
