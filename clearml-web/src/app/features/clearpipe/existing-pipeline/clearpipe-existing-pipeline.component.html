@@ -1,0 +1,64 @@
+@if (result().status === 'loading') {
+  <section class="existing-pipeline-state" aria-live="polite" aria-busy="true">
+    <h1>Reviewing pipeline for ClearPipe editing</h1>
+    <p>Checking its canonical graph, permissions, and referenced resources.</p>
+  </section>
+} @else if (editableResult(); as existing) {
+    <section class="existing-pipeline-entry">
+      <header class="existing-pipeline-entry__header">
+        <div>
+          <p class="existing-pipeline-entry__eyebrow">Existing pipeline</p>
+          <h1>{{ existing.state.definition.name }}</h1>
+          <p>Editing preserves the existing identity, project, permissions, source representation, and revision.</p>
+        </div>
+        <button mat-stroked-button type="button" (click)="returnToPipeline()">Return to pipeline</button>
+      </header>
+      <sm-clearpipe-editor></sm-clearpipe-editor>
+      <section class="existing-pipeline-entry__version" aria-labelledby="existing-pipeline-version">
+        <h2 id="existing-pipeline-version">Create version</h2>
+        <p>Create version uses the established ClearPipe Save As behavior; Save updates this pipeline with its current revision.</p>
+        <label>
+          New definition name
+          <input #versionName type="text" [value]="existing.state.definition.name + ' copy'">
+        </label>
+        <button mat-stroked-button type="button"
+                [disabled]="lifecycle.busy() || lifecycle.readOnly() || lifecycle.capabilities()?.save_as === false"
+                (click)="createVersion(versionName.value)">
+          Create version
+        </button>
+        @if (versionMessage()) {
+          <p role="status">{{ versionMessage() }}</p>
+        }
+      </section>
+    </section>
+} @else if (unsupportedResult(); as unsupported) {
+    <section class="existing-pipeline-state existing-pipeline-state--unsupported" role="alert">
+      <h1>Visual editing is unavailable</h1>
+      <p>{{ unsupported.problem.message }}</p>
+      <p>The original pipeline was not converted. Review every blocking construct in its established details or source experience.</p>
+      <ul>
+        @for (blocker of unsupported.blockers; track blocker.code + blocker.path) {
+          <li>
+            <strong>{{ blocker.code }}</strong>: {{ blocker.message }}
+            <button mat-button type="button" (click)="openBlockerDetails(blocker)">Open details</button>
+          </li>
+        }
+      </ul>
+      <div class="existing-pipeline-state__actions">
+        <button mat-flat-button type="button" (click)="returnToPipeline()">Return to pipeline details</button>
+      </div>
+    </section>
+} @else if (deniedResult(); as denied) {
+    <section class="existing-pipeline-state" role="alert">
+      <h1>Access unavailable</h1>
+      <p>{{ denied.problem.message }}</p>
+      <p>ClearPipe did not load or infer any pipeline content.</p>
+      <button mat-stroked-button type="button" (click)="returnToPipeline()">Return to pipeline details</button>
+    </section>
+} @else if (errorResult(); as error) {
+    <section class="existing-pipeline-state" role="alert">
+      <h1>Pipeline could not be reviewed</h1>
+      <p>{{ error.problem.message }}</p>
+      <button mat-stroked-button type="button" (click)="returnToPipeline()">Return to pipeline details</button>
+    </section>
+}

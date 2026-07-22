@@ -13,6 +13,11 @@
       <mat-icon fontSet="al" fontIcon="al-ico-console"></mat-icon>
       DETAILS
     </button>
+  @if (selected$ | ngrxPush; as pipeline) {
+    <a mat-stroked-button [routerLink]="['/clearpipe', pipeline.id, 'edit']" data-id="openClearpipeVisualEditor">
+      EDIT IN CLEARPIPE
+    </a>
+  }
   @if (!focusOnStageId() && hasStages()) {
     <button
       mat-stroked-button

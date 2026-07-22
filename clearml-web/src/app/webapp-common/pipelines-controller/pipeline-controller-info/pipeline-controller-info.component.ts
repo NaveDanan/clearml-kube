@@ -46,6 +46,7 @@ import {FormsModule} from '@angular/forms';
 import {MatButton, MatIconButton} from '@angular/material/button';
 import {PipelineInfoComponent} from '@common/pipelines-controller/pipeline-details/pipeline-info.component';
 import {MatIconModule} from '@angular/material/icon';
+import {RouterLink} from '@angular/router';
 import {
   PipelineControllerStepComponent
 } from '@common/pipelines-controller/pipeline-controller-step/pipeline-controller-step.component';
@@ -93,6 +94,7 @@ export enum StatusOption {
     MatIconModule,
     MatIconButton,
     MatButton,
+    RouterLink,
     PipelineInfoComponent,
     PipelineControllerStepComponent
   ]

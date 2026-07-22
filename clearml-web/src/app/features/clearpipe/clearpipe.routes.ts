@@ -16,15 +16,16 @@ export const clearpipeRoutes: Routes = [
   },
   {
     path: ':taskId/edit',
-    loadComponent: () => import('./editor/clearpipe-editor.component').then(m => m.ClearpipeEditorComponent),
+    loadComponent: () => import('./existing-pipeline/clearpipe-existing-pipeline.component').then(m => m.ClearpipeExistingPipelineComponent),
     canDeactivate: [clearpipeUnsavedWorkGuard],
     providers: [provideClearpipeFunctionAuthoring(), provideClearpipeTaskAuthoring()],
-    data: {clearpipeVisualEdit: true},
+    data: {clearpipeVisualEdit: true, existingPipeline: true},
   },
   {
     path: ':taskId',
-    loadComponent: () => import('./editor/clearpipe-editor.component').then(m => m.ClearpipeEditorComponent),
+    loadComponent: () => import('./existing-pipeline/clearpipe-existing-pipeline.component').then(m => m.ClearpipeExistingPipelineComponent),
     canDeactivate: [clearpipeUnsavedWorkGuard],
     providers: [provideClearpipeFunctionAuthoring(), provideClearpipeTaskAuthoring()],
+    data: {existingPipeline: true},
   },
 ];
