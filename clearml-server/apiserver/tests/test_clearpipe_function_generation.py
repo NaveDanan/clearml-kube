@@ -167,6 +167,37 @@ class ClearPipeFunctionGenerationTests(unittest.TestCase):
         self.assertIn('packages=["pandas==2.2.3", "scikit-learn==1.5.2"]', lowered.step_source)
         self.assertIn("retry_on_failure=2", lowered.step_source)
 
+    def test_vcs_package_credentials_are_rejected_by_the_generator_boundary(self):
+        graph = graph_fixture()
+        node = next(item for item in graph.nodes if item.id == "normalize")
+        for package in (
+            "git+https://user:password@example.test/repo.git",
+            "git+https://example.test/repo.git?to%6ben=must-not-persist",
+        ):
+            with self.subTest(package=package):
+                configured = replace(
+                    node,
+                    configuration=ExtendedFunctionConfiguration(
+                        task_type=node.configuration.task_type,
+                        cache=False,
+                        queue_resource_id=None,
+                        packages=(package,),
+                        retry_on_failure=None,
+                    ),
+                )
+                with self.assertRaises(FunctionGenerationError) as raised:
+                    lower_function_node(
+                        FunctionLoweringInput(
+                            graph=graph,
+                            node=configured,
+                            inbound_bindings=(),
+                            parent_node_ids=(),
+                        )
+                    )
+
+                self.assertEqual(raised.exception.code, "CPSEM010")
+                self.assertNotIn("must-not-persist", str(raised.exception))
+
     def test_pipeline_parameter_input_and_signature_default_are_explicit(self):
         raw = json.loads(GRAPH_FIXTURE.read_text(encoding="utf-8"))
         raw["nodes"] = [raw["nodes"][0]]

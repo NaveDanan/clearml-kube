@@ -22,7 +22,9 @@ _SECRET_ASSIGNMENT_PATTERN = re.compile(
     r"(?im)\b(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)\b\s*="
 )
 _SECRET_URL_IN_SOURCE_PATTERN = re.compile(
-    r"(?i)https?://[^\s/@:]+(?::[^\s/@]+)?@|https?://[^\s?#]+[^\s]*[?&](?:password|secret|token|api[_-]?key|access[_-]?key)="
+    r"(?i)(?:(?:(?:git|hg|svn|bzr)\+)?(?:https?|ssh))://[^\s/@:]+(?::[^\s/@]+)?@|"
+    r"(?:(?:(?:git|hg|svn|bzr)\+)?(?:https?|ssh))://[^\s?#]+[^\s]*"
+    r"[?&](?:password|secret|token|api[_-]?key|access[_-]?key)="
 )
 _SECRET_KEYS = {
     "password",
@@ -55,6 +57,23 @@ _PORT_DIRECTIONS = {"input", "output"}
 _PORT_ROLES = {"data", "artifact", "parameter"}
 _MULTIPLICITIES = {"single", "many"}
 _MAX_CANONICAL_INTEGER = 9007199254740991
+_CREDENTIAL_URL_SCHEMES = {
+    "http",
+    "https",
+    "git+http",
+    "git+https",
+    "git+ssh",
+    "git+git",
+    "hg+http",
+    "hg+https",
+    "hg+ssh",
+    "svn+http",
+    "svn+https",
+    "svn+ssh",
+    "bzr+http",
+    "bzr+https",
+    "bzr+ssh",
+}
 
 JsonValue = Union[None, bool, int, float, str, List["JsonValue"], Dict[str, "JsonValue"]]
 
@@ -577,9 +596,12 @@ def _is_secret_key(key: str) -> bool:
 
 
 def _is_sensitive_url(value: str) -> bool:
-    if not re.match(r"^https?://", value, re.IGNORECASE):
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return True
+    if parsed.scheme.lower() not in _CREDENTIAL_URL_SCHEMES:
         return False
-    parsed = urlsplit(value)
     if parsed.username or parsed.password:
         return True
     return any(_is_secret_key(key) for key, _ in _query_pairs(parsed.query))

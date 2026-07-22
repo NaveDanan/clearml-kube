@@ -13,8 +13,8 @@ import math
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
-from urllib.parse import unquote_plus, urlsplit
 
+from ..graph_v2 import _is_sensitive_url
 from .contracts import FunctionLoweringInput, SourceMapEntry
 
 
@@ -763,19 +763,6 @@ def _is_secret_key(value: str) -> bool:
         "credential",
         "connectionstring",
     } or compact.endswith(("password", "apikey", "accesstoken"))
-
-
-def _is_sensitive_url(value: str) -> bool:
-    if not re.match(r"^https?://", value, re.IGNORECASE):
-        return False
-    parsed = urlsplit(value)
-    if parsed.username or parsed.password:
-        return True
-    return any(
-        _is_secret_key(unquote_plus(pair.partition("=")[0]))
-        for pair in parsed.query.split("&")
-        if pair
-    )
 
 
 def _error(code: str, path: str, node_id: str, message: str) -> FunctionGenerationError:

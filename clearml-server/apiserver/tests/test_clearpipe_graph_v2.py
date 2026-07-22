@@ -109,6 +109,18 @@ class ClearPipeGraphV2Tests(unittest.TestCase):
                 "invalid",
                 "secret_not_allowed",
             ),
+            (
+                "vcs-userinfo-package",
+                {"packages": ["git+https://user:password@example.test/repo.git"]},
+                "invalid",
+                "secret_not_allowed",
+            ),
+            (
+                "vcs-encoded-secret-query",
+                {"packages": ["git+https://example.test/repo.git?to%6ben=must-not-persist"]},
+                "invalid",
+                "secret_not_allowed",
+            ),
             ("negative-retry", {"retry_on_failure": -1}, "invalid", "invalid_integer"),
             ("fractional-retry", {"retry_on_failure": 1.5}, "invalid", "invalid_integer"),
             ("unknown-config", {"unknown": True}, "unsupported", "unsupported_field"),

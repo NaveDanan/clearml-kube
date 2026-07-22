@@ -25,6 +25,7 @@ from ..graph_v2 import (
     PortEndpoint,
     ResourceEndpoint,
     TaskNode,
+    _is_sensitive_url,
 )
 from .contracts import (
     FunctionLoweringInput,
@@ -616,12 +617,12 @@ def _contains_secret(value: object) -> bool:
     if isinstance(value, str):
         if _SECRET_ASSIGNMENT.search(value):
             return True
+        if _is_sensitive_url(value):
+            return True
         try:
             parsed = urlsplit(value)
         except ValueError:
             return False
-        if parsed.scheme.lower() in {"http", "https"} and (parsed.username or parsed.password):
-            return True
         return any(
             _SECRET_KEY_PART.search(unquote_plus(partition[0]))
             for pair in parsed.query.split("&")
