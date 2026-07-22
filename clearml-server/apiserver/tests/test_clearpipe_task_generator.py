@@ -106,6 +106,20 @@ class ClearPipeTaskGeneratorTests(unittest.TestCase):
         self.assertIn('execution_queue="fast"', generated.source)
         self.assertIn("clone_base_task=False", generated.source)
         self.assertIn("cache_executed_step=True", generated.source)
+        source_lines = generated.source.splitlines()
+
+        def mapped_source(graph_element_id):
+            return [
+                "\n".join(source_lines[entry.start_line - 1 : entry.end_line])
+                for entry in generated.source_map
+                if entry.graph_element_id == graph_element_id
+            ]
+
+        self.assertEqual(len(mapped_source("dataset-iris")), 1)
+        self.assertIn("parameter_override", mapped_source("dataset-iris")[0])
+        self.assertEqual(len(mapped_source("queue-fast")), 1)
+        self.assertIn('execution_queue="fast"', mapped_source("queue-fast")[0])
+        self.assertEqual(mapped_source("queue-default"), ['pipe.set_default_execution_queue("default")'])
 
     def test_integer_retry_extension_lowers_and_callbacks_fail_explicitly(self):
         graph = parsed_graph("dataset-bound-graph.v2.json")
