@@ -2,6 +2,7 @@ import {ChangeDetectionStrategy, Component, DestroyRef, inject, signal} from '@a
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {ActivatedRoute} from '@angular/router';
 import {MatButtonModule} from '@angular/material/button';
+import {distinctUntilChanged, filter, map, switchMap, tap} from 'rxjs/operators';
 import {ClearpipeAdapterService} from '../platform/clearpipe-adapter.service';
 import {ClearpipeEditorComponent} from '../editor/clearpipe-editor.component';
 import {ClearpipeLifecycleService} from '../editor/clearpipe-lifecycle.service';
@@ -26,13 +27,18 @@ export class ClearpipeExistingPipelineComponent {
   private taskId = '';
 
   constructor() {
-    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
-      const taskId = params.get('taskId');
-      if (!taskId) return;
-      this.taskId = taskId;
-      this.versionMessage.set('');
-      this.loader.load(taskId).subscribe(result => this.result.set(result));
-    });
+    this.route.paramMap.pipe(
+      map(params => params.get('taskId')),
+      filter((taskId): taskId is string => Boolean(taskId)),
+      distinctUntilChanged(),
+      tap(taskId => {
+        this.taskId = taskId;
+        this.versionMessage.set('');
+        this.result.set({status: 'loading'});
+      }),
+      switchMap(taskId => this.loader.load(taskId)),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(result => this.result.set(result));
   }
 
   protected returnToPipeline(): void {

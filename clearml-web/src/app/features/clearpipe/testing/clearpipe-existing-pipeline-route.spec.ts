@@ -5,7 +5,8 @@ describe('existing pipeline routes', () => {
     const routes = clearpipeRoutes.filter(route => route.path === ':taskId/edit' || route.path === ':taskId');
 
     expect(routes.length).toBe(2);
-    expect(routes.every(route => route.data?.['existingPipeline'])).toBeTrue();
+    expect(routes[0].data).toEqual({clearpipeVisualEdit: true, existingPipeline: true});
+    expect(routes[1].data).toEqual({existingPipeline: true});
     expect(routes.every(route => route.canDeactivate?.length)).toBeTrue();
     const component = await routes[0].loadComponent!();
     expect(component).toBeDefined();
