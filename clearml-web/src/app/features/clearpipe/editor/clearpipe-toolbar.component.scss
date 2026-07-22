@@ -1,0 +1,39 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.toolbar,
+.toolbar__primary,
+.toolbar__overflow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar {
+  justify-content: space-between;
+  min-height: 48px;
+}
+
+.toolbar__primary {
+  min-width: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.toolbar__reason {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 959px) {
+  .toolbar__primary button {
+    min-width: 40px;
+    padding: 0 10px;
+  }
+}
