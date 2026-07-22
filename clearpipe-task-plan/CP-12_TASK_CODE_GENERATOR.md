@@ -49,8 +49,11 @@ binding shape), CPSEM008 (queue), CPSEM010 (secrets), plus CPGEN diagnostics for
 
 Each result includes `SourceManifest` (schema version, semantic source digest,
 topological node IDs) and `SourceMapEntry` spans for the document, parameters,
-resources, nodes, and inbound bindings.  Diagnostics never interpolate a
-secret value.
+resources, nodes, and inbound bindings. Every resource endpoint used by an
+artifact binding maps to its generated task-parameter use; every node-level
+queue resource maps to its generated `execution_queue` use (the default queue
+maps to `set_default_execution_queue`). Diagnostics never interpolate a secret
+value.
 
 ## CP-13 registration seam
 

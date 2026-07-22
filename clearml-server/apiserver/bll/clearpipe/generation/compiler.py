@@ -23,6 +23,7 @@ from ..graph_v2 import (
     InferredBinding,
     NodeEndpoint,
     PortEndpoint,
+    ResourceEndpoint,
     TaskNode,
 )
 from .contracts import (
@@ -538,8 +539,11 @@ def _render_definition(
         lines.append("")
         element_ids = fragment.graph_element_ids or (node.id,)
         _add_source_map_entries(source_map, element_ids, start, end)
+        if node.configuration.queue_resource_id is not None:
+            _add_source_map_entries(source_map, (node.configuration.queue_resource_id,), start, end)
         for binding in plan.inbound_bindings[node.id]:
             _add_source_map_entries(source_map, (binding.id,), start, end)
+            _add_source_map_entries(source_map, _binding_resource_ids(binding), start, end)
 
     while lines and lines[-1] == "":
         lines.pop()
@@ -718,3 +722,11 @@ def _python_literal(value: object, indent: int = 0) -> str:
         item_lines.append(" " * indent + "}")
         return "\n".join(item_lines)
     raise ValueError("only JSON values can be rendered into generated source")
+
+
+def _binding_resource_ids(binding: object) -> Tuple[str, ...]:
+    """Return stable resource IDs whose literal value is emitted for this binding."""
+
+    if isinstance(binding, ArtifactBinding) and isinstance(binding.source, ResourceEndpoint):
+        return (binding.source.resource_id,)
+    return ()
