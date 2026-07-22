@@ -1,4 +1,4 @@
-<form class="clearpipe-task-form" [formGroup]="createForm" (ngSubmit)="create()">
+<form class="clearpipe-task-form" [formGroup]="createForm" (ngSubmit)="create()" [attr.aria-describedby]="error() ? 'clearpipe-task-create-error' : null">
   <p class="clearpipe-task-form__notice">Search authorized base tasks. ClearPipe stores the immutable base task ID, never a runtime or child-task ID.</p>
   <section>
     <h3>Base task</h3>
@@ -62,6 +62,6 @@
       </section>
     }
   }
-  @if (error(); as message) { <p class="clearpipe-task-form__error" role="alert">{{ message }}</p> }
+  @if (error(); as message) { <p id="clearpipe-task-create-error" class="clearpipe-task-form__error" role="alert">{{ message }}</p> }
   <button mat-flat-button type="submit" [disabled]="descriptor().status !== 'available' && (descriptor().status !== 'stale' || !staleConfirmed())">Create task step</button>
 </form>

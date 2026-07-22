@@ -63,6 +63,8 @@ export class ClearpipeEditorComponent {
   private readonly canvasRegion = viewChild<ElementRef<HTMLElement>>('canvasRegion');
   private readonly paletteHeading = viewChild<ElementRef<HTMLElement>>('paletteHeading');
   private readonly inspectorHeading = viewChild<ElementRef<HTMLElement>>('inspectorHeading');
+  private readonly paletteDrawer = viewChild<ElementRef<HTMLElement>>('paletteDrawer');
+  private readonly inspectorDrawer = viewChild<ElementRef<HTMLElement>>('inspectorDrawer');
 
   protected readonly graph = this.lifecycle.graph;
   protected readonly isDirty = this.lifecycle.dirty;
@@ -207,8 +209,10 @@ export class ClearpipeEditorComponent {
   }
 
   protected closeDrawer(): void {
-    if (!this.activeDrawer()) return;
+    const drawer = this.activeDrawer();
+    if (!drawer) return;
     this.activeDrawer.set(null);
+    this.announce(`${drawer === 'palette' ? 'Authoring catalog' : 'Inspector'} closed`);
     this.focusReturnTarget?.focus();
     this.focusReturnTarget = null;
   }
@@ -233,6 +237,26 @@ export class ClearpipeEditorComponent {
 
   protected focusCanvas(): void {
     this.canvasRegion()?.nativeElement.focus();
+  }
+
+  protected trapDrawerFocus(event: KeyboardEvent): void {
+    if (event.key !== 'Tab' || !this.isNarrow()) return;
+    const drawer = this.activeDrawer() === 'palette' ? this.paletteDrawer()?.nativeElement : this.inspectorDrawer()?.nativeElement;
+    const heading = this.activeDrawer() === 'palette' ? this.paletteHeading()?.nativeElement : this.inspectorHeading()?.nativeElement;
+    if (!drawer) return;
+    const focusable = Array.from(drawer.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && (document.activeElement === heading || document.activeElement === first)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   protected async dispatchCatalogAction(request: ClearpipeCatalogActionRequest): Promise<void> {
@@ -290,17 +314,32 @@ export class ClearpipeEditorComponent {
         warnings: issues.filter(issue => issue.severity === 'warning'),
       });
       this.validationOpen.set(true);
-      this.announce(outcome.status === 'ready' ? 'ClearPipe graph is valid' : 'ClearPipe validation found issues');
+      this.announce(outcome.status === 'ready' && outcome.data.valid
+        ? 'ClearPipe graph is valid'
+        : `ClearPipe validation found ${issues.length} ${issues.length === 1 ? 'issue' : 'issues'}`);
     });
   }
 
   protected submitExecution(): void {
-    void this.execution.submit();
+    this.announce('Submitting ClearPipe run');
+    void this.execution.submit().then(() => {
+      const run = this.execution.run();
+      this.announce(run.state === 'submitted' || run.state === 'submitted_unwatched'
+        ? `ClearPipe run${run.runTaskId ? ` ${run.runTaskId}` : ''} submitted${run.state === 'submitted_unwatched' ? ' without an observed queue worker' : ''}`
+        : run.message ?? 'ClearPipe run was not submitted. Check run availability.');
+    });
   }
 
   protected async saveAndRefresh(): Promise<void> {
     await this.lifecycle.save();
+    this.announce(this.lifecycle.status() === 'saved'
+      ? 'ClearPipe definition saved'
+      : this.lifecycle.problem()?.message ?? 'ClearPipe definition was not saved');
     if (this.execution.routeReady()) await this.execution.refresh();
+  }
+
+  protected handleToolbarSave(): void {
+    void this.execution.refresh();
   }
 
   protected openExecutionTask(taskId: string): void {
@@ -349,6 +388,7 @@ export class ClearpipeEditorComponent {
   private openDrawer(panel: WorkspacePanel, invoker?: HTMLElement): void {
     this.focusReturnTarget = invoker ?? document.activeElement as HTMLElement;
     this.activeDrawer.set(panel);
+    this.announce(`${panel === 'palette' ? 'Authoring catalog' : 'Inspector'} opened`);
     queueMicrotask(() => (panel === 'palette' ? this.paletteHeading() : this.inspectorHeading())?.nativeElement.focus());
   }
 

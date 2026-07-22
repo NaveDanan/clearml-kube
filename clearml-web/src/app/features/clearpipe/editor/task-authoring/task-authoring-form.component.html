@@ -1,4 +1,4 @@
-<form class="clearpipe-task-form" [formGroup]="form">
+<form class="clearpipe-task-form" [formGroup]="form" [attr.aria-describedby]="saveMessage() ? 'clearpipe-task-form-message' : null">
   @let baseTask = node().base_task;
   <p class="clearpipe-task-form__notice">Task ports come only from the authorized task descriptor. Connections are created and removed through ClearPipe’s semantic edge controller.</p>
   <section>
@@ -134,7 +134,7 @@
       </p>
     }
   </section>
-  @if (saveMessage(); as message) { <p class="clearpipe-task-form__error" role="alert">{{ message }}</p> }
+  @if (saveMessage(); as message) { <p id="clearpipe-task-form-message" class="clearpipe-task-form__error" role="alert">{{ message }}</p> }
   <button mat-flat-button type="button" (click)="save()"
           [disabled]="clearpipeInspectorContext().readOnly || (descriptor().status !== 'available' && (descriptor().status !== 'stale' || !staleConfirmed()))">Save task configuration</button>
 </form>

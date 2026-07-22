@@ -456,11 +456,11 @@ a:focus-visible,
 
   .workspace-toolbar {
     align-items: center;
-    overflow-x: auto;
+    overflow: hidden;
   }
 
   .toolbar-primary {
-    flex: 1 0 auto;
+    flex: 1 1 auto;
   }
 
   .run-unavailable,

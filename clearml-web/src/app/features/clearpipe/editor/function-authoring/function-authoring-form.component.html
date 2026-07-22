@@ -1,27 +1,27 @@
-<form class="clearpipe-function-form" [formGroup]="form">
+<form class="clearpipe-function-form" [formGroup]="form" [attr.aria-describedby]="formDescriptionIds()">
   <p class="clearpipe-function-form__notice">Function source and signature are immutable after creation. Source is validated by the server compiler and is never executed here.</p>
-  <mat-form-field appearance="outline"><mat-label>Component name</mat-label><input matInput formControlName="label"></mat-form-field>
-  <mat-form-field appearance="outline"><mat-label>Description</mat-label><textarea matInput formControlName="description" rows="2"></textarea></mat-form-field>
-  <mat-form-field appearance="outline"><mat-label>Task type</mat-label><mat-select formControlName="taskType">@for (type of taskTypes; track type) { <mat-option [value]="type">{{ type }}</mat-option> }</mat-select></mat-form-field>
-  <mat-form-field appearance="outline"><mat-label>Queue reference</mat-label><input matInput formControlName="queueResourceId"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Component name</mat-label><input matInput formControlName="label" [attr.aria-invalid]="hasDiagnostic('label') ? 'true' : null" [attr.aria-describedby]="diagnosticIds('label')"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Description</mat-label><textarea matInput formControlName="description" rows="2" [attr.aria-invalid]="hasDiagnostic('description') ? 'true' : null" [attr.aria-describedby]="diagnosticIds('description')"></textarea></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Task type</mat-label><mat-select formControlName="taskType" [attr.aria-invalid]="hasDiagnostic('taskType') ? 'true' : null" [attr.aria-describedby]="diagnosticIds('taskType')">@for (type of taskTypes; track type) { <mat-option [value]="type">{{ type }}</mat-option> }</mat-select></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Queue reference</mat-label><input matInput formControlName="queueResourceId" [attr.aria-invalid]="hasDiagnostic('queueResourceId') ? 'true' : null" [attr.aria-describedby]="diagnosticIds('queueResourceId')"></mat-form-field>
   <mat-checkbox formControlName="cache">Cache executed step</mat-checkbox>
-  <mat-form-field appearance="outline"><mat-label>Package requirements (one per line)</mat-label><textarea matInput formControlName="packages" rows="3"></textarea></mat-form-field>
-  <mat-form-field appearance="outline"><mat-label>Retry on failure</mat-label><input matInput formControlName="retryOnFailure" inputmode="numeric"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Package requirements (one per line)</mat-label><textarea matInput formControlName="packages" rows="3" [attr.aria-invalid]="hasDiagnostic('packages') ? 'true' : null" [attr.aria-describedby]="diagnosticIds('packages')"></textarea></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Retry on failure</mat-label><input matInput formControlName="retryOnFailure" inputmode="numeric" [attr.aria-invalid]="hasDiagnostic('retryOnFailure') ? 'true' : null" [attr.aria-describedby]="diagnosticIds('retryOnFailure')"></mat-form-field>
 
-  <section formArrayName="inputs"><h3>Typed inputs</h3>
+  <section formArrayName="inputs" [attr.aria-invalid]="hasDiagnostic('inputs', 'ports') ? 'true' : null" [attr.aria-describedby]="diagnosticIds('inputs', 'ports')"><h3>Typed inputs</h3>
     @for (input of form.controls.inputs.controls; track input.controls.id.value; let index = $index) {
       <fieldset [formGroupName]="index"><input aria-label="Input ID" formControlName="id"><input aria-label="Input name" formControlName="name">
         <select aria-label="Input type" formControlName="type"><option value="data">Data</option><option value="artifact">Artifact</option><option value="parameter">Parameter</option></select>
         <label><input type="checkbox" formControlName="required"> Required</label><input aria-label="Default JSON" formControlName="defaultJson"><button type="button" (click)="removeInput(index)" [disabled]="isBound(input.controls.id.value)" [attr.title]="isBound(input.controls.id.value) ? 'Disconnect or remap this port through the edge controller first.' : null">Remove</button></fieldset>
     } <button type="button" (click)="addInput()">Add input</button>
   </section>
-  <section formArrayName="outputs"><h3>Typed outputs</h3>
+  <section formArrayName="outputs" [attr.aria-invalid]="hasDiagnostic('outputs', 'ports') ? 'true' : null" [attr.aria-describedby]="diagnosticIds('outputs', 'ports')"><h3>Typed outputs</h3>
     @for (output of form.controls.outputs.controls; track output.controls.id.value; let index = $index) {
       <fieldset [formGroupName]="index"><input aria-label="Output ID" formControlName="id"><input aria-label="Return name" formControlName="name">
         <select aria-label="Output type" formControlName="type"><option value="data">Data</option><option value="artifact">Artifact</option></select><button type="button" (click)="removeOutput(index)" [disabled]="isBound(output.controls.id.value)" [attr.title]="isBound(output.controls.id.value) ? 'Disconnect or remap this port through the edge controller first.' : null">Remove</button></fieldset>
     } <button type="button" (click)="addOutput()">Add output</button>
   </section>
-  @for (issue of diagnostics(); track issue.code + issue.field) { <p class="clearpipe-function-form__error" role="alert">{{ issue.code }}: {{ issue.message }}</p> }
-  @if (saveMessage(); as message) { <p class="clearpipe-function-form__error" role="alert">{{ message }}</p> }
+  @for (issue of diagnostics(); track issue.code + issue.field; let index = $index) { <p class="clearpipe-function-form__error" [id]="diagnosticId(index)" role="alert">{{ diagnosticLabel(issue) }}</p> }
+  @if (saveMessage(); as message) { <p id="clearpipe-function-save-message" class="clearpipe-function-form__error" role="alert">{{ message }}</p> }
   <button mat-flat-button type="button" (click)="save()" [disabled]="clearpipeInspectorContext().readOnly || diagnostics().length">Save configuration</button>
 </form>

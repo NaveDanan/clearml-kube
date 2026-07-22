@@ -46,7 +46,12 @@ export class ClearpipeToolbarComponent {
         return;
       case 'save':
         await this.lifecycle.save();
-        if (this.lifecycle.status() === 'saved') this.saved.emit();
+        if (this.lifecycle.status() === 'saved') {
+          this.transferMessage.set('ClearPipe definition saved.');
+          this.saved.emit();
+        } else {
+          this.transferMessage.set(this.lifecycle.problem()?.message ?? 'ClearPipe definition was not saved.');
+        }
         return;
       case 'open':
         this.openRequested.emit();

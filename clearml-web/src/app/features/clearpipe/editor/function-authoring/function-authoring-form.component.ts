@@ -7,7 +7,13 @@ import {MatInputModule} from '@angular/material/input';
 import {MatSelectModule} from '@angular/material/select';
 import {FunctionNode} from '../../domain/graph-v2.types';
 import {CLEARPIPE_INSPECTOR_FORM_CONTEXT, ClearpipeInspectorFormContext, ClearpipeInspectorFormContract} from '../framework/clearpipe-ui.types';
-import {FUNCTION_AUTHORING_TASK_TYPES, FunctionAuthoringDefinition, FunctionAuthoringOutput, FunctionAuthoringPort} from './function-authoring.models';
+import {
+  FUNCTION_AUTHORING_TASK_TYPES,
+  FunctionAuthoringDefinition,
+  FunctionAuthoringDiagnostic,
+  FunctionAuthoringOutput,
+  FunctionAuthoringPort,
+} from './function-authoring.models';
 import {ClearpipeFunctionAuthoringService} from './function-authoring.service';
 import {validateFunctionAuthoringDefinition} from './function-authoring.validation';
 
@@ -88,6 +94,30 @@ export class ClearpipeFunctionAuthoringFormComponent implements ClearpipeInspect
 
   protected isBound(portId: string): boolean {
     return this.authoring.isPortBound(this.clearpipeInspectorContext().node.id, portId);
+  }
+
+  protected diagnosticId(index: number): string {
+    return `clearpipe-function-diagnostic-${this.clearpipeInspectorContext().node.id}-${index}`;
+  }
+
+  protected diagnosticIds(...fields: readonly string[]): string | null {
+    const ids = this.diagnostics()
+      .flatMap((diagnostic, index) => fields.includes(diagnostic.field) ? [this.diagnosticId(index)] : []);
+    return ids.length ? ids.join(' ') : null;
+  }
+
+  protected hasDiagnostic(...fields: readonly string[]): boolean {
+    return this.diagnostics().some(diagnostic => fields.includes(diagnostic.field));
+  }
+
+  protected formDescriptionIds(): string | null {
+    const ids = this.diagnostics().map((_, index) => this.diagnosticId(index));
+    if (this.saveMessage()) ids.push('clearpipe-function-save-message');
+    return ids.length ? ids.join(' ') : null;
+  }
+
+  protected diagnosticLabel(diagnostic: FunctionAuthoringDiagnostic): string {
+    return `${diagnostic.code}: ${diagnostic.message}`;
   }
 
   private load(node: FunctionNode): void {

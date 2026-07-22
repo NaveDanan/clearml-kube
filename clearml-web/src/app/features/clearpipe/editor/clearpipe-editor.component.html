@@ -48,21 +48,11 @@
         (validateRequested)="validate()"
         (previewRequested)="previewOpen.set(true)"
         (runRequested)="submitExecution()"
-        (saved)="execution.refresh()"
+        (saved)="handleToolbarSave()"
         (settingsRequested)="openPanel('inspector')">
       </sm-clearpipe-toolbar>
     </div>
   </div>
-
-  @if (execution.routeReady()) {
-    <sm-clearpipe-execution-results
-      [presentation]="execution.presentation()"
-      (openPipelineRequested)="execution.openPipelineRun()"
-      (openTaskRequested)="openExecutionTask($event)"
-      (openDatasetRequested)="openExecutionDataset($event)"
-      (openModelRequested)="openExecutionModel($event)">
-    </sm-clearpipe-execution-results>
-  }
 
   @if (execution.routeReady()) {
     <sm-clearpipe-execution-results
@@ -80,13 +70,19 @@
     }
 
     <aside id="clearpipe-palette"
+           #paletteDrawer
            class="workspace-panel workspace-panel--palette"
+           tabindex="-1"
            [class.workspace-panel--hidden]="(isNarrow() && activeDrawer() !== 'palette') || (!isNarrow() && !paletteOpen())"
            [class.workspace-panel--drawer]="isNarrow() && activeDrawer() === 'palette'"
-           [attr.aria-hidden]="(isNarrow() && activeDrawer() !== 'palette') || (!isNarrow() && !paletteOpen())">
+           [attr.aria-hidden]="(isNarrow() && activeDrawer() !== 'palette') || (!isNarrow() && !paletteOpen())"
+           [attr.role]="isNarrow() && activeDrawer() === 'palette' ? 'dialog' : null"
+           [attr.aria-modal]="isNarrow() && activeDrawer() === 'palette' ? 'true' : null"
+           [attr.aria-labelledby]="isNarrow() && activeDrawer() === 'palette' ? 'clearpipe-palette-title' : null"
+           (keydown)="trapDrawerFocus($event)">
       <header>
         <div>
-          <h2 #paletteHeading tabindex="-1">Authoring catalog</h2>
+          <h2 #paletteHeading id="clearpipe-palette-title" tabindex="-1">Authoring catalog</h2>
           <span>Registered starts</span>
         </div>
         <button mat-icon-button type="button"
@@ -205,13 +201,19 @@
     }
 
     <aside id="clearpipe-inspector"
+           #inspectorDrawer
            class="workspace-panel workspace-panel--inspector"
+           tabindex="-1"
            [class.workspace-panel--hidden]="(isNarrow() && activeDrawer() !== 'inspector') || (!isNarrow() && !inspectorOpen())"
            [class.workspace-panel--drawer]="isNarrow() && activeDrawer() === 'inspector'"
-           [attr.aria-hidden]="(isNarrow() && activeDrawer() !== 'inspector') || (!isNarrow() && !inspectorOpen())">
+           [attr.aria-hidden]="(isNarrow() && activeDrawer() !== 'inspector') || (!isNarrow() && !inspectorOpen())"
+           [attr.role]="isNarrow() && activeDrawer() === 'inspector' ? 'dialog' : null"
+           [attr.aria-modal]="isNarrow() && activeDrawer() === 'inspector' ? 'true' : null"
+           [attr.aria-labelledby]="isNarrow() && activeDrawer() === 'inspector' ? 'clearpipe-inspector-title' : null"
+           (keydown)="trapDrawerFocus($event)">
       <header>
         <div>
-          <h2 #inspectorHeading tabindex="-1">Inspector</h2>
+          <h2 #inspectorHeading id="clearpipe-inspector-title" tabindex="-1">Inspector</h2>
           <span>@if (state.selectedNodeId()) { Selected graph item } @else { No item selected }</span>
         </div>
         <button mat-icon-button type="button"
