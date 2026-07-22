@@ -92,6 +92,8 @@ export interface ClearpipeResourceSummary {
   readonly status?: string;
   readonly tags?: readonly string[];
   readonly updatedAt?: string;
+  readonly taskUserTags?: readonly string[];
+  readonly taskSystemTags?: readonly string[];
 }
 
 export interface ClearpipeResourceFilter {
@@ -170,14 +172,25 @@ export const clearpipeResourceReference = (resource: ClearpipeResourceSummary): 
 
 export const normalizeClearpipeResource = (
   kind: ClearpipeResourceKind,
-  resource: Pick<ClearpipeResourceOption, 'id' | 'name' | 'project'>
-): ClearpipeResourceSummary => ({
-  id: String(resource.id),
-  kind,
-  name: String(resource.name),
-  ...(resource.project ? {project: String(resource.project)} : {}),
-  type: kind,
-});
+  resource: Pick<ClearpipeResourceOption,
+    'id' | 'name' | 'project' | 'taskType' | 'taskStatus' | 'taskUserTags' | 'taskSystemTags' | 'taskLastUpdatedAt'>
+): ClearpipeResourceSummary => {
+  const taskUserTags = resource.taskUserTags?.filter(tag => typeof tag === 'string' && tag.trim());
+  const taskSystemTags = resource.taskSystemTags?.filter(tag => typeof tag === 'string' && tag.trim());
+  const tags = [...new Set([...(taskUserTags ?? []), ...(taskSystemTags ?? [])])];
+  return {
+    id: String(resource.id),
+    kind,
+    name: String(resource.name),
+    ...(resource.project ? {project: String(resource.project)} : {}),
+    type: resource.taskType ?? kind,
+    ...(resource.taskStatus ? {status: resource.taskStatus} : {}),
+    ...(tags.length ? {tags} : {}),
+    ...(resource.taskLastUpdatedAt ? {updatedAt: resource.taskLastUpdatedAt} : {}),
+    ...(taskUserTags?.length ? {taskUserTags} : {}),
+    ...(taskSystemTags?.length ? {taskSystemTags} : {}),
+  };
+};
 
 export const isSafeCredentialReference = (reference: ClearpipeCredentialReference): boolean => {
   const value = reference.reference.trim();

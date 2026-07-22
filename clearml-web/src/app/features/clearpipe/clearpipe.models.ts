@@ -59,6 +59,12 @@ export interface ClearpipeResourceOption {
   name: string;
   project?: string;
   type: 'project' | 'task' | 'dataset' | 'model' | 'queue' | 'report' | 'endpoint' | 'storage';
+  /** Safe task display metadata. `type` above remains the resource kind. */
+  taskType?: string;
+  taskStatus?: string;
+  taskUserTags?: string[];
+  taskSystemTags?: string[];
+  taskLastUpdatedAt?: string;
 }
 
 export const CLEARPIPE_NODE_TYPES: readonly {

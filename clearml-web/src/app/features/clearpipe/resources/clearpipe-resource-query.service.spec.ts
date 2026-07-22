@@ -200,6 +200,7 @@ describe('ClearpipeResourceQueryController', () => {
       name: 'Alpha',
       project: 'project-a',
     });
+
     const payload = JSON.stringify({resources: [clearpipeResourceReference(summary)]});
 
     expect(payload).toContain('task-1');
@@ -207,6 +208,33 @@ describe('ClearpipeResourceQueryController', () => {
     expect(payload).not.toContain('password');
     expect(isSafeCredentialReference({reference: 'credential-reference-1', label: 'Configured credential'})).toBeTrue();
     expect(isSafeCredentialReference({reference: 'api-key-inline-value', label: 'Unsafe'})).toBeFalse();
+  });
+
+  it('normalizes task metadata without replacing the resource kind or resolver inventory', () => {
+    gateway.resources.and.returnValue(of(ready([{
+      ...resource('task-1', 'Training'),
+      taskType: 'training',
+      taskStatus: 'completed',
+      taskUserTags: ['baseline'],
+      taskSystemTags: ['archived'],
+      taskLastUpdatedAt: '2026-07-22T15:00:00Z',
+    }])));
+
+    controller.load();
+
+    expect(controller.state().items).toEqual([jasmine.objectContaining({
+      id: 'task-1',
+      kind: 'task',
+      type: 'training',
+      status: 'completed',
+      tags: ['baseline', 'archived'],
+      taskUserTags: ['baseline'],
+      taskSystemTags: ['archived'],
+      updatedAt: '2026-07-22T15:00:00Z',
+    })]);
+    controller.setFilter({tags: ['archived']});
+    expect(controller.state().items.map(item => item.id)).toEqual(['task-1']);
+    expect(controller.resolve({kind: 'task', resource_id: 'task-1'})).toEqual({status: 'available'});
   });
 
   it('publishes standalone selector components for downstream inspector consumers', () => {

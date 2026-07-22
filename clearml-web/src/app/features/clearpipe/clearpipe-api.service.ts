@@ -267,7 +267,15 @@ export class ClearpipeApiService {
   getResources(type: ClearpipeResourceOption['type']): Observable<ClearpipeResourceOption[]> {
     const requests: Record<ClearpipeResourceOption['type'], {endpoint: string; body: Record<string, unknown>; key: string}> = {
       project: {endpoint: 'projects.get_all', body: {page: 0, page_size: 500, only_fields: ['id', 'name']}, key: 'projects'},
-      task: {endpoint: 'tasks.get_all', body: {page: 0, page_size: 500, only_fields: ['id', 'name', 'project']}, key: 'tasks'},
+      task: {
+        endpoint: 'tasks.get_all',
+        body: {
+          page: 0,
+          page_size: 500,
+          only_fields: ['id', 'name', 'project', 'type', 'status', 'tags', 'system_tags', 'last_update'],
+        },
+        key: 'tasks',
+      },
       dataset: {endpoint: 'tasks.get_all', body: {page: 0, page_size: 500, type: ['data_processing'], system_tags: ['dataset'], only_fields: ['id', 'name', 'project']}, key: 'tasks'},
       model: {endpoint: 'models.get_all', body: {page: 0, page_size: 500, only_fields: ['id', 'name', 'project']}, key: 'models'},
       queue: {endpoint: 'queues.get_all', body: {only_fields: ['id', 'name']}, key: 'queues'},
@@ -282,8 +290,36 @@ export class ClearpipeApiService {
         name: item.name ?? item.id ?? item.url,
         project: item.project?.name ?? item.project,
         type,
+        ...(type === 'task' ? this.taskMetadata(item) : {}),
       })))
     );
+  }
+
+  private taskMetadata(task: Record<string, unknown>): Pick<ClearpipeResourceOption,
+    'taskType' | 'taskStatus' | 'taskUserTags' | 'taskSystemTags' | 'taskLastUpdatedAt'> {
+    const text = (value: unknown): string | undefined =>
+      typeof value === 'string' && value.trim() ? value : undefined;
+    const tags = (value: unknown): string[] | undefined => {
+      if (!Array.isArray(value)) return undefined;
+      const safeTags = value.flatMap(tag => {
+        const normalized = text(tag);
+        return normalized ? [normalized] : [];
+      });
+      return safeTags.length ? safeTags : undefined;
+    };
+
+    const taskType = text(task.type);
+    const taskStatus = text(task.status);
+    const taskUserTags = tags(task.tags);
+    const taskSystemTags = tags(task.system_tags);
+    const taskLastUpdatedAt = text(task.last_update);
+    return {
+      ...(taskType ? {taskType} : {}),
+      ...(taskStatus ? {taskStatus} : {}),
+      ...(taskUserTags ? {taskUserTags} : {}),
+      ...(taskSystemTags ? {taskSystemTags} : {}),
+      ...(taskLastUpdatedAt ? {taskLastUpdatedAt} : {}),
+    };
   }
 
   private definitionPayload(definition: ClearpipeDefinition): Record<string, unknown> {

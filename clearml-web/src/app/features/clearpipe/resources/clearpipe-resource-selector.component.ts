@@ -54,7 +54,11 @@ import {ClearpipeResourceQueryController} from './clearpipe-resource-query.servi
                 @if (resource.version) { <span> · {{ resource.version }}</span> }
                 @if (resource.type) { <span> · {{ resource.type }}</span> }
                 @if (resource.status) { <span> · {{ resource.status }}</span> }
-                @if (resource.tags?.length) { <span> · {{ resource.tags?.join(', ') }}</span> }
+                @if (resource.taskUserTags?.length) { <span> · User tags: {{ resource.taskUserTags?.join(', ') }}</span> }
+                @if (resource.taskSystemTags?.length) { <span> · System tags: {{ resource.taskSystemTags?.join(', ') }}</span> }
+                @if (!resource.taskUserTags?.length && !resource.taskSystemTags?.length && resource.tags?.length) {
+                  <span> · {{ resource.tags?.join(', ') }}</span>
+                }
                 @if (resource.updatedAt) { <span> · {{ resource.updatedAt }}</span> }
               </button>
               @if (managementLink(resource); as management) {

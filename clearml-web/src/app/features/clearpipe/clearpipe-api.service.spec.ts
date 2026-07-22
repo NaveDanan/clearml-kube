@@ -49,6 +49,45 @@ describe('ClearpipeApiService', () => {
     expect(requests.post.calls.argsFor(2)[1]).toEqual({script: 'print(1)', filename: 'train.py'});
   });
 
+  it('requests and normalizes only safe task-selection metadata', () => {
+    requests.post.and.returnValue(of({
+      tasks: [{
+        id: 'task-1',
+        name: 'Training',
+        project: {name: 'Research'},
+        type: 'training',
+        status: 'completed',
+        tags: ['baseline'],
+        system_tags: ['archived'],
+        last_update: '2026-07-22T15:00:00Z',
+        execution: {queue: 'must-not-be-returned'},
+        hyperparams: {params: 'must-not-be-returned'},
+        script: {repository: 'must-not-be-returned'},
+      }],
+    }));
+
+    let resources: unknown;
+    api.getResources('task').subscribe(result => resources = result);
+
+    expect(requests.post).toHaveBeenCalledWith('/service/1/api/v999.0/tasks.get_all', {
+      page: 0,
+      page_size: 500,
+      only_fields: ['id', 'name', 'project', 'type', 'status', 'tags', 'system_tags', 'last_update'],
+    });
+    expect(resources).toEqual([{
+      id: 'task-1',
+      name: 'Training',
+      project: 'Research',
+      type: 'task',
+      taskType: 'training',
+      taskStatus: 'completed',
+      taskUserTags: ['baseline'],
+      taskSystemTags: ['archived'],
+      taskLastUpdatedAt: '2026-07-22T15:00:00Z',
+    }]);
+    expect(JSON.stringify(resources)).not.toContain('must-not-be-returned');
+  });
+
   it('covers each typed CP-07 operation with the v2.35 contract envelopes', () => {
     const graph: GraphV2 = {
       schema_version: 2,
