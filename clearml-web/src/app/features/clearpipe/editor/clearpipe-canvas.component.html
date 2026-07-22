@@ -24,9 +24,19 @@
     <div class="canvas-graph" [style.transform]="transform()">
       <svg class="canvas-bindings"
            role="img"
-           aria-label="Basic visual bindings. Compatibility is not indicated by these lines.">
-        @for (binding of bindings(); track binding.id) {
-          <path class="canvas-binding" [attr.d]="bindingPath(binding)"></path>
+           aria-label="Semantic ClearPipe bindings">
+        @for (edge of semanticEdges(); track edge.id) {
+          <g class="canvas-binding"
+             [class.canvas-binding--selected]="selectedBindingId() === edge.id"
+             [class.canvas-binding--artifact]="edge.kind === 'artifact'">
+            <path [attr.d]="edge.path"
+                  role="button"
+                  tabindex="0"
+                  [attr.aria-label]="edge.label"
+                  (click)="selectBinding($event, edge.id)"
+                  (keydown)="selectBindingKeydown($event, edge.id)"></path>
+            <title>{{ edge.label }}</title>
+          </g>
         }
       </svg>
 
@@ -55,7 +65,20 @@
             @if (nodeTemplate(); as renderer) {
               <ng-container [ngTemplateOutlet]="renderer" [ngTemplateOutletContext]="nodeContext(view)"></ng-container>
             } @else {
-              <span class="canvas-node-fallback">{{ view.node.label }}</span>
+              <div class="canvas-node-fallback">
+                <strong>{{ view.node.label }}</strong>
+                <div class="canvas-node-ports" aria-label="Semantic ports">
+                  @for (port of view.node.ports; track port.id) {
+                    <button type="button"
+                            class="canvas-node-port"
+                            [class.canvas-node-port--selected]="selectedSourcePort()?.node_id === view.node.id && selectedSourcePort()?.port_id === port.id"
+                            [attr.aria-label]="portAriaLabel(view.node.id, port)"
+                            (click)="activatePort($event, view.node.id, port.id)">
+                      {{ port.direction === 'output' ? 'Output' : 'Input' }}: {{ port.name }}
+                    </button>
+                  }
+                </div>
+              </div>
             }
           </div>
         </article>
@@ -92,7 +115,27 @@
           <mat-icon>delete</mat-icon>
         </button>
       }
+      @if (selectedBinding()) {
+        <button mat-icon-button type="button" (click)="beginReconnectSelectedBinding($event)" [disabled]="!canEdit()" aria-label="Reconnect selected binding">
+          <mat-icon>sync_alt</mat-icon>
+        </button>
+        <button mat-icon-button type="button" (click)="removeSelectedBinding($event)" [disabled]="!canEdit()" aria-label="Delete selected binding">
+          <mat-icon>delete</mat-icon>
+        </button>
+      }
     </div>
+
+    @if (selectedSourcePort()) {
+      <section class="canvas-connection-controls" aria-label="Semantic connection options">
+        <strong>@if (reconnectingBindingId()) { Reconnecting } @else { Connecting }</strong>
+        <span>Choose a binding kind, then select an input port.</span>
+        <button type="button" [disabled]="!canChooseBindingKind('data')" [attr.aria-pressed]="selectedBindingKind() === 'data'" (click)="chooseBindingKind('data')">Data</button>
+        <button type="button" [disabled]="!canChooseBindingKind('artifact')" [attr.aria-pressed]="selectedBindingKind() === 'artifact'" (click)="chooseBindingKind('artifact')">Artifact</button>
+      </section>
+    }
+    @if (edgeFeedback()) {
+      <p class="canvas-edge-feedback" role="status" aria-live="polite">{{ edgeFeedback() }}</p>
+    }
 
     @if (nodes().length) {
       <button

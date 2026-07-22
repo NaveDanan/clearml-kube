@@ -5,17 +5,29 @@
 .canvas-surface--panning {cursor:grabbing;}
 .canvas-graph {position:absolute; inset:0; transform-origin:0 0; pointer-events:none; will-change:transform;}
 .canvas-bindings {position:absolute; overflow:visible; width:1px; height:1px; pointer-events:none;}
-.canvas-binding {fill:none; stroke:var(--color-outline); stroke-width:2; stroke-dasharray:4 3; opacity:.85;}
+.canvas-binding path {fill:none; stroke:var(--color-outline); stroke-width:2; stroke-dasharray:4 3; opacity:.9; pointer-events:stroke; cursor:pointer; outline:none;}
+.canvas-binding path:focus-visible {stroke-width:4; stroke-dasharray:none;}
+.canvas-binding--artifact path {stroke-dasharray:1 4;}
+.canvas-binding--selected path {stroke:var(--color-primary); stroke-width:4; stroke-dasharray:none;}
 .canvas-node-drag {position:absolute; inset:0 auto auto 0; width:0; height:0; pointer-events:auto;}
 .canvas-node-position {display:flex; align-items:stretch; box-sizing:border-box; outline:none; cursor:move; transform-origin:0 0;}
 .canvas-node-position:focus-visible {outline:2px solid var(--color-primary); outline-offset:4px;}
 .canvas-node-position--selected {box-shadow:0 0 0 2px var(--color-primary);}
 .canvas-node-position--hovered {filter:drop-shadow(0 2px 4px color-mix(in srgb, var(--color-primary) 24%, transparent));}
-.canvas-node-fallback {display:flex; align-items:center; box-sizing:border-box; width:100%; min-height:inherit; padding:8px 10px; border:1px dashed var(--color-outline); border-radius:4px; background:var(--color-surface); color:var(--color-on-surface); font-size:12px; line-height:1.3;}
+.canvas-node-fallback {display:flex; flex-direction:column; align-items:stretch; box-sizing:border-box; gap:6px; width:100%; min-height:inherit; padding:8px 10px; border:1px dashed var(--color-outline); border-radius:4px; background:var(--color-surface); color:var(--color-on-surface); font-size:12px; line-height:1.3;}
+.canvas-node-ports {display:flex; flex-wrap:wrap; gap:4px;}
+.canvas-node-port {border:1px solid var(--color-outline); border-radius:3px; background:var(--color-surface-container-low); color:var(--color-on-surface); font:inherit; text-align:left; cursor:pointer;}
+.canvas-node-port--selected {border-width:2px; border-style:solid; font-weight:700;}
+.canvas-node-port:focus-visible {outline:2px solid var(--color-primary); outline-offset:2px;}
 .canvas-empty {position:absolute; left:50%; top:50%; display:flex; flex-direction:column; align-items:center; gap:6px; width:min(340px, calc(100% - 32px)); transform:translate(-50%, -50%); color:var(--color-on-surface-variant); text-align:center; pointer-events:none;}
 .canvas-empty mat-icon {width:38px; height:38px; font-size:38px; color:var(--color-primary);}
 .canvas-controls {position:absolute; left:16px; bottom:16px; display:flex; align-items:center; border:1px solid var(--color-outline-variant); border-radius:4px; background:var(--color-surface); box-shadow:0 2px 6px rgb(0 0 0 / .1);}
 .canvas-controls span {width:46px; color:var(--color-on-surface-variant); font-size:11px; text-align:center;}
+.canvas-connection-controls {position:absolute; left:16px; bottom:68px; display:flex; align-items:center; flex-wrap:wrap; gap:6px; max-width:min(460px, calc(100% - 32px)); padding:8px; border:1px solid var(--color-outline); border-radius:4px; background:var(--color-surface); color:var(--color-on-surface); font-size:12px;}
+.canvas-connection-controls span {color:var(--color-on-surface-variant);}
+.canvas-connection-controls button {border:1px solid var(--color-outline); border-radius:3px; background:var(--color-surface-container-low); color:var(--color-on-surface); cursor:pointer;}
+.canvas-connection-controls button[aria-pressed="true"] {border-width:2px; font-weight:700;}
+.canvas-edge-feedback {position:absolute; top:12px; left:50%; max-width:calc(100% - 32px); margin:0; padding:6px 10px; border:1px solid var(--color-outline); border-radius:4px; background:var(--color-surface); color:var(--color-on-surface); font-size:12px; transform:translateX(-50%); text-align:center;}
 .canvas-minimap {position:absolute; right:16px; bottom:16px; display:block; box-sizing:content-box; width:152px; height:96px; padding:0; overflow:hidden; border:1px solid var(--color-outline-variant); border-radius:4px; background:color-mix(in srgb,var(--color-surface) 92%,transparent); color:var(--color-on-surface-variant); cursor:pointer;}
 .canvas-minimap:focus-visible {outline:2px solid var(--color-primary); outline-offset:2px;}
 .canvas-minimap>span:last-child {position:absolute; left:7px; top:6px; font-size:10px; pointer-events:none;}
