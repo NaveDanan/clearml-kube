@@ -23,8 +23,8 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | Done | 99744f9 | Generic catalog, cards, ports, registry, and inspector framework integrated with isolated focused coverage. |
 | [x] | [CP-18](./cp_18_shared-resource-query-layer.md) | 4 | 5 | cp-18-resource-queries | Done | b13bc8b | Authorized shared resource layer integrated with safe canonical inventory, local filtering, and retryable outage handling. |
 | [x] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 | cp-19-persistence-lifecycle | Done | 85f79f4 | Persistence lifecycle integrated with round-trip, CAS, read-only, and non-destructive Save As permission handling. |
-| [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 |  | Not started |  |  |
-| [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 |  | Not started |  |  |
+| [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 | cp-20-port-edge-semantics | In progress | copilot/cp-20 | Semantic compatibility and edge editing worktree active. |
+| [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 | cp-21-dataset-browser | In progress | copilot/cp-21 | Dataset browser and safe dataset-reference integration worktree active. |
 | [ ] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 | cp-22-import-export | In progress | copilot/cp-22 | Versioned document transfer and unsaved-change guard worktree active. |
 | [ ] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | In progress | copilot/cp-23 | Lifecycle toolbar and read-only code preview worktree active. |
 | [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
