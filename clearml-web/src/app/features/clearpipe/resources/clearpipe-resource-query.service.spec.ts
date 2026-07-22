@@ -62,6 +62,39 @@ describe('ClearpipeResourceQueryController', () => {
     expect(gateway.resources).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps paginated task inventory explicitly incomplete until its cursor is exhausted', () => {
+    const taskInventory = jasmine.createSpy('taskInventory').and.returnValues(
+      of({
+        status: 'ready',
+        data: {
+          tasks: [resource('task-1', 'Alpha')],
+          total: 2,
+          next_cursor: 'task-page:1',
+        },
+      }),
+      of({
+        status: 'ready',
+        data: {
+          tasks: [resource('task-2', 'Beta')],
+          total: 2,
+        },
+      }),
+    );
+    gateway.taskInventory = taskInventory;
+
+    controller.load({pageSize: 1});
+
+    expect(controller.state().complete).toBeFalse();
+    expect(controller.state().hasMore).toBeTrue();
+    expect(controller.state().total).toBe(2);
+    expect(controller.resolve({kind: 'task', resource_id: 'unloaded-task'})).toEqual({status: 'pending'});
+    controller.loadMore();
+    expect(taskInventory).toHaveBeenCalledWith({page: 1, page_size: 1, cursor: 'task-page:1'});
+    expect(controller.state().complete).toBeTrue();
+    expect(controller.state().items.map(item => item.id)).toEqual(['task-1', 'task-2']);
+    expect(controller.resolve({kind: 'task', resource_id: 'unloaded-task'})).toEqual({status: 'missing'});
+  });
+
   it('reports an explicit empty state when search has no authorized result', () => {
     gateway.resources.and.returnValue(of(ready([resource('task-1', 'Alpha')])));
 

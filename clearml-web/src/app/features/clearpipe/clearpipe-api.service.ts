@@ -124,6 +124,7 @@ export interface ClearpipeTaskArtifactDescriptor {
 
 export interface ClearpipeTaskDescriptor {
   identity: {task_id: string};
+  base_task_eligible: boolean;
   context: {
     name: string;
     type: string;
@@ -139,6 +140,18 @@ export interface ClearpipeTaskDescriptor {
 export interface ClearpipeTaskDescriptorResponse {
   status: ClearpipeTaskDescriptorStatus;
   descriptor?: ClearpipeTaskDescriptor;
+}
+
+export interface ClearpipeTaskInventoryRequest {
+  page?: number;
+  page_size?: number;
+  cursor?: string;
+}
+
+export interface ClearpipeTaskInventoryResponse {
+  tasks: ClearpipeResourceOption[];
+  total: number;
+  next_cursor?: string;
 }
 
 export interface ClearpipeExecutionNodeSnapshot {
@@ -360,6 +373,20 @@ export class ClearpipeApiService {
     }).pipe(map(response => this.taskDescriptorResponse(response)));
   }
 
+  taskInventory(request: ClearpipeTaskInventoryRequest = {}): Observable<ClearpipeTaskInventoryResponse> {
+    const page = Math.max(0, request.page ?? 0);
+    const pageSize = Math.min(100, Math.max(1, request.page_size ?? 50));
+    return this.requests.post<any>(this.endpoint('task_inventory'), {
+      page,
+      page_size: pageSize,
+      cursor: request.cursor,
+    }).pipe(map(response => ({
+      tasks: this.array(response?.tasks).flatMap(item => this.safeTaskInventoryItem(item)),
+      total: this.integer(response?.total) ?? 0,
+      ...(this.text(response?.next_cursor) ? {next_cursor: this.text(response?.next_cursor)!} : {}),
+    })));
+  }
+
   executionSnapshot(request: ClearpipeExecutionSnapshotRequest): Observable<ClearpipeExecutionSnapshotResponse> {
     return this.requests.post<any>(this.endpoint('execution_snapshot'), {
       run: request.run,
@@ -401,8 +428,29 @@ export class ClearpipeApiService {
     );
   }
 
+  private safeTaskInventoryItem(value: unknown): ClearpipeResourceOption[] {
+    const task = this.record(value);
+    const id = this.text(task?.id);
+    const name = this.text(task?.name);
+    const type = this.text(task?.type);
+    const status = this.text(task?.status);
+    if (!id || !name || !type || !status || task?.base_task_eligible !== true) return [];
+    return [{
+      id,
+      name,
+      ...(this.text(task?.project) ? {project: this.text(task?.project)!} : {}),
+      type: 'task',
+      taskType: type,
+      taskStatus: status,
+      ...(Array.isArray(task?.tags) ? {taskUserTags: task.tags.filter((tag): tag is string => typeof tag === 'string')} : {}),
+      ...(Array.isArray(task?.system_tags) ? {taskSystemTags: task.system_tags.filter((tag): tag is string => typeof tag === 'string')} : {}),
+      ...(this.text(task?.last_update) ? {taskLastUpdatedAt: this.text(task?.last_update)!} : {}),
+      taskBaseEligible: true,
+    }];
+  }
+
   private taskMetadata(task: Record<string, unknown>): Pick<ClearpipeResourceOption,
-    'taskType' | 'taskStatus' | 'taskUserTags' | 'taskSystemTags' | 'taskLastUpdatedAt'> {
+    'taskType' | 'taskStatus' | 'taskUserTags' | 'taskSystemTags' | 'taskLastUpdatedAt' | 'taskBaseEligible'> {
     const text = (value: unknown): string | undefined =>
       typeof value === 'string' && value.trim() ? value : undefined;
     const tags = (value: unknown): string[] | undefined => {
@@ -419,12 +467,14 @@ export class ClearpipeApiService {
     const taskUserTags = tags(task.tags);
     const taskSystemTags = tags(task.system_tags);
     const taskLastUpdatedAt = text(task.last_update);
+    const taskBaseEligible = typeof task.base_task_eligible === 'boolean' ? task.base_task_eligible : undefined;
     return {
       ...(taskType ? {taskType} : {}),
       ...(taskStatus ? {taskStatus} : {}),
       ...(taskUserTags ? {taskUserTags} : {}),
       ...(taskSystemTags ? {taskSystemTags} : {}),
       ...(taskLastUpdatedAt ? {taskLastUpdatedAt} : {}),
+      ...(taskBaseEligible !== undefined ? {taskBaseEligible} : {}),
     };
   }
 
@@ -491,9 +541,10 @@ export class ClearpipeApiService {
     const name = this.text(context?.name);
     const type = this.text(context?.type);
     const status = this.text(context?.status);
-    if (!taskId || !name || !type || !status) return undefined;
+    if (!taskId || !name || !type || !status || typeof descriptor?.base_task_eligible !== 'boolean') return undefined;
     return {
       identity: {task_id: taskId},
+      base_task_eligible: descriptor.base_task_eligible,
       context: {
         name,
         type,

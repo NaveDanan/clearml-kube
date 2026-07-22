@@ -226,13 +226,15 @@ class ClearPipeTaskGeneratorTests(unittest.TestCase):
             compile_graph(no_queue)
         self.assertTrue(any(item.code == "CPSEM008" for item in queue_error.exception.diagnostics))
 
-    def test_unrepresented_retry_policy_is_rejected_before_generation(self):
+    def test_task_retry_policy_round_trips_and_lowers_before_generation(self):
         fixture = graph_fixture("task-graph.v2.json")
         fixture["nodes"][0]["configuration"]["retry_on_failure"] = 2
 
         decoded = read_graph_v2(fixture)
-        self.assertEqual(decoded.status, "unsupported")
-        self.assertEqual(decoded.unsupported.reason, "unsupported_field")
+        self.assertTrue(decoded.is_supported, decoded)
+        self.assertEqual(decoded.graph.nodes[0].configuration.retry_on_failure, 2)
+        generated = compile_graph(decoded.graph)
+        self.assertIn("retry_on_failure=2", generated.source)
 
     def test_secret_values_are_not_rendered_or_echoed_in_diagnostics(self):
         graph = parsed_graph("task-graph.v2.json")

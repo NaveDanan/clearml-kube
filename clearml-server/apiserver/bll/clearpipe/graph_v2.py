@@ -307,11 +307,14 @@ class TaskConfiguration:
     clone_base_task: bool = True
     cache: bool = False
     queue_resource_id: Optional[str] = None
+    retry_on_failure: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         value = {"clone_base_task": self.clone_base_task, "cache": self.cache}
         if self.queue_resource_id is not None:
             value["queue_resource_id"] = self.queue_resource_id
+        if self.retry_on_failure is not None:
+            value["retry_on_failure"] = self.retry_on_failure
         return value
 
 
@@ -858,9 +861,20 @@ def _parse_base_task(value: Any, path: str) -> TaskReference:
     raise UnsupportedGraphError("unsupported_task_reference", path + ".kind")
 
 
+def _is_secret_task_parameter_port(port: Port) -> bool:
+    if port.direction != "input" or port.role != "parameter":
+        return False
+    section, separator, name = port.name.partition("/")
+    return bool(separator) and (_is_secret_key(section) or _is_secret_key(name))
+
+
 def _parse_task_configuration(value: Any, path: str) -> TaskConfiguration:
     raw = _mapping(value, path)
-    _known_fields(raw, {"clone_base_task", "cache", "queue_resource_id"}, path)
+    _known_fields(
+        raw,
+        {"clone_base_task", "cache", "queue_resource_id", "retry_on_failure"},
+        path,
+    )
     queue_resource_id = _optional_string(raw, "queue_resource_id", path)
     if queue_resource_id is not None:
         _stable_id(queue_resource_id, path + ".queue_resource_id")
@@ -868,6 +882,11 @@ def _parse_task_configuration(value: Any, path: str) -> TaskConfiguration:
         clone_base_task=_optional_bool(raw, "clone_base_task", path, True),
         cache=_optional_bool(raw, "cache", path, False),
         queue_resource_id=queue_resource_id,
+        retry_on_failure=(
+            _required_int(raw, "retry_on_failure", path)
+            if "retry_on_failure" in raw
+            else None
+        ),
     )
 
 
@@ -926,6 +945,13 @@ def _parse_node(value: Any, index: int) -> GraphNode:
     _require_unique(((port.direction, port.order) for port in ports), path + ".ports", "duplicate_port_order")
     if kind == "task":
         _known_fields(raw, common | {"base_task"}, path)
+        for port_index, port in enumerate(ports):
+            if port.has_default and _is_secret_task_parameter_port(port):
+                raise GraphV2Error(
+                    "secret_not_allowed",
+                    "{}.ports[{}].default".format(path, port_index),
+                    "literal defaults are not allowed for secret-named task parameters",
+                )
         return TaskNode(
             id=node_id,
             name=name,

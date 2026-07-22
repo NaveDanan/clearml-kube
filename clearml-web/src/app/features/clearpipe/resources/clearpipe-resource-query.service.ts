@@ -1,6 +1,7 @@
 import {inject, Injectable, signal} from '@angular/core';
 import {Observable, Subscription} from 'rxjs';
 import {ClearpipeResourceOption} from '../clearpipe.models';
+import {ClearpipeTaskInventoryResponse} from '../clearpipe-api.service';
 import {
   ClearpipeAdapterOutcome,
   ClearpipeAdapterService,
@@ -23,6 +24,7 @@ import {
 
 export interface ClearpipeAuthorizedResourceGateway {
   resources(type: ClearpipeAdapterResourceType): Observable<ClearpipeAdapterOutcome<ClearpipeResourceOption[]>>;
+  taskInventory?(request: {page?: number; page_size?: number; cursor?: string}): Observable<ClearpipeAdapterOutcome<ClearpipeTaskInventoryResponse>>;
   routeFor(target: ClearpipeNavigationTarget): string[] | null;
 }
 
@@ -44,6 +46,7 @@ const initialState = (kind: ClearpipeResourceKind): ClearpipeResourceQueryState 
   page: 0,
   pageSize: defaultFilter.pageSize,
   hasMore: false,
+  complete: false,
 });
 
 const safeProblem = (code: ClearpipeResourceProblem['code'], retryable: boolean): ClearpipeResourceProblem => ({code, retryable});
@@ -54,9 +57,9 @@ const isPagedResourceQueryStatus = (status: ClearpipeResourceQueryState['status'
   status === 'ready' || status === 'empty' || status === 'stale' || status === 'deleted';
 
 /**
- * Cancels obsolete adapter subscriptions and paginates the authorized adapter
- * result locally. CP-14 currently exposes an authorized inventory, not a
- * server-side cursor; no production resource client is bypassed here.
+ * Cancels obsolete adapter subscriptions. Task inventories use the typed
+ * server cursor while other approved resource kinds retain their local
+ * authorized-inventory pagination; no production client is bypassed here.
  */
 export class ClearpipeResourceQueryController {
   readonly state;
@@ -66,6 +69,9 @@ export class ClearpipeResourceQueryController {
   private request?: Subscription;
   private requestVersion = 0;
   private filter: ClearpipeResourceFilter = defaultFilter;
+  private taskNextCursor?: string;
+  private inventoryComplete = false;
+  private inventoryTotal = 0;
 
   constructor(
     readonly kind: ClearpipeResourceKind,
@@ -100,6 +106,19 @@ export class ClearpipeResourceQueryController {
       status: this.hasKnownInventory ? 'refreshing' : 'loading',
       problem: undefined,
     });
+    if (this.kind === 'task' && this.adapter.taskInventory) {
+      this.clearKnownInventory();
+      this.taskNextCursor = undefined;
+      this.inventoryComplete = false;
+      this.request = this.adapter.taskInventory({
+        page: 0,
+        page_size: this.filter.pageSize,
+      }).subscribe(outcome => {
+        if (version !== this.requestVersion || outcome.status === 'loading') return;
+        this.applyTaskInventoryOutcome(outcome, false);
+      });
+      return;
+    }
     this.request = this.adapter.resources(registration.adapterType).subscribe(outcome => {
       if (version !== this.requestVersion || outcome.status === 'loading') return;
       this.applyOutcome(outcome);
@@ -138,6 +157,20 @@ export class ClearpipeResourceQueryController {
 
   loadMore(): void {
     const current = this.state();
+    if (this.kind === 'task' && this.adapter.taskInventory && !this.inventoryComplete && this.taskNextCursor) {
+      this.request?.unsubscribe();
+      const version = ++this.requestVersion;
+      this.state.set({...current, status: 'refreshing', problem: undefined});
+      this.request = this.adapter.taskInventory({
+        page: current.page + 1,
+        page_size: current.pageSize,
+        cursor: this.taskNextCursor,
+      }).subscribe(outcome => {
+        if (version !== this.requestVersion || outcome.status === 'loading') return;
+        this.applyTaskInventoryOutcome(outcome, true);
+      });
+      return;
+    }
     if (!current.hasMore || !isPagedResourceQueryStatus(current.status)) return;
     this.setPage(current.page + 1, current.status, current.problem);
   }
@@ -169,7 +202,9 @@ export class ClearpipeResourceQueryController {
     if (state.status === 'loading' || state.status === 'refreshing' || state.status === 'idle') return {status: 'pending'};
     if (state.status === 'error' || state.status === 'unavailable') return {status: 'unavailable'};
     const resource = this.knownItems.find(item => item.id === resourceId);
-    return resource ? {status: 'selected', resource} : {status: 'deleted'};
+    return resource
+      ? {status: 'selected', resource}
+      : !this.inventoryComplete ? {status: 'pending'} : {status: 'deleted'};
   }
 
   managementLink(resource: ClearpipeResourceSummary): ClearpipeResourceManagementLink | undefined {
@@ -194,7 +229,7 @@ export class ClearpipeResourceQueryController {
       item.id === request.resource_id ||
       (request.lookup?.name === item.name && (!request.lookup.project || request.lookup.project === item.project))
     );
-    return {status: matched ? 'available' : 'missing'};
+    return {status: matched ? 'available' : !this.inventoryComplete ? 'pending' : 'missing'};
   }
 
   private applyOutcome(outcome: Exclude<ClearpipeAdapterOutcome<ClearpipeResourceOption[]>, {status: 'loading'}>): void {
@@ -202,6 +237,8 @@ export class ClearpipeResourceQueryController {
       this.deletedIds.clear();
       this.knownItems = this.normalizeInventory(outcome.data);
       this.hasKnownInventory = true;
+      this.inventoryComplete = true;
+      this.inventoryTotal = this.knownItems.length;
       this.setPage(0);
       return;
     }
@@ -265,6 +302,28 @@ export class ClearpipeResourceQueryController {
     this.knownItems = [];
     this.hasKnownInventory = false;
     this.deletedIds.clear();
+    this.inventoryComplete = false;
+    this.taskNextCursor = undefined;
+    this.inventoryTotal = 0;
+  }
+
+  private applyTaskInventoryOutcome(
+    outcome: Exclude<ClearpipeAdapterOutcome<ClearpipeTaskInventoryResponse>, {status: 'loading'}>,
+    append: boolean
+  ): void {
+    if (outcome.status !== 'ready') {
+      this.applyOutcome(outcome as unknown as Exclude<ClearpipeAdapterOutcome<ClearpipeResourceOption[]>, {status: 'loading'}>);
+      return;
+    }
+    const page = this.normalizeInventory(outcome.data.tasks);
+    this.knownItems = append
+      ? [...new Map([...this.knownItems, ...page].map(item => [item.id, item])).values()]
+      : page;
+    this.hasKnownInventory = true;
+    this.inventoryComplete = !outcome.data.next_cursor;
+    this.taskNextCursor = outcome.data.next_cursor;
+    this.inventoryTotal = outcome.data.total;
+    this.setPage(append ? this.state().page + 1 : 0);
   }
 
   private normalizeInventory(resources: readonly ClearpipeResourceOption[]): readonly ClearpipeResourceSummary[] {
@@ -298,10 +357,13 @@ export class ClearpipeResourceQueryController {
       status: status ?? (items.length ? 'ready' : 'empty'),
       filter: this.filter,
       items: visible,
-      total: items.length,
+      total: this.kind === 'task' && !this.inventoryComplete
+        ? this.inventoryTotal
+        : items.length,
       page,
       pageSize,
-      hasMore: visible.length < items.length,
+      hasMore: !this.inventoryComplete || visible.length < items.length,
+      complete: this.inventoryComplete,
       updatedAt: Date.now(),
       ...(problem ? {problem} : {}),
     });

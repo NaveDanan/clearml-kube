@@ -29,6 +29,8 @@ from apiserver.apimodels.clearpipe import (
     StartResponse,
     TaskDescriptorRequest,
     TaskDescriptorResponse,
+    TaskInventoryRequest,
+    TaskInventoryResponse,
     UpdateRequest,
     UpdateResponse,
     ValidateRequest,
@@ -91,7 +93,17 @@ CLEARPIPE_LEGACY_PROVENANCE_KEY_ID = "legacy-auth-token-v1"
 MAX_RUNTIME_SNAPSHOT_PAGE_SIZE = 100
 MAX_RUNTIME_SNAPSHOT_MODELS = 500
 MAX_RUNTIME_ARTIFACTS_PER_NODE = 5
-DESCRIPTOR_TASK_FIELDS = ("id", "name", "type", "status", "project", "last_update")
+MAX_TASK_INVENTORY_PAGE_SIZE = 100
+DESCRIPTOR_TASK_FIELDS = (
+    "id",
+    "name",
+    "type",
+    "status",
+    "project",
+    "last_update",
+    "parent",
+    "runtime",
+)
 SNAPSHOT_RUN_FIELDS = (
     "id",
     "type",
@@ -739,6 +751,18 @@ def _safe_artifact_descriptor(item: Mapping) -> Optional[dict]:
     return descriptor
 
 
+def _base_task_eligible(task: Task) -> bool:
+    """Only native non-controller root tasks may become TaskIdReferences."""
+
+    return (
+        not getattr(task, "parent", None)
+        and getattr(task, "type", None) != TaskType.controller
+        and not (getattr(task, "runtime", None) or {}).get(
+            CLEARPIPE_RUNTIME_PROVENANCE
+        )
+    )
+
+
 def _descriptor_ports(company_id: str, task_id: str) -> tuple:
     """
     Project only parameter names/types and artifact key/type/mode in Mongo.
@@ -846,11 +870,15 @@ def _task_descriptor(task: Task, company_id: str) -> dict:
         context["project_name"] = project_name
     if updated_at := _timestamp(task.last_update):
         context["updated_at"] = updated_at
-    parameters, artifacts = _descriptor_ports(company_id, task.id)
+    eligible = _base_task_eligible(task)
+    parameters, artifacts = (
+        _descriptor_ports(company_id, task.id) if eligible else ([], [])
+    )
     return {
         # Base identity is always the immutable task ID. Project/name are
         # display context only and must never be substituted with a run ID.
         "identity": {"task_id": task.id},
+        "base_task_eligible": eligible,
         "context": context,
         "parameters": parameters,
         "artifacts": artifacts,
@@ -1146,7 +1174,11 @@ def _resource_checker(company_id: str):
                 query &= Q(system_tags="dataset")
             elif kind == "report":
                 query &= Q(type=TaskType.report)
-            return Task.objects(query).only("id").first() is not None
+            fields = ("id", "parent", "type", "runtime") if kind == "task" else ("id",)
+            task = Task.objects(query).only(*fields).first()
+            return task is not None and (
+                _base_task_eligible(task) if kind == "task" else True
+            )
         if kind == "model":
             return Model.objects(Q(id=resource_id) & visible).only("id").first() is not None
         if kind == "project":
@@ -1607,6 +1639,84 @@ def start(call: APICall, company_id: str, request: StartRequest):
             # turn a committed run into an ambiguous failed response.
             response["queue_watched"] = False
     call.result.data = response
+
+
+def _task_inventory_cursor(cursor: Optional[str], page: int) -> int:
+    if cursor is None:
+        return max(0, page)
+    prefix = "task-page:"
+    if not cursor.startswith(prefix) or not cursor[len(prefix) :].isdigit():
+        raise errors.bad_request.ValidationError("Invalid ClearPipe task inventory cursor")
+    return int(cursor[len(prefix) :])
+
+
+def _task_inventory_item(task: Task, company_id: str) -> dict:
+    project_name = None
+    if task.project:
+        project = Project.objects(
+            Q(id=task.project) & _visible_query(company_id, True)
+        ).only("name").first()
+        project_name = project.name if project else None
+    return {
+        "id": task.id,
+        "name": task.name,
+        "project": project_name or task.project,
+        "type": task.type,
+        "status": task.status,
+        "tags": list(task.tags or []),
+        "system_tags": list(task.system_tags or []),
+        "last_update": _timestamp(task.last_update),
+        "base_task_eligible": True,
+    }
+
+
+@endpoint(
+    "clearpipe.task_inventory",
+    min_version="2.35",
+    request_data_model=TaskInventoryRequest,
+    response_data_model=TaskInventoryResponse,
+)
+def task_inventory(
+    call: APICall, company_id: str, request: TaskInventoryRequest
+):
+    page = _task_inventory_cursor(request.cursor, request.page or 0)
+    page_size = min(
+        MAX_TASK_INVENTORY_PAGE_SIZE, max(1, request.page_size or 50)
+    )
+    query = (
+        _visible_query(company_id, True)
+        & Q(parent=None, type__ne=TaskType.controller)
+        & Q(runtime__clearpipe_runtime_provenance__exists=False)
+    )
+    fields = (
+        "id",
+        "name",
+        "project",
+        "type",
+        "status",
+        "tags",
+        "system_tags",
+        "last_update",
+        "parent",
+        "runtime",
+    )
+    queryset = Task.objects(query).only(*fields).order_by("name", "id")
+    total = queryset.count()
+    tasks = [
+        _task_inventory_item(task, company_id)
+        for task in queryset.skip(page * page_size).limit(page_size)
+        if _base_task_eligible(task)
+    ]
+    next_cursor = (
+        "task-page:{}".format(page + 1)
+        if (page + 1) * page_size < total
+        else None
+    )
+    call.result.data = {
+        "tasks": tasks,
+        "total": total,
+        **({"next_cursor": next_cursor} if next_cursor else {}),
+    }
 
 
 @endpoint(

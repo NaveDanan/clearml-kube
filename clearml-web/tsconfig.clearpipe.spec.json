@@ -10,6 +10,7 @@
     "src/app/features/clearpipe/domain/graph-v2-codec.spec.ts",
     "src/app/features/clearpipe/clearpipe-api.service.spec.ts",
     "src/app/features/clearpipe/platform/clearpipe-adapter.service.spec.ts",
+    "src/app/features/clearpipe/resources/clearpipe-resource-query.service.spec.ts",
     "src/app/features/clearpipe/platform/clearpipe-route-integration.spec.ts",
     "src/**/*.d.ts"
   ]

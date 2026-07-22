@@ -94,6 +94,7 @@ export interface ClearpipeResourceSummary {
   readonly updatedAt?: string;
   readonly taskUserTags?: readonly string[];
   readonly taskSystemTags?: readonly string[];
+  readonly taskBaseEligible?: boolean;
 }
 
 export interface ClearpipeResourceFilter {
@@ -117,6 +118,8 @@ export interface ClearpipeResourceQueryState {
   readonly page: number;
   readonly pageSize: number;
   readonly hasMore: boolean;
+  /** False means the server-authorized task inventory has additional pages. */
+  readonly complete: boolean;
   readonly updatedAt?: number;
   readonly problem?: ClearpipeResourceProblem;
 }
@@ -173,7 +176,7 @@ export const clearpipeResourceReference = (resource: ClearpipeResourceSummary): 
 export const normalizeClearpipeResource = (
   kind: ClearpipeResourceKind,
   resource: Pick<ClearpipeResourceOption,
-    'id' | 'name' | 'project' | 'taskType' | 'taskStatus' | 'taskUserTags' | 'taskSystemTags' | 'taskLastUpdatedAt'>
+    'id' | 'name' | 'project' | 'taskType' | 'taskStatus' | 'taskUserTags' | 'taskSystemTags' | 'taskLastUpdatedAt' | 'taskBaseEligible'>
 ): ClearpipeResourceSummary => {
   const taskUserTags = resource.taskUserTags?.filter(tag => typeof tag === 'string' && tag.trim());
   const taskSystemTags = resource.taskSystemTags?.filter(tag => typeof tag === 'string' && tag.trim());
@@ -189,6 +192,7 @@ export const normalizeClearpipeResource = (
     ...(resource.taskLastUpdatedAt ? {updatedAt: resource.taskLastUpdatedAt} : {}),
     ...(taskUserTags?.length ? {taskUserTags} : {}),
     ...(taskSystemTags?.length ? {taskSystemTags} : {}),
+    ...(resource.taskBaseEligible !== undefined ? {taskBaseEligible: resource.taskBaseEligible} : {}),
   };
 };
 

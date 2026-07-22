@@ -74,6 +74,7 @@ describe('ClearpipeApiService', () => {
       page_size: 500,
       only_fields: ['id', 'name', 'project', 'type', 'status', 'tags', 'system_tags', 'last_update'],
     });
+
     expect(resources).toEqual([{
       id: 'task-1',
       name: 'Training',
@@ -86,6 +87,32 @@ describe('ClearpipeApiService', () => {
       taskLastUpdatedAt: '2026-07-22T15:00:00Z',
     }]);
     expect(JSON.stringify(resources)).not.toContain('must-not-be-returned');
+  });
+
+  it('uses the paginated authorized task inventory and drops ineligible rows', () => {
+    requests.post.and.returnValue(of({
+      tasks: [
+        {id: 'base-1', name: 'Base', type: 'training', status: 'completed', base_task_eligible: true},
+        {id: 'child-1', name: 'Child', type: 'training', status: 'completed', base_task_eligible: false},
+      ],
+      total: 2,
+      next_cursor: 'task-page:1',
+    }));
+
+    let inventory: unknown;
+    api.taskInventory({page: 0, page_size: 25}).subscribe(result => inventory = result);
+
+    expect(requests.post).toHaveBeenCalledWith('/service/1/api/v2.35/clearpipe.task_inventory', {
+      page: 0,
+      page_size: 25,
+      cursor: undefined,
+    });
+    expect(inventory).toEqual({
+      tasks: [jasmine.objectContaining({id: 'base-1', taskBaseEligible: true})],
+      total: 2,
+      next_cursor: 'task-page:1',
+    });
+    expect(JSON.stringify(inventory)).not.toContain('child-1');
   });
 
   it('covers each typed CP-07 operation with the v2.35 contract envelopes', () => {
@@ -157,6 +184,7 @@ describe('ClearpipeApiService', () => {
         status: 'stale',
         descriptor: {
           identity: {task_id: 'base-1'},
+          base_task_eligible: true,
           context: {
             name: 'Base task',
             type: 'training',
@@ -269,6 +297,7 @@ describe('ClearpipeApiService', () => {
       status: 'denied',
       descriptor: {
         identity: {task_id: 'private-task'},
+        base_task_eligible: false,
         context: {name: 'Private', type: 'training', status: 'completed'},
         parameters: [],
         artifacts: [],

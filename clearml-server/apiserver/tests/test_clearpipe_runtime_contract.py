@@ -129,6 +129,8 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
             status="completed",
             project=None,
             last_update=None,
+            parent=None,
+            runtime={},
         )
         call = endpoint_call()
 
@@ -152,6 +154,7 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
         self.assertEqual(call.result.data["status"], "stale")
         descriptor = call.result.data["descriptor"]
         self.assertEqual(descriptor["identity"], {"task_id": "base-task"})
+        self.assertTrue(descriptor["base_task_eligible"])
         self.assertEqual(
             descriptor["parameters"],
             [
@@ -163,6 +166,30 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
         for prohibited in ("must-not-leak", '"default"', '"value"', "uri", '"script"'):
             self.assertNotIn(prohibited, encoded)
         TaskDescriptorResponse(**call.result.data).validate()
+
+    def test_visible_child_descriptor_is_ineligible_and_task_id_validation_refuses_it(self):
+        child = SimpleNamespace(
+            id="child-task",
+            name="Runtime child",
+            type="training",
+            status="completed",
+            project=None,
+            last_update=None,
+            parent="controller-run",
+            runtime={},
+        )
+        with patch.object(clearpipe, "_descriptor_ports") as ports:
+            descriptor = clearpipe._task_descriptor(child, "company-a")
+        self.assertEqual(descriptor["identity"]["task_id"], "child-task")
+        self.assertFalse(descriptor["base_task_eligible"])
+        ports.assert_not_called()
+
+        query = Mock()
+        query.only.return_value.first.return_value = child
+        task_model = Mock()
+        task_model.objects.return_value = query
+        with patch.object(clearpipe, "Task", task_model):
+            self.assertFalse(clearpipe._resource_checker("company-a")("task", "child-task"))
 
     def test_task_descriptor_uses_one_non_enumerating_unavailable_result(self):
         for task_id in ("missing-task", "private-task"):
@@ -176,6 +203,12 @@ class ClearPipeRuntimeContractTests(unittest.TestCase):
                     )
                 self.assertEqual(call.result.data, {"status": "unavailable"})
                 TaskDescriptorResponse(**call.result.data).validate()
+
+    def test_task_inventory_cursor_is_typed_and_non_opaque(self):
+        self.assertEqual(clearpipe._task_inventory_cursor(None, 2), 2)
+        self.assertEqual(clearpipe._task_inventory_cursor("task-page:3", 0), 3)
+        with self.assertRaises(clearpipe.errors.bad_request.ValidationError):
+            clearpipe._task_inventory_cursor("child-task", 0)
 
     def test_descriptor_port_projection_never_materializes_parameter_or_artifact_values(self):
         task_model = Mock()

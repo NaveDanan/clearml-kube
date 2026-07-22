@@ -145,6 +145,36 @@ class ClearPipeGraphV2Tests(unittest.TestCase):
         self.assertEqual(secret_description.errors[0].code, "secret_not_allowed")
         self.assertNotIn("must-not-persist", json.dumps([issue.to_dict() for issue in secret_description.errors]))
 
+    def test_task_retry_round_trips_and_secret_parameter_defaults_fail_closed(self):
+        raw = fixture("task-graph.v2.json")
+        raw["nodes"][0]["configuration"]["retry_on_failure"] = 2
+
+        parsed = read_graph_v2(raw)
+
+        self.assertTrue(parsed.is_supported, parsed)
+        self.assertEqual(parsed.graph.nodes[0].configuration.retry_on_failure, 2)
+        self.assertTrue(
+            read_graph_v2(serialize_graph_v2(parsed.graph)).is_supported
+        )
+
+        for retry in (-1, 1.5, {"callback": "retry"}):
+            with self.subTest(retry=retry):
+                invalid = fixture("task-graph.v2.json")
+                invalid["nodes"][0]["configuration"]["retry_on_failure"] = retry
+                result = read_graph_v2(invalid)
+                self.assertFalse(result.is_supported)
+
+        secret_default = fixture("task-graph.v2.json")
+        port = secret_default["nodes"][0]["ports"][0]
+        port.update(name="General/api_key", default="must-not-persist")
+        result = read_graph_v2(secret_default)
+        self.assertEqual(result.status, "invalid")
+        self.assertEqual(result.errors[0].code, "secret_not_allowed")
+        self.assertNotIn(
+            "must-not-persist",
+            json.dumps([issue.to_dict() for issue in result.errors]),
+        )
+
     def test_invalid_secret_fixture_never_echoes_the_secret(self):
         result = read_graph_v2(fixture("invalid-secret-graph.v2.json"))
         self.assertEqual(result.status, "invalid")

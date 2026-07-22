@@ -10,6 +10,7 @@ EXPECTED = {
     "validate",
     "start",
     "task_descriptor",
+    "task_inventory",
     "execution_snapshot",
     "archive",
     "delete",

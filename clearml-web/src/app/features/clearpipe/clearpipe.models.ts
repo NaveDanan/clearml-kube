@@ -65,6 +65,7 @@ export interface ClearpipeResourceOption {
   taskUserTags?: string[];
   taskSystemTags?: string[];
   taskLastUpdatedAt?: string;
+  taskBaseEligible?: boolean;
 }
 
 export const CLEARPIPE_NODE_TYPES: readonly {

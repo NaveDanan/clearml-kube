@@ -83,6 +83,10 @@ class TaskDescriptorRequest(models.Base):
     known_updated_at = StringField()
 
 
+class TaskInventoryRequest(PagedRequest):
+    cursor = StringField()
+
+
 class ExecutionSnapshotRequest(models.Base):
     """Request a safe live snapshot for one submitted ClearPipe v2 run."""
 
@@ -151,6 +155,12 @@ class TaskDescriptorResponse(models.Base):
 
     status = StringField(required=True)
     descriptor = DictField()
+
+
+class TaskInventoryResponse(models.Base):
+    tasks = ListField([dict], required=True)
+    total = IntField(required=True)
+    next_cursor = StringField()
 
 
 class ExecutionSnapshotResponse(models.Base):

@@ -11,6 +11,7 @@ from ..graph_v2 import (
     ResourceEndpoint,
     TaskIdReference,
     TaskNameReference,
+    _is_secret_key,
 )
 from .compiler import GenerationDiagnostic, GenerationError, LoweredNode, _format_call, _unicode_key
 from .contracts import TaskLoweringInput
@@ -53,6 +54,19 @@ def lower_task(input_value: TaskLoweringInput) -> LoweredNode:
                     "CPSEM007",
                     path + ".name",
                     "task input ports must name a sectioned task parameter",
+                    port.id,
+                )
+            )
+            continue
+        section, _, parameter_name = port.name.partition("/")
+        if port.has_default and (
+            _is_secret_key(section) or _is_secret_key(parameter_name)
+        ):
+            diagnostics.append(
+                GenerationDiagnostic(
+                    "CPSEM010",
+                    path + ".default",
+                    "literal defaults are not allowed for secret-named task parameters",
                     port.id,
                 )
             )

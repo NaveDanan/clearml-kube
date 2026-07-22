@@ -21,6 +21,8 @@ import {
   ClearpipeStartRequest,
   ClearpipeStartResponse,
   ClearpipeTaskDescriptorResponse,
+  ClearpipeTaskInventoryRequest,
+  ClearpipeTaskInventoryResponse,
   ClearpipeUpdateRequest,
   ClearpipeValidateRequest,
   ClearpipeValidationResponse,
@@ -241,6 +243,13 @@ export class ClearpipeAdapterService {
     return this.withLoading(this.api.taskDescriptor(task, knownUpdatedAt).pipe(
       map(data => ({status: 'ready' as const, data})),
       catchError(error => of(this.normalizeError<ClearpipeTaskDescriptorResponse>(error, 'task-descriptor')))
+    ));
+  }
+
+  taskInventory(request: ClearpipeTaskInventoryRequest = {}): Observable<ClearpipeAdapterOutcome<ClearpipeTaskInventoryResponse>> {
+    return this.withLoading(this.api.taskInventory(request).pipe(
+      map(data => ({status: 'ready' as const, data})),
+      catchError(error => of(this.normalizeError<ClearpipeTaskInventoryResponse>(error, 'task-inventory')))
     ));
   }
 
