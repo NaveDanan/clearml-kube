@@ -42,6 +42,9 @@ from apiserver.bll.clearpipe.graph_v2 import (
     read_graph_v2,
     serialize_graph_v2,
 )
+from apiserver.bll.clearpipe.generation.compiler import GenerationError, compile_graph
+from apiserver.bll.clearpipe.generation.contracts import ClearPipeRuntimeConfiguration, GeneratedDefinition
+from apiserver.bll.clearpipe.generation.function import lower_function_node
 from apiserver.bll.clearpipe.validation import (
     DiagnosticTarget,
     ValidationIssue,
@@ -72,10 +75,8 @@ from apiserver.utilities.dicts import nested_get
 CLEARPIPE_TAG = "clearpipe"
 PIPELINE_TAG = "pipeline"
 MAX_PAGE_SIZE = 500
-V2_COMPILATION_UNAVAILABLE = "compilation_unavailable"
-V2_UNAVAILABLE_CONTROLLER_SCRIPT = (
-    "# ClearPipe graph v2 execution is unavailable until a v2 compiler is registered\n"
-)
+CLEARPIPE_RUNTIME_CONFIGURATION = "ClearPipeRuntime"
+CLEARPIPE_RUNTIME_SCHEMA_VERSION = 1
 _SECRET_PARAMETER_VALUE = re.compile(
     r"(?i)(?:(?:^|[^a-z0-9])(?:password|passwd|secret|token|api[_-]?key|"
     r"access[_-]?key|private[_-]?key|credential)s?(?:$|[^a-z0-9])|"
@@ -162,31 +163,33 @@ def _is_v2_graph(graph: Mapping) -> bool:
     return isinstance(graph, Mapping) and graph.get("schema_version") == 2
 
 
-def _compilation_unavailable_issue() -> ValidationIssue:
+def _compiler_issue(diagnostic) -> ValidationIssue:
+    node_id = diagnostic.graph_element_id
     return ValidationIssue.create(
-        code=V2_COMPILATION_UNAVAILABLE,
-        target=DiagnosticTarget(kind="graph", path="graph"),
-        message="ClearPipe graph v2 compilation and execution are unavailable until a v2 compiler is registered",
-        correction="Save the canonical graph and retry after a v2 compiler is registered.",
-        severity="warning",
-        blocks_save=False,
-        blocks_run=True,
+        code=diagnostic.code,
+        target=DiagnosticTarget(
+            kind="node" if node_id else "graph" if diagnostic.path == "graph" else "field",
+            path=diagnostic.path,
+            node_id=node_id,
+        ),
+        message=diagnostic.message,
+        correction="Correct the indicated graph field or use a supported ClearPipe lowering.",
     )
 
 
-def _raise_compilation_unavailable():
-    issue = _compilation_unavailable_issue()
-    raise errors.bad_request.ValidationError(
-        "ClearPipe graph v2 compilation and execution are unavailable",
-        issues=[issue.to_dict()],
-    )
-
-
-def _v2_validation_result(graph: Mapping, include_compilation_diagnostic: bool = True):
+def _compile_v2(graph: Mapping) -> GeneratedDefinition:
     parsed = read_graph_v2(graph)
-    if parsed.is_supported:
-        issues = [_compilation_unavailable_issue()] if include_compilation_diagnostic else []
-        return ValidationResult(issues)
+    if not parsed.is_supported:
+        raise ValueError("ClearPipe graph v2 could not be compiled")
+    return compile_graph(parsed.graph, lowerers={"function": lower_function_node})
+
+
+def _v2_validation_result(
+    graph: Mapping,
+    resource_checker=None,
+    queue_checker=None,
+) -> ValidationResult:
+    parsed = read_graph_v2(graph)
     if parsed.status == "unsupported":
         issue = ValidationIssue.create(
             code="CPSTR002",
@@ -198,26 +201,50 @@ def _v2_validation_result(graph: Mapping, include_compilation_diagnostic: bool =
             correction="Inspect the original graph without converting or dropping graph data.",
         )
         return ValidationResult([issue])
-    code = "CPSEM010" if parsed.errors and parsed.errors[0].code == "secret_not_allowed" else "CPSTR001"
-    return ValidationResult(
-        [
-            ValidationIssue.create(
-                code=code,
-                target=DiagnosticTarget(kind="graph", path=issue.path),
-                message=(
-                    "Secret or credential material is not allowed in a ClearPipe graph."
-                    if code == "CPSEM010"
-                    else "The document is not a valid canonical ClearPipe v2 graph."
-                ),
-                correction=(
-                    "Use an approved opaque runtime reference; never store the secret value in the graph."
-                    if code == "CPSEM010"
-                    else "Correct the indicated graph field without dropping unrelated graph data."
+    if not parsed.is_supported:
+        code = "CPSEM010" if parsed.errors and parsed.errors[0].code == "secret_not_allowed" else "CPSTR001"
+        return ValidationResult(
+            [
+                ValidationIssue.create(
+                    code=code,
+                    target=DiagnosticTarget(kind="graph", path=issue.path),
+                    message=(
+                        "Secret or credential material is not allowed in a ClearPipe graph."
+                        if code == "CPSEM010"
+                        else "The document is not a valid canonical ClearPipe v2 graph."
+                    ),
+                    correction=(
+                        "Use an approved opaque runtime reference; never store the secret value in the graph."
+                        if code == "CPSEM010"
+                        else "Correct the indicated graph field without dropping unrelated graph data."
+                    ),
+                )
+                for issue in parsed.errors
+            ]
+        )
+    result = GraphValidator(
+        resource_checker=resource_checker,
+        queue_checker=queue_checker,
+    ).validate(graph)
+    if not result.valid:
+        return result
+    try:
+        _compile_v2(graph)
+    except GenerationError as error:
+        return ValidationResult(result.issues + tuple(_compiler_issue(item) for item in error.diagnostics))
+    except (TypeError, ValueError, MemoryError):
+        return ValidationResult(
+            result.issues
+            + (
+                ValidationIssue.create(
+                    code="CPGEN002",
+                    target=DiagnosticTarget(kind="graph", path="graph"),
+                    message="ClearPipe graph could not be compiled safely.",
+                    correction="Correct the graph or use a supported ClearPipe lowering.",
                 ),
             )
-            for issue in parsed.errors
-        ]
-    )
+        )
+    return result
 
 
 def _canonical_v2_configuration(graph: Mapping) -> dict:
@@ -233,6 +260,72 @@ def _canonical_v2_configuration(graph: Mapping) -> dict:
             description="Canonical ClearPipe graph v2 definition",
         )
     }
+
+
+def _runtime_configuration(generated: GeneratedDefinition, revision: int) -> ClearPipeRuntimeConfiguration:
+    return ClearPipeRuntimeConfiguration(
+        schema_version=CLEARPIPE_RUNTIME_SCHEMA_VERSION,
+        definition_revision=revision,
+        graph_schema_version=generated.manifest.graph_schema_version,
+        graph_digest=generated.manifest.graph_digest,
+        runtime_steps=generated.manifest.runtime_steps,
+        source_map=generated.source_map,
+    )
+
+
+def _stored_runtime_configuration(task: Task) -> Optional[ClearPipeRuntimeConfiguration]:
+    value = _configuration_value(task, CLEARPIPE_RUNTIME_CONFIGURATION)
+    if value is None:
+        return None
+    try:
+        return ClearPipeRuntimeConfiguration.from_dict(value)
+    except (TypeError, ValueError) as ex:
+        raise errors.bad_request.ValidationError(
+            "ClearPipe definition has malformed compiled runtime metadata",
+            task=task.id,
+        ) from ex
+
+
+def _v2_configurations(graph: Mapping, generated: GeneratedDefinition, revision: int) -> dict:
+    configurations = _canonical_v2_configuration(graph)
+    runtime = _runtime_configuration(generated, revision)
+    # PipelineController owns its live Pipeline monitoring configuration when
+    # the cloned Agent task starts. Never seed it from the lossy v1 projection.
+    configurations[CLEARPIPE_RUNTIME_CONFIGURATION] = ConfigurationItem(
+        name=CLEARPIPE_RUNTIME_CONFIGURATION,
+        value=json.dumps(runtime.to_dict(), separators=(",", ":"), ensure_ascii=False),
+        type="json",
+        description="ClearPipe v2 compiled runtime identity and source map",
+    )
+    return configurations
+
+
+def _compiler_output(generated: GeneratedDefinition, revision: int) -> dict:
+    runtime = _runtime_configuration(generated, revision)
+    return {
+        "source": generated.source,
+        "source_map": [
+            {
+                "graph_element_id": entry.graph_element_id,
+                "start_line": entry.start_line,
+                "end_line": entry.end_line,
+            }
+            for entry in generated.source_map
+        ],
+        "manifest": {
+            "graph_schema_version": generated.manifest.graph_schema_version,
+            "graph_digest": generated.manifest.graph_digest,
+            "node_ids": list(generated.manifest.node_ids),
+            "runtime_steps": [item.to_dict() for item in generated.manifest.runtime_steps],
+        },
+        "runtime": runtime.to_dict(),
+    }
+
+
+def _controller_launch_script(source: str) -> str:
+    """Keep the compiler no-launch while making the cloned Agent task executable."""
+
+    return '{}\nif __name__ == "__main__":\n    pipe.start()\n'.format(source.rstrip("\n"))
 
 
 def _secret_parameter_material(value) -> bool:
@@ -291,16 +384,12 @@ def _definition(
     graph = _graph(task)
     # Never return a graph that predates server-side secret enforcement.
     is_v2 = _is_v2_graph(graph)
-    security = (
-        _v2_validation_result(graph, include_compilation_diagnostic=False)
-        if is_v2
-        else GraphValidator().validate(graph)
-    )
+    security = _v2_validation_result(graph) if is_v2 else GraphValidator().validate(graph)
     if any(issue.code in {"embedded_secret", "CPSEM010"} for issue in security.issues):
         raise errors.bad_request.ValidationError(
             "ClearPipe definition contains prohibited embedded credentials", task=task.id
         )
-    if is_v2 and not security.valid:
+    if is_v2 and not read_graph_v2(graph).is_supported:
         raise errors.bad_request.ValidationError(
             "ClearPipe definition is not a valid supported graph",
             task=task.id,
@@ -312,7 +401,21 @@ def _definition(
     can_edit = can_write_definition(task.company, task.company_origin, company_id)
     archived = EntityVisibility.archived.value in (task.system_tags or [])
     schema_version = graph.get("schema_version")
-    v2_compilation_available = schema_version != 2
+    revision = _revision(task)
+    generated = _compile_v2(graph) if is_v2 and security.run_valid else None
+    runtime_configuration = _runtime_configuration(generated, revision) if generated is not None else None
+    stored_runtime = _stored_runtime_configuration(task) if is_v2 else None
+    if (
+        runtime_configuration is not None
+        and stored_runtime is not None
+        and stored_runtime.definition_revision == revision
+        and stored_runtime.graph_digest == runtime_configuration.graph_digest
+        and stored_runtime.runtime_steps == runtime_configuration.runtime_steps
+        and stored_runtime.source_map == runtime_configuration.source_map
+    ):
+        runtime_configuration = stored_runtime
+    v2_execution_available = bool(generated) and can_edit and not archived
+    legacy_compilation_available = schema_version != 2
     representation = (
         "clearpipe_graph_v2"
         if schema_version == 2
@@ -334,7 +437,7 @@ def _definition(
         "public": task.company == "",
         "created": task.created.isoformat() if task.created else None,
         "last_update": task.last_update.isoformat() if task.last_update else None,
-        "revision": _revision(task),
+        "revision": revision,
         "graph": graph,
         # These capabilities reflect the authenticated task boundary. CP-14
         # applies the stricter CP-06 legacy/unsupported representation policy.
@@ -343,9 +446,9 @@ def _definition(
             "edit": can_edit,
             "save_as": True,
             "version": False,
-            "run": not archived and v2_compilation_available,
-            "compilation": v2_compilation_available,
-            "execution": not archived and v2_compilation_available,
+            "run": v2_execution_available if is_v2 else not archived and legacy_compilation_available,
+            "compilation": bool(generated) if is_v2 else legacy_compilation_available,
+            "execution": v2_execution_available if is_v2 else not archived and legacy_compilation_available,
             "import": True,
             "export": True,
             "source": False,
@@ -353,6 +456,14 @@ def _definition(
             "delete": can_edit,
         },
         "representation": representation,
+        **(
+            {
+                "validation": security.to_dict(),
+                "runtime": runtime_configuration.to_dict(),
+            }
+            if runtime_configuration is not None
+            else {"validation": security.to_dict()} if is_v2 else {}
+        ),
     }
 
 
@@ -390,7 +501,11 @@ def _queue_checker(company_id: str):
 
 def _validate_graph(company_id: str, graph: Mapping):
     if _is_v2_graph(graph):
-        return _v2_validation_result(graph)
+        return _v2_validation_result(
+            graph,
+            resource_checker=_resource_checker(company_id),
+            queue_checker=_queue_checker(company_id),
+        )
     try:
         result = GraphValidator(
             resource_checker=_resource_checker(company_id),
@@ -415,7 +530,7 @@ def _assert_valid(result):
 
 def _compile(graph: Mapping, revision: int, node_queues=None):
     if _is_v2_graph(graph):
-        _raise_compilation_unavailable()
+        raise errors.bad_request.ValidationError("ClearPipe graph v2 must use the canonical compiler")
     graph = deepcopy(dict(graph))
     if node_queues is not None:
         graph["default_queues"] = dict(node_queues)
@@ -487,9 +602,9 @@ def create(call: APICall, company_id: str, request: CreateRequest):
     with distributed_lock(name=f"clearpipe_create_{lock_key}", timeout=30):
         project_id = _find_project(company_id, call.identity.user, request.name, request.description)
         _assert_name_available(company_id, project_id)
-        compiled = None if v2_graph else _compile(request.graph, revision=1)
+        compiled = _compile_v2(request.graph) if v2_graph else _compile(request.graph, revision=1)
         configurations = (
-            _canonical_v2_configuration(request.graph)
+            _v2_configurations(request.graph, compiled, revision=1)
             if v2_graph
             else _configurations(compiled)
         )
@@ -511,12 +626,12 @@ def create(call: APICall, company_id: str, request: CreateRequest):
             configuration=configurations,
             runtime={
                 "clearpipe_revision": 1,
-                "_pipeline_hash": "clearpipe-v2-uncompiled" if v2_graph else "clearpipe-v1",
+                "_pipeline_hash": compiled.manifest.graph_digest if v2_graph else "clearpipe-v1",
             },
             script={
                 "binary": "python",
                 "entry_point": "clearpipe_controller.py",
-                "diff": V2_UNAVAILABLE_CONTROLLER_SCRIPT if v2_graph else compiled["script"],
+                "diff": compiled.source if v2_graph else compiled["script"],
                 "requirements": {"pip": ["clearml>=1.16"]},
             },
         )
@@ -604,19 +719,19 @@ def update(call: APICall, company_id: str, request: UpdateRequest):
         _assert_name_available(company_id, project_id, task.id)
     new_revision = current_revision + 1
     v2_graph = _is_v2_graph(graph)
-    compiled = None if v2_graph else _compile(graph, revision=new_revision)
+    compiled = _compile_v2(graph) if v2_graph else _compile(graph, revision=new_revision)
     updates = {
         "set__name": name.strip(),
         "set__comment": description or "",
         "set__project": project_id,
         "set__tags": tags,
         "set__configuration": (
-            _canonical_v2_configuration(graph)
+            _v2_configurations(graph, compiled, revision=new_revision)
             if v2_graph
             else _configurations(compiled)
         ),
         "set__script__diff": (
-            V2_UNAVAILABLE_CONTROLLER_SCRIPT if v2_graph else compiled["script"]
+            compiled.source if v2_graph else compiled["script"]
         ),
         "set__last_update": datetime.now(timezone.utc),
         "set__last_change": datetime.now(timezone.utc),
@@ -626,7 +741,7 @@ def update(call: APICall, company_id: str, request: UpdateRequest):
         runtime = dict(task.runtime or {})
         runtime.update(
             clearpipe_revision=new_revision,
-            _pipeline_hash="clearpipe-v2-uncompiled",
+            _pipeline_hash=compiled.manifest.graph_digest,
         )
         updates["set__runtime"] = runtime
     else:
@@ -661,11 +776,16 @@ def validate(call: APICall, company_id: str, request: ValidateRequest):
     has_graph = "graph" in call.data
     if has_task == has_graph:
         raise errors.bad_request.ValidationError("Exactly one of task or graph is required")
-    graph = _graph(_get_task(company_id, request.task)) if has_task else request.graph
+    task = _get_task(company_id, request.task) if has_task else None
+    graph = _graph(task) if task is not None else request.graph
     result = _validate_graph(company_id, graph)
     data = result.to_dict()
-    if result.valid and not _is_v2_graph(graph):
-        data["pipeline"] = _compile(graph, revision=graph.get("revision", 1))["pipeline"]
+    if result.valid:
+        if _is_v2_graph(graph):
+            revision = _revision(task) if task is not None else 1
+            data["pipeline"] = _compiler_output(_compile_v2(graph), revision)
+        else:
+            data["pipeline"] = _compile(graph, revision=graph.get("revision", 1))["pipeline"]
     call.result.data = data
 
 
@@ -684,20 +804,45 @@ def start(call: APICall, company_id: str, request: StartRequest):
         raise RevisionConflict(expected=revision, received=request.revision)
     _assert_safe_parameter_overrides(request.parameters or {})
     graph = _graph(definition)
-    if _is_v2_graph(graph):
-        _raise_compilation_unavailable()
+    v2_graph = _is_v2_graph(graph)
+    if v2_graph and not can_write_definition(
+        definition.company,
+        definition.company_origin,
+        company_id,
+    ):
+        raise errors.bad_request.ValidationError(
+            "ClearPipe graph v2 definitions can only be started by their owner"
+        )
     graph = deepcopy(graph)
-    if request.node_queues:
+    if v2_graph and request.node_queues:
+        raise errors.bad_request.ValidationError(
+            "ClearPipe graph v2 does not support per-run node queue overrides"
+        )
+    if not v2_graph and request.node_queues:
         graph["default_queues"] = dict(request.node_queues)
     result = _validate_graph(company_id, graph)
     _assert_valid(result)
+    if v2_graph and not result.run_valid:
+        raise errors.bad_request.ValidationError(
+            "ClearPipe graph cannot be executed",
+            issues=[issue.to_dict() for issue in result.issues],
+        )
     # Resolve and authorize the controller queue before creating a run so an
     # invalid queue cannot leave an orphaned clone.
     if request.queue:
         queue = queue_bll.get_by_id(company_id, request.queue, only=("id",))
     else:
         queue = queue_bll.get_default(company_id)
-    compiled = _compile(graph, revision=revision, node_queues=request.node_queues)
+    if v2_graph:
+        compiled = _compile_v2(graph)
+        configurations = _v2_configurations(graph, compiled, revision)
+        controller_script = _controller_launch_script(compiled.source)
+        pipeline_hash = compiled.manifest.graph_digest
+    else:
+        compiled = _compile(graph, revision=revision, node_queues=request.node_queues)
+        configurations = _configurations(compiled)
+        controller_script = compiled["script"]
+        pipeline_hash = "clearpipe-v1"
     hyperparams = {
         "ClearPipe": {
             key: ParamsItem(section="ClearPipe", name=str(key), value=json.dumps(value) if not isinstance(value, str) else value)
@@ -716,11 +861,11 @@ def start(call: APICall, company_id: str, request: StartRequest):
             name=definition.name,
             project=run_project,
             hyperparams=hyperparams,
-            configuration=_configurations(compiled),
-            script_overrides={"diff": compiled["script"], "entry_point": "clearpipe_controller.py"},
+            configuration=configurations,
+            script_overrides={"diff": controller_script, "entry_point": "clearpipe_controller.py"},
         )
         Task.objects(id=run.id, company=company_id).update_one(
-            set__runtime={"clearpipe_revision": revision, "_pipeline_hash": "clearpipe-v1"}
+            set__runtime={"clearpipe_revision": revision, "_pipeline_hash": pipeline_hash}
         )
         queued, enqueue_result = enqueue_task(
             task_id=run.id,
@@ -769,11 +914,22 @@ def archive(call: APICall, company_id: str, request: ArchiveRequest):
     new_revision = revision + 1
     graph = _graph(task)
     v2_graph = _is_v2_graph(graph)
-    compiled = None if v2_graph else _compile(graph, revision=new_revision)
+    compiled = None
+    if v2_graph:
+        try:
+            compiled = _compile_v2(graph)
+        except (GenerationError, TypeError, ValueError, MemoryError):
+            # Archiving remains available for historical invalid definitions.
+            # It must not repair, drop, or execute their canonical graph.
+            pass
+    else:
+        compiled = _compile(graph, revision=new_revision)
     updates = {
         "add_to_set__system_tags": EntityVisibility.archived.value,
         "set__configuration": (
-            _canonical_v2_configuration(graph)
+            _v2_configurations(graph, compiled, revision=new_revision)
+            if v2_graph and compiled is not None
+            else task.configuration
             if v2_graph
             else _configurations(compiled)
         ),
@@ -783,10 +939,10 @@ def archive(call: APICall, company_id: str, request: ArchiveRequest):
     }
     if v2_graph:
         runtime = dict(task.runtime or {})
-        runtime.update(
-            clearpipe_revision=new_revision,
-            _pipeline_hash="clearpipe-v2-uncompiled",
-        )
+        runtime["clearpipe_revision"] = new_revision
+        if compiled is not None:
+            runtime["_pipeline_hash"] = compiled.manifest.graph_digest
+            updates["set__script__diff"] = compiled.source
         updates["set__runtime"] = runtime
     else:
         updates["set__script__diff"] = compiled["script"]

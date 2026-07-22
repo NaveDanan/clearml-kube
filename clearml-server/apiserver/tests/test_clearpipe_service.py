@@ -1,11 +1,26 @@
+import json
 import unittest
 from contextlib import ExitStack
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from apiserver.apierrors import errors
 from apiserver.apimodels.clearpipe import GetAllRequest
 from apiserver.services import clearpipe
+
+
+FUNCTION_GRAPH = (
+    Path(__file__).resolve().parents[3]
+    / "clearml-web"
+    / "src"
+    / "app"
+    / "features"
+    / "clearpipe"
+    / "domain"
+    / "fixtures"
+    / "function-graph.v2.json"
+)
 
 
 class FakeQuerySet:
@@ -222,6 +237,135 @@ class ServiceFailurePolicyTests(unittest.TestCase):
             id="run-1", company="company-a", status=clearpipe.TaskStatus.created
         )
         deletion.delete.assert_called_once_with()
+
+
+class V2StartTests(unittest.TestCase):
+    def test_start_clones_and_enqueues_compiled_controller_with_persisted_runtime_mapping(self):
+        graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        definition = SimpleNamespace(
+            id="definition",
+            company="company-a",
+            company_origin=None,
+            project="project-a",
+            name="Pipeline A",
+            comment="",
+            system_tags=[],
+            runtime={"clearpipe_revision": 7},
+            configuration={"ClearPipe": SimpleNamespace(value=json.dumps(graph))},
+        )
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+        )
+        run = SimpleNamespace(id="run-1")
+        queue = SimpleNamespace(id="default")
+        task_model = Mock()
+        runtime_update = Mock()
+        task_model.objects.return_value = runtime_update
+
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe.queue_bll, "get_by_id", return_value=queue
+        ) as get_queue, patch.object(clearpipe.queue_bll, "get_default", return_value=queue), patch.object(
+            clearpipe, "Task", task_model
+        ), patch.object(
+            clearpipe.task_bll, "clone_task", return_value=(run, None)
+        ) as clone, patch.object(
+            clearpipe, "enqueue_task", return_value=(True, None)
+        ) as enqueue:
+            clearpipe.start(call, "company-a", request)
+
+        self.assertEqual(call.result.data, {"task": "run-1", "enqueued": True})
+        clone_kwargs = clone.call_args.kwargs
+        runtime = json.loads(clone_kwargs["configuration"]["ClearPipeRuntime"].value)
+        self.assertNotIn("Pipeline", clone_kwargs["configuration"])
+        self.assertEqual(runtime["definition_revision"], 7)
+        self.assertEqual(
+            runtime["runtime_steps"],
+            [
+                {"graph_node_id": "normalize", "pipeline_step_name": "normalize"},
+                {"graph_node_id": "format-result", "pipeline_step_name": "format_result"},
+            ],
+        )
+        script = clone_kwargs["script_overrides"]["diff"]
+        self.assertIn("pipe.add_function_step", script)
+        self.assertNotIn("DagRunner", script)
+        self.assertTrue(script.endswith('if __name__ == "__main__":\n    pipe.start()\n'))
+        runtime_update.update_one.assert_called_once_with(
+            set__runtime={
+                "clearpipe_revision": 7,
+                "_pipeline_hash": runtime["graph_digest"],
+            }
+        )
+        enqueue.assert_called_once_with(
+            task_id="run-1",
+            company_id="company-a",
+            identity=call.identity,
+            queue_id="default",
+            status_message="Starting ClearPipe pipeline",
+            status_reason="",
+            validate=True,
+        )
+        get_queue.assert_called_once_with("company-a", "default", only=("id",))
+
+    def test_start_rejects_stale_v2_revision_before_creating_a_clone(self):
+        definition = SimpleNamespace(id="definition", system_tags=[])
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=6,
+            parameters={},
+        )
+        clone = Mock()
+
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_revision", return_value=7
+        ), patch.object(clearpipe.task_bll, "clone_task", clone):
+            with self.assertRaises(clearpipe.RevisionConflict):
+                clearpipe.start(call, "company-a", request)
+
+        clone.assert_not_called()
+        self.assertIsNone(call.result.data)
+
+    def test_public_v2_definition_cannot_be_started_by_a_non_owner(self):
+        graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        definition = SimpleNamespace(
+            id="definition",
+            company="",
+            company_origin="company-a",
+            system_tags=[],
+            runtime={"clearpipe_revision": 7},
+            configuration={"ClearPipe": SimpleNamespace(value=json.dumps(graph))},
+        )
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-b"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            parameters={},
+        )
+        clone = Mock()
+
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe.task_bll, "clone_task", clone
+        ):
+            with self.assertRaises(errors.bad_request.ValidationError):
+                clearpipe.start(call, "company-b", request)
+
+        clone.assert_not_called()
+        self.assertIsNone(call.result.data)
 
 
 if __name__ == "__main__":

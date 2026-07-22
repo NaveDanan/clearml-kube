@@ -30,6 +30,7 @@ from .contracts import (
     FunctionLoweringInput,
     GeneratedDefinition,
     NodeLoweringInput,
+    RuntimeStepIdentity,
     SourceManifest,
     SourceMapEntry,
     TaskLoweringInput,
@@ -555,6 +556,13 @@ def _render_definition(
             graph_schema_version=graph.schema_version,
             graph_digest=digest,
             node_ids=tuple(node.id for node in plan.topological_nodes),
+            runtime_steps=tuple(
+                RuntimeStepIdentity(
+                    graph_node_id=node.id,
+                    pipeline_step_name=node.name,
+                )
+                for node in plan.topological_nodes
+            ),
         ),
     )
 

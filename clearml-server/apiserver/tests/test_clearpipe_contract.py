@@ -111,6 +111,7 @@ class ClearPipeContractSchemaTests(unittest.TestCase):
         self.assertEqual(set(service.endpoint_groups), expected)
         self.assertTrue(
             {"clearpipe_graph_v2", "diagnostic", "compiler_output", "definition"}
+            .union({"runtime_metadata"})
             .issubset(service.definitions)
         )
         for action in expected:
@@ -174,13 +175,42 @@ class ClearPipeDefinitionCapabilityTests(unittest.TestCase):
         self.assertFalse(definition["capabilities"]["archive"])
         self.assertFalse(definition["capabilities"]["delete"])
 
-    def test_v2_definition_reports_compilation_and_execution_unavailable(self):
-        definition = clearpipe._definition(
-            stored_definition(), "company-a", project_name="Pipelines"
+    def test_v2_definition_reports_executable_compilation_and_runtime_identity(self):
+        stored = stored_definition()
+        generated = clearpipe._compile_v2(
+            json.loads(stored.configuration["ClearPipe"].value)
         )
-        self.assertFalse(definition["capabilities"]["compilation"])
-        self.assertFalse(definition["capabilities"]["execution"])
-        self.assertFalse(definition["capabilities"]["run"])
+        stored.configuration["ClearPipeRuntime"] = SimpleNamespace(
+            value=json.dumps(clearpipe._runtime_configuration(generated, 7).to_dict())
+        )
+        definition = clearpipe._definition(stored, "company-a", project_name="Pipelines")
+
+        self.assertTrue(definition["capabilities"]["compilation"])
+        self.assertTrue(definition["capabilities"]["execution"])
+        self.assertTrue(definition["capabilities"]["run"])
+        self.assertTrue(definition["runtime"]["graph_digest"].startswith("sha256:"))
+        self.assertEqual(
+            definition["runtime"]["runtime_steps"],
+            [
+                {"graph_node_id": "normalize", "pipeline_step_name": "normalize"},
+                {"graph_node_id": "format-result", "pipeline_step_name": "format_result"},
+            ],
+        )
+
+    def test_compiler_diagnostic_disables_v2_execution_without_hiding_the_definition(self):
+        definition = stored_definition()
+        graph = cp06_fixture("task-graph.v2.json")
+        next(port for port in graph["nodes"][0]["ports"] if port["direction"] == "input")[
+            "name"
+        ] = "unsectioned"
+        definition.configuration["ClearPipe"].value = json.dumps(graph)
+
+        response = clearpipe._definition(definition, "company-a", project_name="Pipelines")
+
+        self.assertFalse(response["capabilities"]["compilation"])
+        self.assertFalse(response["capabilities"]["execution"])
+        self.assertFalse(response["capabilities"]["run"])
+        self.assertIn("CPSEM007", {issue["code"] for issue in response["validation"]["issues"]})
 
     def test_legacy_contract_is_explicitly_classified_for_read_only_adapter_policy(self):
         legacy = clearpipe._definition(
@@ -234,6 +264,8 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
             clearpipe, "update_project_time"
         ), patch.object(
             clearpipe, "_definition", return_value={"id": "definition-1"}
+        ), patch.object(
+            clearpipe.queue_bll, "get_by_id", return_value=SimpleNamespace(id="default")
         ):
             clearpipe.create(call, "company-a", request)
 
@@ -245,21 +277,41 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
         self.assertIn("bindings", persisted)
         self.assertNotIn("edges", persisted)
         self.assertNotIn("Pipeline", configuration)
-        self.assertEqual(created[0].runtime["_pipeline_hash"], "clearpipe-v2-uncompiled")
+        runtime = json.loads(configuration["ClearPipeRuntime"].value)
+        self.assertEqual(runtime["definition_revision"], 1)
+        self.assertEqual(
+            runtime["runtime_steps"],
+            [
+                {"graph_node_id": "normalize", "pipeline_step_name": "normalize"},
+                {"graph_node_id": "format-result", "pipeline_step_name": "format_result"},
+            ],
+        )
+        self.assertTrue(created[0].runtime["_pipeline_hash"].startswith("sha256:"))
+        self.assertIn("pipe.add_function_step", created[0].script["diff"])
+        self.assertNotIn(".start(", created[0].script["diff"])
 
-    def test_validate_v2_reports_typed_compilation_unavailable_diagnostic(self):
+    def test_validate_v2_returns_server_generated_source_and_runtime_identity(self):
         graph = cp06_fixture("function-graph.v2.json")
         call = SimpleNamespace(data={"graph": graph}, result=SimpleNamespace(data=None))
         request = SimpleNamespace(task=None, graph=graph)
 
-        clearpipe.validate(call, "company-a", request)
+        with patch.object(
+            clearpipe.queue_bll, "get_by_id", return_value=SimpleNamespace(id="default")
+        ):
+            clearpipe.validate(call, "company-a", request)
 
         self.assertTrue(call.result.data["valid"])
+        self.assertEqual(call.result.data["issues"], [])
+        compiler = call.result.data["pipeline"]
+        self.assertIn("pipe.add_function_step", compiler["source"])
         self.assertEqual(
-            call.result.data["issues"][0]["code"],
-            clearpipe.V2_COMPILATION_UNAVAILABLE,
+            compiler["manifest"]["runtime_steps"],
+            [
+                {"graph_node_id": "normalize", "pipeline_step_name": "normalize"},
+                {"graph_node_id": "format-result", "pipeline_step_name": "format_result"},
+            ],
         )
-        self.assertNotIn("pipeline", call.result.data)
+        self.assertEqual(compiler["runtime"]["definition_revision"], 1)
 
     def test_update_persists_v2_without_invoking_legacy_compilation(self):
         graph = cp06_fixture("function-graph.v2.json")
@@ -287,6 +339,8 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
             clearpipe, "update_project_time"
         ), patch.object(
             clearpipe, "_definition", return_value={"id": stored.id}
+        ), patch.object(
+            clearpipe.queue_bll, "get_by_id", return_value=SimpleNamespace(id="default")
         ):
             clearpipe.update(call, "company-a", request)
 
@@ -294,10 +348,13 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
         persisted = json.loads(updates["set__configuration"]["ClearPipe"].value)
         self.assertEqual(persisted, canonical_graph_dict(read_graph_v2(graph).graph))
         self.assertNotIn("Pipeline", updates["set__configuration"])
-        self.assertEqual(
-            updates["set__script__diff"], clearpipe.V2_UNAVAILABLE_CONTROLLER_SCRIPT
+        runtime = json.loads(updates["set__configuration"]["ClearPipeRuntime"].value)
+        self.assertEqual(runtime["definition_revision"], 8)
+        self.assertIn(
+            "pipe.add_function_step", updates["set__script__diff"]
         )
-        self.assertEqual(updates["set__runtime"]["_pipeline_hash"], "clearpipe-v2-uncompiled")
+        self.assertNotIn(".start(", updates["set__script__diff"])
+        self.assertTrue(updates["set__runtime"]["_pipeline_hash"].startswith("sha256:"))
 
 
 class ClearPipeStartParameterSafetyTests(unittest.TestCase):

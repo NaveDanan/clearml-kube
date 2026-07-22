@@ -9,6 +9,7 @@ from apiserver.bll.clearpipe.generation.compiler import (
     GenerationError,
     compile_graph,
 )
+from apiserver.bll.clearpipe.generation.contracts import ClearPipeRuntimeConfiguration
 from apiserver.bll.clearpipe.generation.function import lower_function_node
 from apiserver.bll.clearpipe.graph_v2 import DataBinding, PortEndpoint, read_graph_v2
 
@@ -58,6 +59,36 @@ class ClearPipeTaskGeneratorTests(unittest.TestCase):
         self.assertIn("${stage_data.artifacts.dataset.url}", generated.source)
         self.assertEqual(generated.manifest.node_ids, ("stage-data", "stage-process"))
         self.assertTrue(generated.manifest.graph_digest.startswith("sha256:"))
+        self.assertEqual(
+            [
+                (item.graph_node_id, item.pipeline_step_name)
+                for item in generated.manifest.runtime_steps
+            ],
+            [("stage-data", "stage_data"), ("stage-process", "stage_process")],
+        )
+
+    def test_runtime_identity_payload_round_trips_without_source_line_inference(self):
+        generated = compile_graph(parsed_graph("task-graph.v2.json"))
+        payload = ClearPipeRuntimeConfiguration(
+            schema_version=1,
+            definition_revision=4,
+            graph_schema_version=generated.manifest.graph_schema_version,
+            graph_digest=generated.manifest.graph_digest,
+            runtime_steps=generated.manifest.runtime_steps,
+            source_map=generated.source_map,
+        )
+
+        restored = ClearPipeRuntimeConfiguration.from_dict(payload.to_dict())
+
+        self.assertEqual(restored, payload)
+        self.assertEqual(
+            restored.runtime_steps[0].graph_node_id,
+            "stage-data",
+        )
+        self.assertEqual(
+            restored.runtime_steps[0].pipeline_step_name,
+            "stage_data",
+        )
 
     def test_source_is_deterministic_when_canvas_and_collection_order_change(self):
         original = graph_fixture("task-graph.v2.json")
