@@ -61,6 +61,12 @@ Bindings have stable IDs. Multiple kinds may connect the same node pair.
 Consumers compute a sorted, deduplicated parent list; a visual edge never
 means untyped data transport.
 
+Every binding that has a source and target node contributes a dependency:
+`data`, port-sourced `artifact`, `inferred`, and `execution-only`. Resource and
+pipeline-parameter sources have no upstream node. The resulting deduplicated
+dependencies must be a DAG. A cycle (including a self-edge) is rejected on
+both codecs with `graph_cycle` at `graph.bindings`.
+
 ## Serialization, JSON, and secrets
 
 The codecs accept only finite JSON values, reject unsafe object keys, and
@@ -70,9 +76,15 @@ references, but no credential value is part of this graph. Transient editor
 state (selection, hover, drag, panels, request/history/clipboard/run state)
 has no field in v2. Approved positions, optional dimensions, and viewport do.
 
-Serialization sorts tags and unordered collections by stable identity, sorts
-ports by direction/order/ID, sorts JSON object keys, and emits compact JSON.
-Logical round-trips therefore have one deterministic representation.
+Serialization sorts tags and unordered collections by Unicode code-point
+ordering (never locale collation), sorts ports by direction/order/ID, sorts
+JSON object keys the same way, and emits compact JSON. Integers must be
+IEEE-754-safe. Every integral number—including `1.0`—serializes without a
+fraction; `-0.0` serializes as `0`; other finite doubles serialize as a
+17-significant-digit normalized scientific value. Logical round-trips
+therefore have one byte-for-byte representation in server and browser codecs.
+URL query keys are percent-decoded before secret-key detection, so encoded
+forms such as `%61pi_key` are rejected.
 
 ## Migration and unsupported policy
 
@@ -104,6 +116,12 @@ server and browser focused tests:
   binding, not a dataset card.
 * `invalid-secret-graph.v2.json` proves credential-shaped values are rejected
   without echoing their contents.
+* `cyclic-graph.v2.json` proves data and artifact port dependencies are jointly
+  cycle-checked.
+* `encoded-secret-url-graph.v2.json` proves percent-encoded secret query keys
+  are rejected.
+* `canonical-serialization.v2.json` and its golden JSON string prove shared
+  ordering plus `1.0`/`-0.0` numeric normalization.
 
 The no-launch lowering handoff is named in
 `apiserver.bll.clearpipe.generation.contracts`; CP-12 and CP-13 own the actual

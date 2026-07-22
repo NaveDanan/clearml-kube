@@ -8,6 +8,7 @@ import {
   FunctionNode,
   GraphBinding,
   GraphCodecIssue,
+  GraphDependency,
   GraphDecodeResult,
   GraphNode,
   GraphOutput,
@@ -65,6 +66,16 @@ class UnsupportedCodecError extends Error {
 
 const isRecord = (value: JsonValue): value is JsonRecord => typeof value === 'object' && value !== null && !Array.isArray(value);
 const has = (value: JsonRecord, key: string): boolean => Object.prototype.hasOwnProperty.call(value, key);
+const compareCanonicalStrings = (left: string, right: string): number => {
+  const leftCharacters = Array.from(left);
+  const rightCharacters = Array.from(right);
+  const length = Math.min(leftCharacters.length, rightCharacters.length);
+  for (let index = 0; index < length; index++) {
+    const difference = leftCharacters[index].codePointAt(0)! - rightCharacters[index].codePointAt(0)!;
+    if (difference) return difference;
+  }
+  return leftCharacters.length - rightCharacters.length;
+};
 const compactKey = (key: string): string => key.replace(/[^a-z0-9]/gi, '').toLowerCase();
 const isSecretKey = (key: string): boolean => {
   const compact = compactKey(key);
@@ -90,6 +101,9 @@ const normalizeJson = (value: unknown, path = 'graph'): JsonValue => {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) throw new CodecError('non_json_value', path, 'numbers must be finite JSON values');
+    if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
+      throw new CodecError('non_canonical_number', path, 'integers must be IEEE-754 safe');
+    }
     return value;
   }
   if (Array.isArray(value)) return value.map((item, index) => normalizeJson(item, `${path}[${index}]`));
@@ -119,7 +133,7 @@ const array = (value: JsonValue | undefined, path: string): JsonValue[] => {
 };
 
 const assertAllowed = (value: JsonRecord, allowed: readonly string[], path: string): void => {
-  const unknown = Object.keys(value).filter((key) => !allowed.includes(key)).sort()[0];
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key)).sort(compareCanonicalStrings)[0];
   if (unknown) throw new UnsupportedCodecError('unsupported_field', `${path}.${unknown}`);
 };
 
@@ -461,6 +475,57 @@ const ensureUnique = (values: readonly string[], path: string, code: string): vo
   if (new Set(values).size !== values.length) throw new CodecError(code, path, 'values must be unique');
 };
 
+export const deriveGraphV2Dependencies = (graph: GraphV2): GraphDependency[] => {
+  const dependencies = new Map<string, GraphDependency>();
+  const add = (sourceNodeId: string, targetNodeId: string): void => {
+    const key = `${sourceNodeId}\u0000${targetNodeId}`;
+    dependencies.set(key, {source_node_id: sourceNodeId, target_node_id: targetNodeId});
+  };
+  graph.bindings.forEach((binding) => {
+    if (binding.kind === 'data') {
+      add(binding.source.node_id, binding.target.node_id);
+    } else if (binding.kind === 'artifact' && binding.source.kind === 'port') {
+      add(binding.source.node_id, binding.target.node_id);
+    } else if (binding.kind === 'inferred' || binding.kind === 'execution-only') {
+      add(binding.source.node_id, binding.target.node_id);
+    }
+  });
+  return [...dependencies.values()].sort((left, right) =>
+    compareCanonicalStrings(left.source_node_id, right.source_node_id)
+    || compareCanonicalStrings(left.target_node_id, right.target_node_id));
+};
+
+const validateAcyclicDependencies = (graph: GraphV2): void => {
+  const dependencies = deriveGraphV2Dependencies(graph);
+  const parents = new Map(graph.nodes.map((node) => [node.id, new Set<string>()]));
+  const children = new Map(graph.nodes.map((node) => [node.id, new Set<string>()]));
+  dependencies.forEach((dependency) => {
+    if (dependency.source_node_id === dependency.target_node_id) {
+      throw new CodecError('graph_cycle', 'graph.bindings', 'graph dependencies must be acyclic');
+    }
+    parents.get(dependency.target_node_id)?.add(dependency.source_node_id);
+    children.get(dependency.source_node_id)?.add(dependency.target_node_id);
+  });
+  const ready = [...parents.entries()]
+    .filter(([, nodeParents]) => !nodeParents.size)
+    .map(([nodeId]) => nodeId)
+    .sort(compareCanonicalStrings);
+  let visited = 0;
+  while (ready.length) {
+    const nodeId = ready.shift()!;
+    visited += 1;
+    [...(children.get(nodeId) ?? [])].sort(compareCanonicalStrings).forEach((childId) => {
+      const childParents = parents.get(childId);
+      childParents?.delete(nodeId);
+      if (!childParents?.size) ready.push(childId);
+    });
+    ready.sort(compareCanonicalStrings);
+  }
+  if (visited !== graph.nodes.length) {
+    throw new CodecError('graph_cycle', 'graph.bindings', 'graph dependencies must be acyclic');
+  }
+};
+
 const validateReferences = (graph: GraphV2): void => {
   ensureUnique(graph.nodes.map((item) => item.id), 'graph.nodes', 'duplicate_node_id');
   ensureUnique(graph.nodes.map((item) => item.name), 'graph.nodes', 'duplicate_node_name');
@@ -535,6 +600,7 @@ const validateReferences = (graph: GraphV2): void => {
       throw new CodecError('invalid_node_queue', 'graph.nodes', 'node queue must reference a queue resource');
     }
   });
+  validateAcyclicDependencies(graph);
 };
 
 export const decodeGraphV2 = (raw: unknown): GraphDecodeResult => {
@@ -586,35 +652,47 @@ export const decodeGraphV2 = (raw: unknown): GraphDecodeResult => {
   }
 };
 
-const sortJson = (value: JsonValue): JsonValue => {
-  if (Array.isArray(value)) return value.map(sortJson);
-  if (!isRecord(value)) return value;
-  const sorted: JsonRecord = {};
-  Object.keys(value).sort().forEach((key) => sorted[key] = sortJson(value[key]));
-  return sorted;
+const canonicalNumber = (value: number): string => {
+  if (Object.is(value, -0) || value === 0) return '0';
+  if (Number.isInteger(value)) return String(value);
+  const [rawMantissa, rawExponent] = value.toExponential(16).split('e');
+  const mantissa = rawMantissa.replace(/(?:\.0+|(\.\d*?)0+)$/, '$1');
+  const exponent = Number(rawExponent);
+  return `${mantissa}e${exponent >= 0 ? '+' : ''}${exponent}`;
+};
+
+const canonicalJson = (value: JsonValue): string => {
+  if (value === null) return 'null';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (typeof value === 'number') return canonicalNumber(value);
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  return `{${Object.keys(value).sort(compareCanonicalStrings)
+    .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+    .join(',')}}`;
 };
 
 export const canonicalGraphV2 = (graph: GraphV2): GraphV2 => ({
   ...graph,
-  document: {...graph.document, tags: [...graph.document.tags].sort()},
+  document: {...graph.document, tags: [...graph.document.tags].sort(compareCanonicalStrings)},
   settings: {...graph.settings},
-  parameters: [...graph.parameters].sort((left, right) => left.order - right.order || left.id.localeCompare(right.id)),
-  resources: [...graph.resources].sort((left, right) => left.id.localeCompare(right.id)),
-  outputs: [...graph.outputs].sort((left, right) => left.id.localeCompare(right.id)),
+  parameters: [...graph.parameters].sort((left, right) => left.order - right.order || compareCanonicalStrings(left.id, right.id)),
+  resources: [...graph.resources].sort((left, right) => compareCanonicalStrings(left.id, right.id)),
+  outputs: [...graph.outputs].sort((left, right) => compareCanonicalStrings(left.id, right.id)),
   nodes: graph.nodes
     .map((item) => ({
       ...item,
       ports: item.ports
-        .map((port) => ({...port, accepted_binding_kinds: [...port.accepted_binding_kinds].sort()}))
-        .sort((left, right) => left.direction.localeCompare(right.direction) || left.order - right.order || left.id.localeCompare(right.id)),
+        .map((port) => ({...port, accepted_binding_kinds: [...port.accepted_binding_kinds].sort(compareCanonicalStrings)}))
+        .sort((left, right) => compareCanonicalStrings(left.direction, right.direction) || left.order - right.order || compareCanonicalStrings(left.id, right.id)),
     }) as GraphNode)
-    .sort((left, right) => left.id.localeCompare(right.id)),
-  bindings: [...graph.bindings].sort((left, right) => left.id.localeCompare(right.id)),
+    .sort((left, right) => compareCanonicalStrings(left.id, right.id)),
+  bindings: [...graph.bindings].sort((left, right) => compareCanonicalStrings(left.id, right.id)),
   visual: {...graph.visual, viewport: {...graph.visual.viewport}},
 });
 
 export const serializeGraphV2 = (graph: GraphV2): string => {
   const decoded = decodeGraphV2(graph);
   if (decoded.status !== 'ok') throw new Error('Cannot serialize an invalid or unsupported ClearPipe graph');
-  return JSON.stringify(sortJson(normalizeJson(canonicalGraphV2(decoded.graph))));
+  return canonicalJson(normalizeJson(canonicalGraphV2(decoded.graph)));
 };

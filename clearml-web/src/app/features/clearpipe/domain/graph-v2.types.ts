@@ -200,6 +200,12 @@ export interface GraphOutput {
   source: PortEndpoint;
 }
 
+/** A deduplicated execution dependency derived from node-to-node bindings. */
+export interface GraphDependency {
+  source_node_id: string;
+  target_node_id: string;
+}
+
 export interface GraphV2 {
   schema_version: typeof GRAPH_V2_SCHEMA_VERSION;
   document: DocumentMetadata;

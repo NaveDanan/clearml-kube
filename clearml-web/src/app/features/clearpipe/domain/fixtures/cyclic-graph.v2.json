@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "document": {"name": "cyclic_graph", "project": "examples", "tags": []},
+  "settings": {},
+  "parameters": [],
+  "resources": [],
+  "outputs": [],
+  "nodes": [
+    {
+      "id": "first",
+      "kind": "function",
+      "name": "first",
+      "label": "First",
+      "signature": "def first(value: int) -> int",
+      "source": "def first(value: int) -> int:\n    return value\n",
+      "ports": [
+        {"id": "in-value", "kind": "port", "name": "value", "direction": "input", "role": "data", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["data", "artifact"], "order": 0},
+        {"id": "out-value", "kind": "port", "name": "value", "direction": "output", "role": "data", "required": false, "multiplicity": "many", "accepted_binding_kinds": ["data", "artifact"], "order": 0}
+      ],
+      "configuration": {"task_type": "data_processing"},
+      "visual": {"position": {"x": 0, "y": 0}}
+    },
+    {
+      "id": "second",
+      "kind": "function",
+      "name": "second",
+      "label": "Second",
+      "signature": "def second(value: int) -> int",
+      "source": "def second(value: int) -> int:\n    return value\n",
+      "ports": [
+        {"id": "in-value", "kind": "port", "name": "value", "direction": "input", "role": "data", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["data", "artifact"], "order": 0},
+        {"id": "out-value", "kind": "port", "name": "value", "direction": "output", "role": "data", "required": false, "multiplicity": "many", "accepted_binding_kinds": ["data", "artifact"], "order": 0}
+      ],
+      "configuration": {"task_type": "data_processing"},
+      "visual": {"position": {"x": 300, "y": 0}}
+    }
+  ],
+  "bindings": [
+    {"id": "bind-data-first-second", "kind": "data", "source": {"kind": "port", "node_id": "first", "port_id": "out-value"}, "target": {"kind": "port", "node_id": "second", "port_id": "in-value"}},
+    {"id": "bind-artifact-second-first", "kind": "artifact", "source": {"kind": "port", "node_id": "second", "port_id": "out-value"}, "target": {"kind": "port", "node_id": "first", "port_id": "in-value"}}
+  ],
+  "visual": {"viewport": {"x": 0, "y": 0}, "zoom": 1}
+}
