@@ -1,8 +1,12 @@
+import canonicalGoldenFixture from './fixtures/canonical-serialization.golden.json';
+import canonicalFixture from './fixtures/canonical-serialization.v2.json';
+import cyclicFixture from './fixtures/cyclic-graph.v2.json';
 import datasetFixture from './fixtures/dataset-bound-graph.v2.json';
+import encodedSecretUrlFixture from './fixtures/encoded-secret-url-graph.v2.json';
 import functionFixture from './fixtures/function-graph.v2.json';
 import invalidSecretFixture from './fixtures/invalid-secret-graph.v2.json';
 import taskFixture from './fixtures/task-graph.v2.json';
-import {decodeGraphV2, serializeGraphV2} from './graph-v2-codec';
+import {decodeGraphV2, deriveGraphV2Dependencies, serializeGraphV2} from './graph-v2-codec';
 
 describe('ClearPipe canonical graph v2 codec', () => {
   const decodeFixture = (fixture: unknown) => {
@@ -19,8 +23,10 @@ describe('ClearPipe canonical graph v2 codec', () => {
 
     expect(task.nodes.map((node) => node.name)).toEqual(['stage_data', 'stage_process']);
     expect(task.bindings.map((binding) => binding.kind).sort()).toEqual(['artifact', 'execution-only', 'parameter']);
+    expect(deriveGraphV2Dependencies(task)).toEqual([{source_node_id: 'stage-data', target_node_id: 'stage-process'}]);
     expect(functionGraph.nodes.map((node) => node.name)).toEqual(['normalize', 'format_result']);
     expect(functionGraph.bindings.map((binding) => binding.kind).sort()).toEqual(['data', 'inferred']);
+    expect(deriveGraphV2Dependencies(functionGraph)).toEqual([{source_node_id: 'normalize', target_node_id: 'format-result'}]);
     expect(dataset.resources.some((resource) => resource.kind === 'dataset')).toBeTrue();
     expect(dataset.nodes[0].kind).toBe('task');
   });
@@ -47,6 +53,27 @@ describe('ClearPipe canonical graph v2 codec', () => {
     const sourceSecret = structuredClone(functionFixture);
     sourceSecret.nodes[0].source = 'def normalize():\n    api_key = \'must-not-persist\'\n';
     expect(decodeGraphV2(sourceSecret).status).toBe('invalid');
+
+    const encodedUrl = decodeGraphV2(encodedSecretUrlFixture);
+    expect(encodedUrl.status).toBe('invalid');
+    if (encodedUrl.status !== 'invalid') throw new Error('encoded URL must be invalid');
+    expect(encodedUrl.errors[0].code).toBe('secret_not_allowed');
+    expect(JSON.stringify(encodedUrl.errors)).not.toContain('must-not-persist');
+  });
+
+  it('rejects cycles derived from data and artifact port bindings', () => {
+    const result = decodeGraphV2(cyclicFixture);
+    expect(result.status).toBe('invalid');
+    if (result.status !== 'invalid') throw new Error('cycle fixture must be invalid');
+    expect(result.errors[0]).toEqual({
+      code: 'graph_cycle',
+      path: 'graph.bindings',
+      message: 'graph dependencies must be acyclic',
+    });
+  });
+
+  it('matches the server/browser canonical serialization golden', () => {
+    expect(serializeGraphV2(decodeFixture(canonicalFixture))).toBe(canonicalGoldenFixture.canonical_json);
   });
 
   it('preserves legacy, newer, and unknown structures as read-only unsupported documents', () => {

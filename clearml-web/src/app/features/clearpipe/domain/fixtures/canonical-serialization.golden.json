@@ -1,0 +1,3 @@
+{
+  "canonical_json": "{\"bindings\":[],\"document\":{\"name\":\"canonical_graph\",\"project\":\"examples\",\"tags\":[\"a\",\"z\"]},\"nodes\":[],\"outputs\":[],\"parameters\":[{\"default\":1,\"id\":\"param-a\",\"name\":\"alpha\",\"order\":0,\"required\":false},{\"default\":1.0000000000000001e-1,\"id\":\"param-mid\",\"name\":\"middle\",\"order\":1,\"required\":false},{\"default\":0,\"id\":\"param-z\",\"name\":\"zeta\",\"order\":2,\"required\":false}],\"resources\":[{\"id\":\"resource-Z\",\"kind\":\"model\",\"resource_id\":\"model-Z\"},{\"id\":\"resource-a\",\"kind\":\"model\",\"resource_id\":\"model-a\"}],\"schema_version\":2,\"settings\":{},\"visual\":{\"viewport\":{\"x\":0,\"y\":1},\"zoom\":1}}"
+}

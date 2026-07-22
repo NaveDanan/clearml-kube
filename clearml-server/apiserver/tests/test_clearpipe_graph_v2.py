@@ -7,6 +7,7 @@ from apiserver.bll.clearpipe.generation.contracts import NodeLoweringInput, Sour
 from apiserver.bll.clearpipe.graph_v2 import (
     GRAPH_SCHEMA_VERSION,
     canonical_graph_dict,
+    derive_graph_dependencies,
     read_graph_v2,
     serialize_graph_v2,
 )
@@ -43,8 +44,16 @@ class ClearPipeGraphV2Tests(unittest.TestCase):
 
         self.assertEqual([node.name for node in task.nodes], ["stage_data", "stage_process"])
         self.assertEqual({binding.kind for binding in task.bindings}, {"artifact", "parameter", "execution-only"})
+        self.assertEqual(
+            [(item.source_node_id, item.target_node_id) for item in derive_graph_dependencies(task)],
+            [("stage-data", "stage-process")],
+        )
         self.assertEqual([node.name for node in function.nodes], ["normalize", "format_result"])
         self.assertEqual({binding.kind for binding in function.bindings}, {"data", "inferred"})
+        self.assertEqual(
+            [(item.source_node_id, item.target_node_id) for item in derive_graph_dependencies(function)],
+            [("normalize", "format-result")],
+        )
         self.assertEqual(dataset.resources[0].kind, "dataset")
         self.assertFalse(any(node.kind == "dataset" for node in dataset.nodes))
 
@@ -78,6 +87,22 @@ class ClearPipeGraphV2Tests(unittest.TestCase):
         source_result = read_graph_v2(source_secret)
         self.assertEqual(source_result.status, "invalid")
         self.assertEqual(source_result.errors[0].code, "secret_not_allowed")
+
+        encoded_url_result = read_graph_v2(fixture("encoded-secret-url-graph.v2.json"))
+        self.assertEqual(encoded_url_result.status, "invalid")
+        self.assertEqual(encoded_url_result.errors[0].code, "secret_not_allowed")
+        self.assertNotIn("must-not-persist", json.dumps([error.to_dict() for error in encoded_url_result.errors]))
+
+    def test_rejects_cycles_derived_from_data_and_artifact_port_bindings(self):
+        result = read_graph_v2(fixture("cyclic-graph.v2.json"))
+        self.assertEqual(result.status, "invalid")
+        self.assertEqual(result.errors[0].code, "graph_cycle")
+        self.assertEqual(result.errors[0].path, "graph.bindings")
+
+    def test_cross_codec_golden_serialization_normalizes_numbers_and_order(self):
+        graph = self.assert_supported_fixture("canonical-serialization.v2.json")
+        expected = fixture("canonical-serialization.golden.json")["canonical_json"]
+        self.assertEqual(serialize_graph_v2(graph), expected)
 
     def test_legacy_v1_and_newer_versions_remain_read_only_with_original_data(self):
         legacy = {"schema_version": 1, "nodes": [{"id": "legacy"}], "edges": []}

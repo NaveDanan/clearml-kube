@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "document": {"name": "canonical_graph", "project": "examples", "tags": ["z", "a"]},
+  "settings": {},
+  "parameters": [
+    {"id": "param-z", "name": "zeta", "required": false, "order": 2, "default": -0.0},
+    {"id": "param-a", "name": "alpha", "required": false, "order": 0, "default": 1.0},
+    {"id": "param-mid", "name": "middle", "required": false, "order": 1, "default": 0.1}
+  ],
+  "resources": [
+    {"id": "resource-a", "kind": "model", "resource_id": "model-a"},
+    {"id": "resource-Z", "kind": "model", "resource_id": "model-Z"}
+  ],
+  "outputs": [],
+  "nodes": [],
+  "bindings": [],
+  "visual": {"viewport": {"x": -0.0, "y": 1.0}, "zoom": 1.0}
+}

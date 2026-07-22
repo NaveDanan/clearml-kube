@@ -10,7 +10,7 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
-from urllib.parse import urlsplit
+from urllib.parse import unquote_plus, urlsplit
 
 from .migrations import CURRENT_GRAPH_SCHEMA_VERSION, DEFAULT_MIGRATION_REGISTRY, MigrationRegistry
 
@@ -54,8 +54,15 @@ _RESOURCE_KINDS = {"dataset", "model", "queue", "task"}
 _PORT_DIRECTIONS = {"input", "output"}
 _PORT_ROLES = {"data", "artifact", "parameter"}
 _MULTIPLICITIES = {"single", "many"}
+_MAX_CANONICAL_INTEGER = 9007199254740991
 
 JsonValue = Union[None, bool, int, float, str, List["JsonValue"], Dict[str, "JsonValue"]]
+
+
+def _canonical_string_key(value: str) -> Tuple[int, ...]:
+    """Unicode code-point ordering shared with the browser codec."""
+
+    return tuple(ord(character) for character in value)
 
 
 class GraphV2Error(ValueError):
@@ -168,7 +175,7 @@ class DocumentMetadata:
         value = {
             "name": self.name,
             "project": self.project,
-            "tags": sorted(self.tags),
+            "tags": sorted(self.tags, key=_canonical_string_key),
         }
         if self.version is not None:
             value["version"] = self.version
@@ -248,7 +255,7 @@ class Port:
             "role": self.role,
             "required": self.required,
             "multiplicity": self.multiplicity,
-            "accepted_binding_kinds": sorted(self.accepted_binding_kinds),
+            "accepted_binding_kinds": sorted(self.accepted_binding_kinds, key=_canonical_string_key),
             "order": self.order,
         }
         if self.has_default:
@@ -480,17 +487,72 @@ class GraphV2:
             "schema_version": self.schema_version,
             "document": self.document.to_dict(),
             "settings": self.settings.to_dict(),
-            "parameters": [parameter.to_dict() for parameter in sorted(self.parameters, key=lambda item: (item.order, item.id))],
-            "resources": [resource.to_dict() for resource in sorted(self.resources, key=lambda item: item.id)],
-            "outputs": [output.to_dict() for output in sorted(self.outputs, key=lambda item: item.id)],
-            "nodes": [node.to_dict() for node in sorted(self.nodes, key=lambda item: item.id)],
-            "bindings": [binding.to_dict() for binding in sorted(self.bindings, key=lambda item: item.id)],
+            "parameters": [parameter.to_dict() for parameter in sorted(self.parameters, key=lambda item: (item.order, _canonical_string_key(item.id)))],
+            "resources": [resource.to_dict() for resource in sorted(self.resources, key=lambda item: _canonical_string_key(item.id))],
+            "outputs": [output.to_dict() for output in sorted(self.outputs, key=lambda item: _canonical_string_key(item.id))],
+            "nodes": [node.to_dict() for node in sorted(self.nodes, key=lambda item: _canonical_string_key(item.id))],
+            "bindings": [binding.to_dict() for binding in sorted(self.bindings, key=lambda item: _canonical_string_key(item.id))],
             "visual": self.visual.to_dict(),
         }
 
 
+@dataclass(frozen=True)
+class GraphDependency:
+    """A deduplicated node dependency derived from canonical bindings."""
+
+    source_node_id: str
+    target_node_id: str
+
+
 def _sort_ports(ports: Sequence[Port]) -> List[Port]:
-    return sorted(ports, key=lambda item: (item.direction, item.order, item.id))
+    return sorted(ports, key=lambda item: (_canonical_string_key(item.direction), item.order, _canonical_string_key(item.id)))
+
+
+def derive_graph_dependencies(graph: GraphV2) -> Tuple[GraphDependency, ...]:
+    """Derive sorted, deduplicated node dependencies from every node binding."""
+
+    dependencies = set()
+    for binding in graph.bindings:
+        if isinstance(binding, DataBinding):
+            dependencies.add((binding.source.node_id, binding.target.node_id))
+        elif isinstance(binding, ArtifactBinding) and isinstance(binding.source, PortEndpoint):
+            dependencies.add((binding.source.node_id, binding.target.node_id))
+        elif isinstance(binding, (InferredBinding, ExecutionOnlyBinding)):
+            dependencies.add((binding.source.node_id, binding.target.node_id))
+    return tuple(
+        GraphDependency(source_node_id=source, target_node_id=target)
+        for source, target in sorted(
+            dependencies,
+            key=lambda item: (_canonical_string_key(item[0]), _canonical_string_key(item[1])),
+        )
+    )
+
+
+def _validate_acyclic_dependencies(graph: GraphV2) -> None:
+    dependencies = derive_graph_dependencies(graph)
+    parents = {node.id: set() for node in graph.nodes}
+    children = {node.id: set() for node in graph.nodes}
+    for dependency in dependencies:
+        if dependency.source_node_id == dependency.target_node_id:
+            raise GraphV2Error("graph_cycle", "graph.bindings", "graph dependencies must be acyclic")
+        parents[dependency.target_node_id].add(dependency.source_node_id)
+        children[dependency.source_node_id].add(dependency.target_node_id)
+
+    ready = sorted(
+        (node_id for node_id, node_parents in parents.items() if not node_parents),
+        key=_canonical_string_key,
+    )
+    visited = 0
+    while ready:
+        node_id = ready.pop(0)
+        visited += 1
+        for child_id in sorted(children[node_id], key=_canonical_string_key):
+            parents[child_id].remove(node_id)
+            if not parents[child_id]:
+                ready.append(child_id)
+        ready.sort(key=_canonical_string_key)
+    if visited != len(graph.nodes):
+        raise GraphV2Error("graph_cycle", "graph.bindings", "graph dependencies must be acyclic")
 
 
 def _compact_key(key: str) -> str:
@@ -518,17 +580,21 @@ def _query_pairs(query: str) -> Iterable[Tuple[str, str]]:
         if not pair:
             continue
         key, _, value = pair.partition("=")
-        yield key, value
+        yield unquote_plus(key), value
 
 
 def _validate_json(value: Any, path: str = "graph") -> JsonValue:
     if value is None or isinstance(value, (str, bool)):
         return value
     if type(value) is int:
+        if abs(value) > _MAX_CANONICAL_INTEGER:
+            raise GraphV2Error("non_canonical_number", path, "integers must be IEEE-754 safe")
         return value
     if type(value) is float:
         if not math.isfinite(value):
             raise GraphV2Error("non_json_value", path, "numbers must be finite JSON values")
+        if value.is_integer() and abs(value) > _MAX_CANONICAL_INTEGER:
+            raise GraphV2Error("non_canonical_number", path, "integers must be IEEE-754 safe")
         return value
     if isinstance(value, list):
         return [_validate_json(item, "{}[{}]".format(path, index)) for index, item in enumerate(value)]
@@ -562,7 +628,7 @@ def _list(value: Any, path: str) -> List[Any]:
 
 
 def _known_fields(value: Mapping[str, Any], allowed: Iterable[str], path: str) -> None:
-    unknown = sorted(set(value) - set(allowed))
+    unknown = sorted(set(value) - set(allowed), key=_canonical_string_key)
     if unknown:
         raise UnsupportedGraphError("unsupported_field", "{}.{}".format(path, unknown[0]))
 
@@ -1005,6 +1071,7 @@ def _validate_references(graph: GraphV2) -> None:
             queue = resource_by_id.get(queue_id)
             if queue is None or queue.kind != "queue":
                 raise GraphV2Error("invalid_node_queue", "graph.nodes", "node queue must reference a queue resource")
+    _validate_acyclic_dependencies(graph)
 
 
 def _parse_graph_v2(raw_value: Mapping[str, Any]) -> GraphV2:
@@ -1069,7 +1136,43 @@ def canonical_graph_dict(graph: GraphV2) -> Dict[str, Any]:
     return graph.to_dict()
 
 
-def serialize_graph_v2(graph: GraphV2) -> str:
-    """Serialize a valid graph deterministically without whitespace noise."""
+def _canonical_number(value: Union[int, float]) -> str:
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ValueError("canonical graph contains a non-finite number")
+    if value == 0:
+        return "0"
+    if isinstance(value, int) or value.is_integer():
+        if abs(value) > _MAX_CANONICAL_INTEGER:
+            raise ValueError("canonical graph contains an unsafe integer")
+        return str(int(value))
+    mantissa, exponent = format(value, ".16e").split("e")
+    mantissa = mantissa.rstrip("0").rstrip(".")
+    exponent_value = int(exponent)
+    return "{}e{}{}".format(mantissa, "+" if exponent_value >= 0 else "", exponent_value)
 
-    return json.dumps(canonical_graph_dict(graph), ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+
+def _canonical_json(value: JsonValue) -> str:
+    if value is None:
+        return "null"
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if type(value) in (int, float):
+        return _canonical_number(value)
+    if isinstance(value, list):
+        return "[{}]".format(",".join(_canonical_json(item) for item in value))
+    if isinstance(value, Mapping):
+        return "{{{}}}".format(",".join(
+            "{}:{}".format(json.dumps(key, ensure_ascii=False), _canonical_json(value[key]))
+            for key in sorted(value, key=_canonical_string_key)
+        ))
+    raise TypeError("canonical graph contains a non-JSON value")
+
+
+def serialize_graph_v2(graph: GraphV2) -> str:
+    """Serialize with Unicode code-point key order and IEEE-754-safe numbers."""
+
+    return _canonical_json(canonical_graph_dict(graph))
