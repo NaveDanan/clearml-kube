@@ -33,8 +33,8 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Done | f9e579b | Advanced history, clipboard, keyboard, selection, and layout operations integrated with atomic restore safety. |
 | [x] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 | cp-28-task-vertical-slice | Done | af39ed9 | Deterministic two-task vertical slice proves canonical save/reload, generated output, typed execution handoff, snapshot correlation, navigation, and denied-task fail-closed behavior. |
 | [x] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 | cp-29-existing-pipeline-editing | Done | a924507 | Authorized existing-pipeline entry, lossless supported conversion, explicit unsupported fallback, safe version behavior, and latest-only route loading integrated. |
-| [ ] | [CP-30](./cp_30_accessibility-responsive-performance.md) | 8 | 8 | cp-30-accessibility-performance | In progress | copilot/cp-30 | Hardening responsive accessibility and large-graph performance after Wave 7 convergence. |
-| [ ] | [CP-31](./cp_31_automated-coverage-regression.md) | 8 | 8 | cp-31-coverage-regression | In progress | copilot/cp-31 | Completing end-to-end coverage, quality automation, and `/pipelines` regression protection. |
+| [ ] | [CP-30](./cp_30_accessibility-responsive-performance.md) | 8 | 8 | cp-30-accessibility-performance | Blocked | copilot/cp-30 | Reviewed CP-30 hardening is ready, but uncommitted overlapping root UI/UX edits must be preserved and resolved before integration. |
+| [x] | [CP-31](./cp_31_automated-coverage-regression.md) | 8 | 8 | cp-31-coverage-regression | Done | 2f9c824 | Real server generator-packet goldens, honest browser request contracts, expanded ClearPipe targets, and `/pipelines` entry regressions integrated. |
 | [ ] | [CP-32](./cp_32_final-integration-quality-report.md) | 9 | 5 |  | Not started |  |  |
 
 ## Gate checklist
