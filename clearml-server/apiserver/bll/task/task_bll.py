@@ -363,7 +363,10 @@ class TaskBLL:
             validate_parent=validate_references or parent,
             validate_project=validate_references or project,
         )
-        new_task.save()
+        if new_task_id is not None:
+            new_task.save(force_insert=True)
+        else:
+            new_task.save()
 
         if task.project == new_task.project:
             updated_tags = tags

@@ -11,6 +11,8 @@ from mongoengine.errors import NotUniqueError
 
 from apiserver.apierrors import errors
 from apiserver.apimodels.clearpipe import GetAllRequest
+from apiserver.bll.task import task_bll as task_bll_module
+from apiserver.bll.task.task_bll import TaskBLL
 from apiserver.services import clearpipe
 
 
@@ -63,6 +65,63 @@ def task(company, origin=None):
         name="Pipeline A",
         comment="",
     )
+
+
+class TaskCloneInsertSemanticsTests(unittest.TestCase):
+    @staticmethod
+    def _source_task():
+        return SimpleNamespace(
+            id="definition",
+            name="Source task",
+            comment="",
+            parent=None,
+            project="project-a",
+            tags=[],
+            system_tags=[],
+            type="controller",
+            script=None,
+            output=None,
+            models=SimpleNamespace(input=[]),
+            container=None,
+            execution=None,
+            configuration={},
+            hyperparams={},
+        )
+
+    def _clone(self, new_task_id=None):
+        source = self._source_task()
+        cloned = Mock()
+        cloned.project = source.project
+        with patch.object(TaskBLL, "get_by_id", return_value=source), patch.object(
+            TaskBLL, "validate"
+        ), patch.object(
+            task_bll_module, "Task", return_value=cloned
+        ), patch.object(
+            task_bll_module, "validate_tags"
+        ), patch.object(
+            task_bll_module, "params_prepare_for_save"
+        ), patch.object(
+            task_bll_module.org_bll, "update_tags"
+        ), patch.object(
+            task_bll_module, "update_project_time"
+        ):
+            TaskBLL.clone_task(
+                company_id="company-a",
+                user_id="user-a",
+                task_id=source.id,
+                new_task_id=new_task_id,
+            )
+        return cloned
+
+    def test_clone_with_explicit_task_id_uses_insert_only_persistence(self):
+        cloned = self._clone(new_task_id="reserved-run")
+
+        cloned.save.assert_called_once_with(force_insert=True)
+
+    def test_clone_without_explicit_task_id_retains_normal_save_semantics(self):
+        cloned = self._clone()
+
+        cloned.save.assert_called_once_with()
 
 
 class ServiceCompanyIsolationTests(unittest.TestCase):
@@ -689,7 +748,7 @@ class V2StartTests(unittest.TestCase):
         get_default.assert_not_called()
         self.assertEqual(enqueue.call_args.kwargs["queue_id"], "original-default")
 
-    def test_concurrent_clone_collision_recovers_the_single_reserved_run(self):
+    def test_concurrent_insert_collision_recovers_the_single_reserved_run(self):
         graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
         definition = self._definition(graph)
         call = SimpleNamespace(
@@ -711,6 +770,7 @@ class V2StartTests(unittest.TestCase):
             id="reserved-run", status=clearpipe.TaskStatus.created
         )
         clone = Mock(side_effect=NotUniqueError("duplicate task ID"))
+        cleanup = Mock()
         with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
             clearpipe, "_resource_checker", return_value=lambda *_: True
         ), patch.object(
@@ -739,12 +799,70 @@ class V2StartTests(unittest.TestCase):
             return_value={**pending, "state": "committed", "enqueued": True},
         ), patch.object(
             clearpipe, "_update_idempotency_reservation"
+        ), patch.object(
+            clearpipe, "_cleanup_unqueued_run", cleanup
         ):
             clearpipe.start(call, "company-a", request)
 
         self.assertEqual(call.result.data, {"task": "reserved-run", "enqueued": True})
         clone.assert_called_once()
         enqueue.assert_called_once()
+        cleanup.assert_not_called()
+
+    def test_insert_collision_never_cleans_up_the_recovered_run(self):
+        graph = json.loads(FUNCTION_GRAPH.read_text(encoding="utf-8"))
+        definition = self._definition(graph)
+        call = SimpleNamespace(
+            identity=SimpleNamespace(user="user-a"),
+            result=SimpleNamespace(data=None),
+        )
+        request = SimpleNamespace(
+            task="definition",
+            revision=7,
+            queue=None,
+            parameters={},
+            node_queues={},
+            verify_watched_queue=False,
+            idempotency_key="00000000-0000-4000-8000-000000000010",
+        )
+        reservation = self._reservation("reserved-run")
+        pending = {**reservation, "state": "pending"}
+        recovered_run = SimpleNamespace(
+            id="reserved-run", status=clearpipe.TaskStatus.created
+        )
+        cleanup = Mock()
+        with patch.object(clearpipe, "_get_task", return_value=definition), patch.object(
+            clearpipe, "_resource_checker", return_value=lambda *_: True
+        ), patch.object(
+            clearpipe, "_queue_checker", return_value=lambda _: True
+        ), patch.object(
+            clearpipe, "_idempotency_reservation", return_value=None
+        ), patch.object(
+            clearpipe, "_reserve_idempotency", return_value=reservation
+        ), patch.object(
+            clearpipe.queue_bll, "get_default", return_value=SimpleNamespace(id="default")
+        ), patch.object(
+            clearpipe,
+            "_runtime_provenance_key_ring",
+            return_value=self._provenance_key_ring(),
+        ), patch.object(
+            clearpipe,
+            "_idempotent_run",
+            side_effect=[None, (recovered_run, pending)],
+        ), patch.object(
+            clearpipe.task_bll,
+            "clone_task",
+            side_effect=NotUniqueError("duplicate task ID"),
+        ), patch.object(
+            clearpipe, "enqueue_task", side_effect=RuntimeError("enqueue failed")
+        ), patch.object(
+            clearpipe, "_cleanup_unqueued_run", cleanup
+        ):
+            with self.assertRaisesRegex(RuntimeError, "enqueue failed"):
+                clearpipe.start(call, "company-a", request)
+
+        cleanup.assert_not_called()
+        self.assertIsNone(call.result.data)
 
     def test_start_reuses_committed_idempotent_run_without_cloning(self):
         definition = self._definition(
