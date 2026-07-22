@@ -23,7 +23,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-17](./cp_17_generic-node-ui-framework.md) | 4 | 8 | cp-17-node-framework | Done | 99744f9 | Generic catalog, cards, ports, registry, and inspector framework integrated with isolated focused coverage. |
 | [x] | [CP-18](./cp_18_shared-resource-query-layer.md) | 4 | 5 | cp-18-resource-queries | Done | b13bc8b | Authorized shared resource layer integrated with safe canonical inventory, local filtering, and retryable outage handling. |
 | [x] | [CP-19](./cp_19_persistence-lifecycle.md) | 4 | 8 | cp-19-persistence-lifecycle | Done | 85f79f4 | Persistence lifecycle integrated with round-trip, CAS, read-only, and non-destructive Save As permission handling. |
-| [ ] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 | cp-20-port-edge-semantics | In progress | copilot/cp-20 | Semantic compatibility and edge editing worktree active. |
+| [x] | [CP-20](./cp_20_port-edge-semantics.md) | 5 | 5 | cp-20-port-edge-semantics | Done | 4c457ae | Canonical semantic edge compatibility, editing, and accessible feedback integrated. |
 | [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 | cp-21-dataset-browser | In progress | copilot/cp-21 | Dataset browser and safe dataset-reference integration worktree active. |
 | [x] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 | cp-22-import-export | Done | 99377c9 | Versioned safe transfer and unsaved-change guards integrated; unsupported generated source fails closed. |
 | [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
