@@ -1,0 +1,17 @@
+{
+  "request": {
+    "graph": {
+      "schema_version": 2
+    }
+  },
+  "response": {
+    "valid": false,
+    "issues": [
+      {
+        "code": "inaccessible_resource",
+        "message": "Referenced resource is unavailable"
+      }
+    ]
+  },
+  "adapter_outcome": "resource_unavailable"
+}

@@ -1,0 +1,16 @@
+{
+  "request": {
+    "task": "definition-1",
+    "revision": 3,
+    "graph": {
+      "schema_version": 2
+    }
+  },
+  "error": {
+    "http_status": 409,
+    "error_type": "RevisionConflict",
+    "expected": 4,
+    "received": 3
+  },
+  "adapter_outcome": "stale_revision"
+}

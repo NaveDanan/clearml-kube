@@ -1,4 +1,5 @@
 from apiserver.schema import SchemaReader
+from apiserver.utilities.partial_version import PartialVersion
 
 
 EXPECTED = {
@@ -15,6 +16,33 @@ EXPECTED = {
 
 
 schema = SchemaReader().get_schema()
-assert set(schema.services["clearpipe"].endpoint_groups) == EXPECTED
-print("clearpipe-schema: OK")
+service = schema.services["clearpipe"]
 
+assert set(service.endpoint_groups) == EXPECTED
+assert {
+    "clearpipe_graph_v2",
+    "diagnostic",
+    "compiler_output",
+    "definition",
+}.issubset(service.definitions)
+
+for action in EXPECTED:
+    endpoint = service.endpoint_groups[action].get_for_version(PartialVersion("2.35"))
+    assert endpoint.request_schema["type"] == "object"
+    assert endpoint.response_schema["type"] == "object"
+    assert endpoint.request_schema["properties"]
+    assert endpoint.response_schema["properties"]
+
+assert (
+    service.endpoint_groups["create"]
+    .get_for_version(PartialVersion("2.35"))
+    .request_schema["properties"]["graph"]["$ref"]
+    == "#/definitions/clearpipe_graph_v2"
+)
+assert (
+    service.endpoint_groups["validate"]
+    .get_for_version(PartialVersion("2.35"))
+    .response_schema["properties"]["issues"]["items"]["$ref"]
+    == "#/definitions/diagnostic"
+)
+print("clearpipe-schema: OK")

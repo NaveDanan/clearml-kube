@@ -11,14 +11,23 @@ from apiserver.apierrors import APIError, errors
 from apiserver.apierrors.base import BaseError
 from apiserver.apimodels.clearpipe import (
     ArchiveRequest,
+    ArchiveResponse,
     CreateRequest,
+    CreateResponse,
+    DeleteResponse,
     DefinitionRequest,
+    DefinitionResponse,
     DeleteRequest,
     GetAllRequest,
+    GetAllResponse,
     ParseScriptRequest,
+    ParseScriptResponse,
     StartRequest,
+    StartResponse,
     UpdateRequest,
+    UpdateResponse,
     ValidateRequest,
+    ValidationResponse,
 )
 from apiserver.bll.clearpipe import (
     GraphValidator,
@@ -137,7 +146,9 @@ def _configurations(compiled: Mapping) -> dict:
     }
 
 
-def _definition(task: Task, project_name: Optional[str] = None) -> dict:
+def _definition(
+    task: Task, company_id: str, project_name: Optional[str] = None
+) -> dict:
     graph = _graph(task)
     # Never return a graph that predates server-side secret enforcement.
     security = GraphValidator().validate(graph)
@@ -148,6 +159,16 @@ def _definition(task: Task, project_name: Optional[str] = None) -> dict:
     if project_name is None and task.project:
         project = Project.objects(id=task.project).only("name").first()
         project_name = project.name if project else None
+    can_edit = can_write_definition(task.company, task.company_origin, company_id)
+    archived = EntityVisibility.archived.value in (task.system_tags or [])
+    schema_version = graph.get("schema_version")
+    representation = (
+        "clearpipe_graph_v2"
+        if schema_version == 2
+        else "legacy_clearpipe_graph"
+        if schema_version == 1
+        else "unsupported_clearpipe_graph"
+    )
     return {
         "id": task.id,
         "name": task.name,
@@ -158,12 +179,27 @@ def _definition(task: Task, project_name: Optional[str] = None) -> dict:
         "company": task.company,
         "tags": list(task.tags or []),
         "system_tags": list(task.system_tags or []),
-        "archived": EntityVisibility.archived.value in (task.system_tags or []),
+        "archived": archived,
         "public": task.company == "",
         "created": task.created.isoformat() if task.created else None,
         "last_update": task.last_update.isoformat() if task.last_update else None,
         "revision": _revision(task),
         "graph": graph,
+        # These capabilities reflect the authenticated task boundary. CP-14
+        # applies the stricter CP-06 legacy/unsupported representation policy.
+        "capabilities": {
+            "view": True,
+            "edit": can_edit,
+            "save_as": True,
+            "version": False,
+            "run": not archived,
+            "import": True,
+            "export": True,
+            "source": False,
+            "archive": can_edit,
+            "delete": can_edit,
+        },
+        "representation": representation,
     }
 
 
@@ -279,7 +315,12 @@ def _assert_name_available(company_id: str, project_id: str, task_id: str = None
         )
 
 
-@endpoint("clearpipe.create", min_version="2.35", request_data_model=CreateRequest)
+@endpoint(
+    "clearpipe.create",
+    min_version="2.35",
+    request_data_model=CreateRequest,
+    response_data_model=CreateResponse,
+)
 def create(call: APICall, company_id: str, request: CreateRequest):
     _validate_name(request.name)
     result = _validate_graph(company_id, request.graph)
@@ -326,10 +367,19 @@ def create(call: APICall, company_id: str, request: CreateRequest):
                 )
                 task.reload()
             update_project_time(project_id)
-    call.result.data = {"id": task.id, "revision": 1, "definition": _definition(task)}
+    call.result.data = {
+        "id": task.id,
+        "revision": 1,
+        "definition": _definition(task, company_id),
+    }
 
 
-@endpoint("clearpipe.get_all", min_version="2.35", request_data_model=GetAllRequest)
+@endpoint(
+    "clearpipe.get_all",
+    min_version="2.35",
+    request_data_model=GetAllRequest,
+    response_data_model=GetAllResponse,
+)
 def get_all(call: APICall, company_id: str, request: GetAllRequest):
     page = max(0, request.page or 0)
     page_size = min(MAX_PAGE_SIZE, max(1, request.page_size or 50))
@@ -345,18 +395,30 @@ def get_all(call: APICall, company_id: str, request: GetAllRequest):
     queryset = Task.objects(query).order_by("-last_update", "id")
     total = queryset.count()
     definitions = [
-        _definition(task)
+        _definition(task, company_id)
         for task in queryset.skip(page * page_size).limit(page_size)
     ]
     call.result.data = {"definitions": definitions, "total": total}
 
 
-@endpoint("clearpipe.get_by_id", min_version="2.35", request_data_model=DefinitionRequest)
+@endpoint(
+    "clearpipe.get_by_id",
+    min_version="2.35",
+    request_data_model=DefinitionRequest,
+    response_data_model=DefinitionResponse,
+)
 def get_by_id(call: APICall, company_id: str, request: DefinitionRequest):
-    call.result.data = {"definition": _definition(_get_task(company_id, request.task))}
+    call.result.data = {
+        "definition": _definition(_get_task(company_id, request.task), company_id)
+    }
 
 
-@endpoint("clearpipe.update", min_version="2.35", request_data_model=UpdateRequest)
+@endpoint(
+    "clearpipe.update",
+    min_version="2.35",
+    request_data_model=UpdateRequest,
+    response_data_model=UpdateResponse,
+)
 def update(call: APICall, company_id: str, request: UpdateRequest):
     task = _get_task(company_id, request.task, owned=True)
     current_revision = _revision(task)
@@ -400,10 +462,19 @@ def update(call: APICall, company_id: str, request: UpdateRequest):
         raise RevisionConflict(expected=expected, received=request.revision)
     update_project_time([task.project, project_id])
     task = _get_task(company_id, task.id, owned=True)
-    call.result.data = {"updated": 1, "revision": new_revision, "definition": _definition(task)}
+    call.result.data = {
+        "updated": 1,
+        "revision": new_revision,
+        "definition": _definition(task, company_id),
+    }
 
 
-@endpoint("clearpipe.validate", min_version="2.35", request_data_model=ValidateRequest)
+@endpoint(
+    "clearpipe.validate",
+    min_version="2.35",
+    request_data_model=ValidateRequest,
+    response_data_model=ValidationResponse,
+)
 def validate(call: APICall, company_id: str, request: ValidateRequest):
     has_task = "task" in call.data and bool(request.task)
     has_graph = "graph" in call.data
@@ -417,7 +488,12 @@ def validate(call: APICall, company_id: str, request: ValidateRequest):
     call.result.data = data
 
 
-@endpoint("clearpipe.start", min_version="2.35", request_data_model=StartRequest)
+@endpoint(
+    "clearpipe.start",
+    min_version="2.35",
+    request_data_model=StartRequest,
+    response_data_model=StartResponse,
+)
 def start(call: APICall, company_id: str, request: StartRequest):
     definition = _get_task(company_id, request.task)
     if EntityVisibility.archived.value in (definition.system_tags or []):
@@ -491,7 +567,12 @@ def start(call: APICall, company_id: str, request: StartRequest):
     call.result.data = response
 
 
-@endpoint("clearpipe.archive", min_version="2.35", request_data_model=ArchiveRequest)
+@endpoint(
+    "clearpipe.archive",
+    min_version="2.35",
+    request_data_model=ArchiveRequest,
+    response_data_model=ArchiveResponse,
+)
 def archive(call: APICall, company_id: str, request: ArchiveRequest):
     task = _get_task(company_id, request.task, owned=True)
     revision = _revision(task)
@@ -518,7 +599,12 @@ def archive(call: APICall, company_id: str, request: ArchiveRequest):
     call.result.data = {"updated": 1, "revision": new_revision}
 
 
-@endpoint("clearpipe.delete", min_version="2.35", request_data_model=DeleteRequest)
+@endpoint(
+    "clearpipe.delete",
+    min_version="2.35",
+    request_data_model=DeleteRequest,
+    response_data_model=DeleteResponse,
+)
 def delete(call: APICall, company_id: str, request: DeleteRequest):
     task = _get_task(company_id, request.task, owned=True)
     revision = _revision(task)
@@ -537,7 +623,12 @@ def delete(call: APICall, company_id: str, request: DeleteRequest):
     call.result.data = {"deleted": True}
 
 
-@endpoint("clearpipe.parse_script", min_version="2.35", request_data_model=ParseScriptRequest)
+@endpoint(
+    "clearpipe.parse_script",
+    min_version="2.35",
+    request_data_model=ParseScriptRequest,
+    response_data_model=ParseScriptResponse,
+)
 def parse_script(call: APICall, _, request: ParseScriptRequest):
     try:
         call.result.data = parse_python_script(request.script)
