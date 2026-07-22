@@ -30,6 +30,8 @@
       }
     </mat-menu>
   </div>
+  <input #importInput hidden type="file" accept="application/json,.json" (change)="importGraph($event)">
+  <span class="toolbar__message" aria-live="polite">{{ transferMessage() }}</span>
   @for (action of actions(); track action.id) {
     @if (action.disabledReason) {
       <span class="toolbar__reason" [id]="'clearpipe-action-' + action.id">{{ action.disabledReason }}</span>

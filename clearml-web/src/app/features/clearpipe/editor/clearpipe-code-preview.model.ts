@@ -21,6 +21,12 @@ const stable = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
+const withoutPresentation = (value: object, fields: readonly string[]): Record<string, unknown> => {
+  const copy = structuredClone(value) as Record<string, unknown>;
+  fields.forEach(field => delete copy[field]);
+  return copy;
+};
+
 /**
  * Only compilation-relevant canonical data participates in regeneration.
  * Canvas visual state, document identity, labels, and resource labels cannot
@@ -31,9 +37,9 @@ export const clearpipeSemanticFingerprint = (graph: GraphV2): string => stable({
   document: {name: graph.document.name, project: graph.document.project, version: graph.document.version},
   settings: graph.settings,
   parameters: graph.parameters,
-  resources: graph.resources.map(({label, ...resource}) => resource),
+  resources: graph.resources.map(resource => withoutPresentation(resource, ['label'])),
   outputs: graph.outputs,
-  nodes: graph.nodes.map(({label, visual, ...node}) => node),
+  nodes: graph.nodes.map(node => withoutPresentation(node, ['label', 'visual'])),
   bindings: graph.bindings,
 });
 

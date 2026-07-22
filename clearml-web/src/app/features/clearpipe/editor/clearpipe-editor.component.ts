@@ -133,7 +133,8 @@ export class ClearpipeEditorComponent {
 
   protected togglePanel(panel: WorkspacePanel, invoker?: HTMLElement): void {
     if (this.isNarrow()) {
-      this.activeDrawer() === panel ? this.closeDrawer() : this.openDrawer(panel, invoker);
+      if (this.activeDrawer() === panel) this.closeDrawer();
+      else this.openDrawer(panel, invoker);
       return;
     }
     const open = panel === 'palette' ? this.paletteOpen : this.inspectorOpen;
@@ -238,7 +239,8 @@ export class ClearpipeEditorComponent {
 
   private setPanelWidth(panel: WorkspacePanel, width: number): void {
     const clamped = Math.max(240, Math.min(480, Math.round(width)));
-    panel === 'palette' ? this.paletteWidth.set(clamped) : this.inspectorWidth.set(clamped);
+    if (panel === 'palette') this.paletteWidth.set(clamped);
+    else this.inspectorWidth.set(clamped);
   }
 
   private announce(message: string): void {

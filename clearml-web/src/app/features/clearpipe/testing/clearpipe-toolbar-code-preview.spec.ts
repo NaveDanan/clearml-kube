@@ -8,6 +8,7 @@ import {ClearpipeLifecycleService} from '../editor/clearpipe-lifecycle.service';
 import {ClearpipeCodePreviewComponent} from '../editor/clearpipe-code-preview.component';
 import {clearpipeSemanticFingerprint} from '../editor/clearpipe-code-preview.model';
 import {ClearpipeToolbarComponent} from '../editor/clearpipe-toolbar.component';
+import {ClearpipeDocumentTransferService} from '../editor/clearpipe-document-transfer.service';
 import {clearpipeToolbarActions} from '../editor/clearpipe-toolbar.model';
 import {functionGraph, taskGraph} from './clearpipe-fixtures';
 
@@ -18,23 +19,23 @@ describe('ClearPipe toolbar and code preview', () => {
     readOnly: boolean;
     canSave: boolean;
     saveDisabledReason: string | null;
+    capabilities: null;
   }> = {}) => ({
     busy: signal(overrides.busy ?? false),
     graph: signal(overrides.graph === false ? null : taskGraph()),
     readOnly: signal(overrides.readOnly ?? false),
     canSave: signal(overrides.canSave ?? true),
     saveDisabledReason: signal(overrides.saveDisabledReason ?? null),
+    capabilities: signal(overrides.capabilities ?? null),
   }) as unknown as ClearpipeLifecycleService;
 
-  it('exposes lifecycle actions and states dependency-owned actions with a reason', () => {
+  it('exposes lifecycle actions and keeps only execution dependency-owned', () => {
     const actions = clearpipeToolbarActions(lifecycle(), true);
     expect(actions.map(action => action.id)).toEqual([
       'new', 'save', 'open', 'validate', 'import', 'export', 'preview', 'run', 'settings',
     ]);
-    expect(actions.find(action => action.id === 'import')).toEqual(jasmine.objectContaining({
-      disabled: true,
-      disabledReason: jasmine.stringContaining('CP-22'),
-    }));
+    expect(actions.find(action => action.id === 'import')?.disabled).toBeFalse();
+    expect(actions.find(action => action.id === 'export')?.disabled).toBeFalse();
     expect(actions.find(action => action.id === 'run')).toEqual(jasmine.objectContaining({
       disabled: true,
       disabledReason: jasmine.stringContaining('CP-26'),
@@ -60,7 +61,13 @@ describe('ClearPipe toolbar and code preview', () => {
     });
     TestBed.configureTestingModule({
       imports: [ClearpipeToolbarComponent],
-      providers: [{provide: ClearpipeLifecycleService, useValue: blockedLifecycle}],
+      providers: [
+        {provide: ClearpipeLifecycleService, useValue: blockedLifecycle},
+        {provide: ClearpipeDocumentTransferService, useValue: {
+          downloadGraph: () => ({status: 'exported'}),
+          importGraph: () => Promise.resolve({status: 'imported'}),
+        }},
+      ],
     });
     const fixture = TestBed.createComponent(ClearpipeToolbarComponent);
     fixture.detectChanges();
