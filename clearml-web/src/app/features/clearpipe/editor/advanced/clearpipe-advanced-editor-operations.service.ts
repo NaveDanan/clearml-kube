@@ -195,7 +195,7 @@ export class ClearpipeAdvancedEditorOperationsService {
     if (!this.synchronizeGraphState() || this.historyStale()) return this.historyChanged('undo');
     if (!this.canUndo()) return {ok: true, changed: false, command: 'undo', errors: []};
     const entry = this.history()[this.cursor() - 1];
-    const result = this.restore(entry.before, 'undo');
+    const result = this.restore(entry.before);
     if (result.ok) this.cursor.update(value => value - 1);
     return result;
   }
@@ -204,7 +204,7 @@ export class ClearpipeAdvancedEditorOperationsService {
     if (!this.synchronizeGraphState() || this.historyStale()) return this.historyChanged('redo');
     if (!this.canRedo()) return {ok: true, changed: false, command: 'redo', errors: []};
     const entry = this.history()[this.cursor()];
-    const result = this.restore(entry.after, 'redo');
+    const result = this.restore(entry.after);
     if (result.ok) this.cursor.update(value => value + 1);
     return result;
   }
@@ -224,28 +224,10 @@ export class ClearpipeAdvancedEditorOperationsService {
     this.observedGraph = this.store.graph();
   }
 
-  private restore(snapshot: GraphV2, label: string): GraphCommandResult {
-    const restored = this.store.runTransaction(`history-${label}`, () => {
-      [...this.store.bindings()].forEach(binding => this.removeBinding(binding));
-      [...(this.store.graph()?.outputs ?? [])].forEach(output => this.store.removeOutput(output.id));
-      [...this.store.nodes()].forEach(node => this.store.removeNode(node.id));
-      snapshot.nodes.forEach(node => this.store.addNode(clone(node)));
-      snapshot.outputs.forEach(output => this.store.addOutput(clone(output)));
-      this.store.setViewport(clone(snapshot.visual));
-    });
-    if (!restored.ok) return restored;
-    for (const binding of snapshot.bindings) {
-      const result = this.edges.create(clone(binding));
-      if (!result.command?.ok) return result.command ?? {
-        ok: false, changed: false, command: `history-${label}`, errors: [{code: 'semantic_restore_rejected', path: 'graph.bindings', message: result.message}],
-      };
-    }
+  private restore(snapshot: GraphV2): GraphCommandResult {
+    const restored = this.store.restoreGraphSnapshot(clone(snapshot));
     this.observedGraph = this.store.graph();
     return restored;
-  }
-
-  private removeBinding(binding: GraphBinding): void {
-    this.edges.remove(binding.id);
   }
 
   private snapshot(): GraphV2 {

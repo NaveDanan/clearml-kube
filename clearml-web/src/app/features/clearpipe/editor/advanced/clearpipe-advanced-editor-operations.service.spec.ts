@@ -144,7 +144,9 @@ describe('ClearpipeAdvancedEditorOperationsService', () => {
     })).eligible).toBeTrue();
     operations.performSemantic('remove-edge', () => edges.remove(id));
     expect(store.bindings()).toHaveSize(0);
+    const restore = spyOn(store, 'restoreGraphSnapshot').and.callThrough();
     operations.undo();
+    expect(restore).toHaveBeenCalled();
     expect(store.bindings()[0].target.kind === 'port' && store.bindings()[0].target.node_id).toBe('replacement');
     operations.undo();
     expect(store.bindings()[0].target.kind === 'port' && store.bindings()[0].target.node_id).toBe('right');
