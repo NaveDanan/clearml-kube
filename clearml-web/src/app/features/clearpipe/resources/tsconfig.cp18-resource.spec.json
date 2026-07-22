@@ -1,0 +1,12 @@
+{
+  "extends": "../../../../../tsconfig.clearpipe.spec.json",
+  "compilerOptions": {
+    "outDir": "../../../../../out-tsc/cp18-resource-spec",
+    "types": ["jasmine", "node"]
+  },
+  "files": ["../../../../../src/test.ts", "../../../../../src/polyfills.ts"],
+  "include": [
+    "./**/*.spec.ts",
+    "../../../../../src/**/*.d.ts"
+  ]
+}
