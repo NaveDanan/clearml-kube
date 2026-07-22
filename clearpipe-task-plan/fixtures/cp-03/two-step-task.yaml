@@ -1,0 +1,42 @@
+id: cp03-two-step-task
+target: PipelineController.add_step
+controller:
+  name: iris-task-pipeline
+  project: examples
+  version: 1.0.0
+  default_execution_queue: default
+parameters:
+  dataset_url:
+    default: https://example.invalid/iris.pkl
+    description: Dataset URL
+nodes:
+  - id: stage_data
+    kind: task
+    base_task:
+      project: examples
+      name: Pipeline step 1 dataset artifact
+    parameter_overrides:
+      General/dataset_url: ${pipeline.dataset_url}
+  - id: stage_process
+    kind: task
+    base_task:
+      project: examples
+      name: Pipeline step 2 process dataset
+    parents: [stage_data]
+    parameter_overrides:
+      General/dataset_url: ${stage_data.artifacts.dataset.url}
+      General/test_size: 0.25
+edges:
+  - kind: parameter
+    from: pipeline.dataset_url
+    to: stage_data.General/dataset_url
+  - kind: execution-only
+    from: stage_data
+    to: stage_process
+  - kind: artifact
+    from: stage_data.artifacts.dataset.url
+    to: stage_process.General/dataset_url
+expected_source: two-step-task.expected.py
+expected_references:
+  - ${pipeline.dataset_url}
+  - ${stage_data.artifacts.dataset.url}
