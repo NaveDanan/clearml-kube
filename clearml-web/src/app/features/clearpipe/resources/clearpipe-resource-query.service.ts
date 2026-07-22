@@ -48,6 +48,11 @@ const initialState = (kind: ClearpipeResourceKind): ClearpipeResourceQueryState 
 
 const safeProblem = (code: ClearpipeResourceProblem['code'], retryable: boolean): ClearpipeResourceProblem => ({code, retryable});
 
+type PagedResourceQueryStatus = Extract<ClearpipeResourceQueryState['status'], 'ready' | 'empty' | 'stale' | 'deleted'>;
+
+const isPagedResourceQueryStatus = (status: ClearpipeResourceQueryState['status']): status is PagedResourceQueryStatus =>
+  status === 'ready' || status === 'empty' || status === 'stale' || status === 'deleted';
+
 /**
  * Cancels obsolete adapter subscriptions and paginates the authorized adapter
  * result locally. CP-14 currently exposes an authorized inventory, not a
@@ -55,7 +60,8 @@ const safeProblem = (code: ClearpipeResourceProblem['code'], retryable: boolean)
  */
 export class ClearpipeResourceQueryController {
   readonly state;
-  private allItems: readonly ClearpipeResourceSummary[] = [];
+  private knownItems: readonly ClearpipeResourceSummary[] = [];
+  private hasKnownInventory = false;
   private readonly deletedIds = new Set<string>();
   private request?: Subscription;
   private requestVersion = 0;
@@ -75,7 +81,7 @@ export class ClearpipeResourceQueryController {
     const registration = CLEARPIPE_RESOURCE_REGISTRATIONS[this.kind];
     const previous = this.state();
     if (!registration.adapterType) {
-      this.allItems = [];
+      this.clearKnownInventory();
       this.state.set({
         ...initialState(this.kind),
         filter: this.filter,
@@ -91,7 +97,7 @@ export class ClearpipeResourceQueryController {
       filter: this.filter,
       page: 0,
       pageSize: this.filter.pageSize ?? defaultFilter.pageSize,
-      status: previous.items.length ? 'refreshing' : 'loading',
+      status: this.hasKnownInventory ? 'refreshing' : 'loading',
       problem: undefined,
     });
     this.request = this.adapter.resources(registration.adapterType).subscribe(outcome => {
@@ -108,9 +114,31 @@ export class ClearpipeResourceQueryController {
     this.load(this.filter);
   }
 
+  /**
+   * Changes the selector view without issuing another authorized inventory
+   * request. Resolver and selection lookups remain bound to knownItems.
+   */
+  setFilter(filter: ClearpipeResourceFilter): void {
+    this.filter = normalizeFilter(filter);
+    const current = this.state();
+    if (!this.hasKnownInventory) {
+      this.state.set({
+        ...current,
+        filter: this.filter,
+        page: 0,
+        pageSize: this.filter.pageSize ?? defaultFilter.pageSize,
+      });
+      return;
+    }
+    const status = current.status === 'stale' || current.status === 'deleted'
+      ? current.status
+      : undefined;
+    this.setPage(0, status, current.problem);
+  }
+
   loadMore(): void {
     const current = this.state();
-    if (!current.hasMore || (current.status !== 'ready' && current.status !== 'stale')) return;
+    if (!current.hasMore || !isPagedResourceQueryStatus(current.status)) return;
     this.setPage(current.page + 1, current.status, current.problem);
   }
 
@@ -125,19 +153,11 @@ export class ClearpipeResourceQueryController {
    * confirmed selection without reclassifying a denied lookup as deleted.
    */
   markDeleted(resourceId: string): void {
-    if (!this.allItems.some(item => item.id === resourceId)) return;
+    if (!this.knownItems.some(item => item.id === resourceId)) return;
     this.deletedIds.add(resourceId);
-    this.allItems = this.allItems.filter(item => item.id !== resourceId);
+    this.knownItems = this.knownItems.filter(item => item.id !== resourceId);
     const current = this.state();
-    const visible = this.allItems.slice(0, (current.page + 1) * current.pageSize);
-    this.state.set({
-      ...current,
-      status: 'deleted',
-      items: visible,
-      total: this.allItems.length,
-      hasMore: visible.length < this.allItems.length,
-      problem: undefined,
-    });
+    this.setPage(current.page, 'deleted');
   }
 
   selection(resourceId: string | null | undefined): ClearpipeResourceSelectionState {
@@ -148,7 +168,7 @@ export class ClearpipeResourceQueryController {
     if (state.status === 'stale') return {status: 'stale'};
     if (state.status === 'loading' || state.status === 'refreshing' || state.status === 'idle') return {status: 'pending'};
     if (state.status === 'error' || state.status === 'unavailable') return {status: 'unavailable'};
-    const resource = this.allItems.find(item => item.id === resourceId);
+    const resource = this.knownItems.find(item => item.id === resourceId);
     return resource ? {status: 'selected', resource} : {status: 'deleted'};
   }
 
@@ -170,7 +190,7 @@ export class ClearpipeResourceQueryController {
     if (state.status === 'stale') return {status: 'stale'};
     if (state.status === 'error' || state.status === 'unavailable') return {status: 'unavailable'};
     if (this.deletedIds.has(request.resource_id)) return {status: 'missing'};
-    const matched = this.allItems.some(item =>
+    const matched = this.knownItems.some(item =>
       item.id === request.resource_id ||
       (request.lookup?.name === item.name && (!request.lookup.project || request.lookup.project === item.project))
     );
@@ -180,13 +200,13 @@ export class ClearpipeResourceQueryController {
   private applyOutcome(outcome: Exclude<ClearpipeAdapterOutcome<ClearpipeResourceOption[]>, {status: 'loading'}>): void {
     if (outcome.status === 'ready') {
       this.deletedIds.clear();
-      this.allItems = this.filterItems(outcome.data);
-      const status = this.allItems.length ? 'ready' : 'empty';
-      this.setPage(0, status);
+      this.knownItems = this.normalizeInventory(outcome.data);
+      this.hasKnownInventory = true;
+      this.setPage(0);
       return;
     }
     if (outcome.status === 'denied_or_missing') {
-      this.allItems = [];
+      this.clearKnownInventory();
       this.state.set({
         ...initialState(this.kind),
         filter: this.filter,
@@ -197,70 +217,91 @@ export class ClearpipeResourceQueryController {
       return;
     }
     if (outcome.status === 'stale_revision') {
-      this.state.set({
-        ...this.state(),
-        status: 'stale',
-        problem: safeProblem('request_failed', false),
-      });
+      this.setFailureState(safeProblem('request_failed', false));
       return;
     }
-    if (outcome.status === 'resource_unavailable'
-      || outcome.status === 'unsupported_representation'
+    if (outcome.status === 'resource_unavailable') {
+      if (outcome.problem.retryable) {
+        this.setFailureState(safeProblem('unavailable', true));
+      } else {
+        this.setUnavailableState(false);
+      }
+      return;
+    }
+    if (outcome.status === 'unsupported_representation'
       || outcome.status === 'execution_unavailable') {
-      this.allItems = [];
-      this.state.set({
-        ...initialState(this.kind),
-        filter: this.filter,
-        pageSize: this.filter.pageSize ?? defaultFilter.pageSize,
-        status: 'unavailable',
-        problem: safeProblem('unavailable', outcome.problem.retryable),
-      });
+      this.setUnavailableState(outcome.problem.retryable);
       return;
     }
-    const current = this.state();
-    if (current.items.length) {
-      this.state.set({...current, status: 'stale', problem: safeProblem('request_failed', true)});
+    this.setFailureState(safeProblem('request_failed', true));
+  }
+
+  private setFailureState(problem: ClearpipeResourceProblem): void {
+    if (this.hasKnownInventory) {
+      this.setPage(this.state().page, 'stale', problem);
     } else {
       this.state.set({
         ...initialState(this.kind),
         filter: this.filter,
         pageSize: this.filter.pageSize ?? defaultFilter.pageSize,
         status: 'error',
-        problem: safeProblem('request_failed', true),
+        problem,
       });
     }
   }
 
-  private filterItems(resources: readonly ClearpipeResourceOption[]): readonly ClearpipeResourceSummary[] {
+  private setUnavailableState(retryable: boolean): void {
+    this.clearKnownInventory();
+    this.state.set({
+      ...initialState(this.kind),
+      filter: this.filter,
+      pageSize: this.filter.pageSize ?? defaultFilter.pageSize,
+      status: 'unavailable',
+      problem: safeProblem('unavailable', retryable),
+    });
+  }
+
+  private clearKnownInventory(): void {
+    this.knownItems = [];
+    this.hasKnownInventory = false;
+    this.deletedIds.clear();
+  }
+
+  private normalizeInventory(resources: readonly ClearpipeResourceOption[]): readonly ClearpipeResourceSummary[] {
+    return resources
+      .map(resource => normalizeClearpipeResource(this.kind, resource))
+      .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+  }
+
+  private filteredItems(): readonly ClearpipeResourceSummary[] {
     const search = this.filter.search?.toLocaleLowerCase();
     const project = this.filter.project;
     const tags = this.filter.tags ?? [];
-    return resources
-      .map(resource => normalizeClearpipeResource(this.kind, resource))
+    return this.knownItems
       .filter(resource => !search || [resource.name, resource.id, resource.project, resource.version, resource.type, resource.status]
         .filter((value): value is string => Boolean(value))
         .some(value => value.toLocaleLowerCase().includes(search)))
       .filter(resource => !project || resource.project === project)
-      .filter(resource => !tags.length || tags.every(tag => resource.tags?.includes(tag)))
-      .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+      .filter(resource => !tags.length || tags.every(tag => resource.tags?.includes(tag)));
   }
 
   private setPage(
     page: number,
-    status: Extract<ClearpipeResourceQueryState['status'], 'ready' | 'empty' | 'stale'>,
+    status?: PagedResourceQueryStatus,
     problem?: ClearpipeResourceProblem
   ): void {
     const pageSize = this.filter.pageSize ?? defaultFilter.pageSize;
-    const visible = this.allItems.slice(0, (page + 1) * pageSize);
+    const items = this.filteredItems();
+    const visible = items.slice(0, (page + 1) * pageSize);
     this.state.set({
       kind: this.kind,
-      status,
+      status: status ?? (items.length ? 'ready' : 'empty'),
       filter: this.filter,
       items: visible,
-      total: this.allItems.length,
+      total: items.length,
       page,
       pageSize,
-      hasMore: visible.length < this.allItems.length,
+      hasMore: visible.length < items.length,
       updatedAt: Date.now(),
       ...(problem ? {problem} : {}),
     });

@@ -28,7 +28,7 @@ import {ClearpipeResourceQueryController} from './clearpipe-resource-query.servi
       } @else if (state.status === 'unavailable') {
         <p role="alert">This resource type is unavailable through the authorized ClearPipe service.</p>
       } @else if (state.status === 'error') {
-        <p role="alert">Resources could not be loaded.</p>
+        <p role="alert">{{ state.problem?.code === 'unavailable' ? 'Resources are temporarily unavailable.' : 'Resources could not be loaded.' }}</p>
         <button type="button" (click)="controller.retry()">Retry</button>
       } @else if (state.status === 'stale') {
         <p role="status">Showing stale resource information. Refresh before running.</p>
@@ -93,7 +93,7 @@ export class ClearpipeResourceSelectorComponent implements OnInit {
   }
 
   search(search: string): void {
-    this.controller.load({...this.state.filter, search});
+    this.controller.setFilter({...this.state.filter, search});
   }
 
   select(resource: ClearpipeResourceSummary): void {

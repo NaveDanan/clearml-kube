@@ -41,7 +41,7 @@ describe('ClearpipeResourceQueryController', () => {
     controller = new ClearpipeResourceQueryController('task', gateway);
   });
 
-  it('searches authorized summaries and incrementally reveals local pages without a second client call', () => {
+  it('searches authorized summaries locally and incrementally reveals pages without a second client call', () => {
     gateway.resources.and.returnValue(of(ready([
       resource('task-3', 'Zulu'),
       resource('task-2', 'Beta'),
@@ -57,19 +57,45 @@ describe('ClearpipeResourceQueryController', () => {
     expect(controller.state().items.map(item => item.id)).toEqual(['task-1', 'task-2', 'task-3']);
     expect(gateway.resources).toHaveBeenCalledTimes(1);
 
-    controller.load({search: 'beta'});
+    controller.setFilter({search: 'beta'});
     expect(controller.state().items.map(item => item.id)).toEqual(['task-2']);
-    expect(gateway.resources).toHaveBeenCalledTimes(2);
+    expect(gateway.resources).toHaveBeenCalledTimes(1);
   });
 
   it('reports an explicit empty state when search has no authorized result', () => {
     gateway.resources.and.returnValue(of(ready([resource('task-1', 'Alpha')])));
 
-    controller.load({search: 'not-present'});
+    controller.load();
+    controller.setFilter({search: 'not-present'});
 
     expect(controller.state().status).toBe('empty');
     expect(controller.state().items).toEqual([]);
     expect(controller.state().total).toBe(0);
+    expect(gateway.resources).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps canonical selection and CP-11 resolution valid when local filters hide a resource', () => {
+    gateway.resources.and.returnValue(of(ready([
+      resource('task-1', 'Alpha', 'project-a'),
+      resource('task-2', 'Beta', 'project-b'),
+    ])));
+    controller.load();
+    const resolver = new ClearpipeResourceResolver(() => controller);
+    const selector = new ClearpipeResourceSelectorComponent();
+    selector.controller = controller;
+
+    selector.search('beta');
+    expect(controller.state().items.map(item => item.id)).toEqual(['task-2']);
+    controller.setFilter({search: 'beta', project: 'project-b'});
+    controller.setFilter({search: 'alpha', tags: ['not-present']});
+    expect(controller.state().status).toBe('empty');
+    expect(controller.selection('task-1')).toEqual(jasmine.objectContaining({status: 'selected'}));
+    expect(resolver.resolve({kind: 'task', resource_id: 'task-1'})).toEqual({status: 'available'});
+
+    controller.setFilter({search: 'a'});
+    controller.setFilter({search: 'al'});
+    controller.setFilter({search: 'alp'});
+    expect(gateway.resources).toHaveBeenCalledTimes(1);
   });
 
   it('keeps transient failures retryable without retaining adapter error text', () => {
@@ -88,6 +114,37 @@ describe('ClearpipeResourceQueryController', () => {
     expect(controller.state().status).toBe('ready');
     expect(controller.state().items[0].id).toBe('task-1');
     expect(gateway.resources).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps retryable resource-unavailable outcomes actionable while unsupported kinds remain terminal', () => {
+    gateway.resources.and.returnValues(
+      of({
+        status: 'resource_unavailable',
+        problem: {message: 'temporary outage', retryable: true},
+      }),
+      of(ready([resource('task-1', 'Alpha')])),
+      of({
+        status: 'resource_unavailable',
+        problem: {message: 'temporary outage', retryable: true},
+      })
+    );
+
+    controller.load();
+    expect(controller.state().status).toBe('error');
+    expect(controller.state().problem).toEqual({code: 'unavailable', retryable: true});
+    controller.retry();
+    expect(controller.state().status).toBe('ready');
+    expect(gateway.resources).toHaveBeenCalledTimes(2);
+    controller.refresh();
+    expect(controller.state().status).toBe('stale');
+    expect(controller.state().problem).toEqual({code: 'unavailable', retryable: true});
+    expect(gateway.resources).toHaveBeenCalledTimes(3);
+
+    const unsupported = new ClearpipeResourceQueryController('template', gateway);
+    unsupported.load();
+    expect(unsupported.state().status).toBe('unavailable');
+    expect(unsupported.state().problem).toEqual({code: 'unsupported', retryable: false});
+    expect(gateway.resources).toHaveBeenCalledTimes(3);
   });
 
   it('fails closed on denied inventory and only exposes links for returned authorized resources', () => {

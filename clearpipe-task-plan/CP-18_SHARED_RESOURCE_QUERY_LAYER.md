@@ -10,7 +10,7 @@ stores credentials, or makes validation-triggered network calls.
 ## Consumer API
 
 * `ClearpipeResourceQueryService.for(kind)` supplies a cancellable controller
-  with `load`, `refresh`, `retry`, `loadMore`, `selection`, and
+  with `load`, `setFilter`, `refresh`, `retry`, `loadMore`, `selection`, and
   `managementLink`.
 * `CLEARPIPE_RESOURCE_REGISTRATIONS` is the typed handoff for CP-17/21/24/25.
   Projects, tasks, datasets, queues, and models are adapter-backed. Dataset
@@ -34,10 +34,15 @@ Queries distinguish loading, refreshing, ready, empty, error, stale, deleted,
 denied, and unavailable. Obsolete adapter subscriptions are cancelled.
 CP-14 currently returns an authorized inventory rather than a cursor, so
 search/filtering and incremental pages are applied locally without bypassing
-that adapter. A refresh failure retains only previously authorized normalized
-summaries as `stale`; a denied result clears them and exposes no protected
-resource identity. Management routes are requested only for an item returned
-by the authorized adapter and only for registrations with a verified route.
+that adapter. The full authorized inventory remains the canonical
+selection/resolver index, so an interactive filter cannot make an existing
+resource appear deleted or missing. A refresh failure retains only previously
+authorized normalized summaries as `stale`; a retryable resource-unavailable
+outcome remains actionable through Retry, while unverified kinds remain
+terminally unavailable. A denied result clears the inventory and exposes no
+protected resource identity. Management routes are requested only for an item
+returned by the authorized adapter and only for registrations with a verified
+route.
 
 Normalized summaries retain stable ID, name, project, and only optional
 verified display metadata. They deliberately discard raw response properties,
