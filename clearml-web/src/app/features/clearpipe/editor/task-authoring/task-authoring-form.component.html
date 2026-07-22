@@ -1,4 +1,6 @@
 <form class="clearpipe-task-form" [formGroup]="form">
+  @let n = node();
+  @let descriptorState = descriptor();
   <p class="clearpipe-task-form__notice">Task ports come only from the authorized task descriptor. Connections are created and removed through ClearPipe’s semantic edge controller.</p>
   <section>
     <h3>Task resource</h3>
@@ -7,7 +9,7 @@
     } @else if (node().base_task.kind === 'task-name') {
       <p class="clearpipe-task-form__error" role="alert">This step has a project/name reference. Select an authorized immutable task ID before editing or running it.</p>
     } @else if (taskAvailability().status === 'selected') {
-      <p>{{ taskAvailability().resource?.project ?? 'No project name supplied' }} · {{ taskAvailability().resource?.name }} · {{ node().base_task.kind === 'task-id' ? node().base_task.task_id : 'project/name reference' }}</p>
+      <p>{{ taskAvailability().resource?.project ?? 'No project name supplied' }} · {{ taskAvailability().resource?.name }} · {{ n.base_task.kind === 'task-id' ? n.base_task.task_id : 'project/name reference' }}</p>
     } @else if (taskAvailability().status === 'stale') {
       <p role="status">Task inventory information is stale. Refresh the task descriptor before running.</p>
     } @else if (taskAvailability().status === 'deleted' || taskAvailability().status === 'denied') {
@@ -19,7 +21,7 @@
     }
     @if (!clearpipeInspectorContext().readOnly) {
       <sm-clearpipe-resource-selector [controller]="taskController"
-                                      [selectedId]="selectedTask()?.id ?? (node().base_task.kind === 'task-id' ? node().base_task.task_id : null)"
+                                      [selectedId]="selectedTask()?.id ?? (n.base_task.kind === 'task-id' ? n.base_task.task_id : null)"
                                       (resourceSelected)="selectTask($event)"></sm-clearpipe-resource-selector>
     }
     @if (selectedTask() || node().base_task.kind === 'task-id') {
@@ -27,11 +29,11 @@
     }
   </section>
 
-  @if (descriptor().status === 'loading') {
+  @if (descriptorState.status === 'loading') {
     <p role="status">Loading safe task parameter and artifact metadata…</p>
-  } @else if (descriptor().status === 'unavailable') {
-    <p class="clearpipe-task-form__error" role="alert">{{ descriptor().message }}</p>
-  } @else if (descriptor().status === 'stale') {
+  } @else if (descriptorState.status === 'unavailable') {
+    <p class="clearpipe-task-form__error" role="alert">{{ descriptorState.message }}</p>
+  } @else if (descriptorState.status === 'stale') {
     <p role="alert">The selected task changed since inventory data was loaded. Review the refreshed descriptor before applying it.</p>
     @if (!clearpipeInspectorContext().readOnly) { <button mat-stroked-button type="button" (click)="confirmStaleDescriptor()">Use refreshed descriptor</button> }
   }
@@ -52,7 +54,7 @@
     }
   </section>
 
-  @if (descriptor().status === 'available' || descriptor().status === 'stale') {
+  @if (descriptorState.status === 'available' || descriptorState.status === 'stale') {
     <section formArrayName="parameters">
       <h3>Parameter overrides and bindings</h3>
       @for (parameter of form.controls.parameters.controls; track parameter.controls.portId.value; let index = $index) {
@@ -81,7 +83,7 @@
             <button mat-stroked-button type="button" (click)="bindArtifact(parameter.controls.portId.value, artifact.value)"
                     [disabled]="!artifact.value">Bind artifact</button>
           }
-          @for (binding of bindingsForPort(node().id, parameter.controls.portId.value); track binding.id) {
+          @for (binding of bindingsForPort(parameter.controls.portId.value); track binding.id) {
             <p>{{ binding.kind }} binding · {{ binding.id }}
               @if (!clearpipeInspectorContext().readOnly) { <button mat-stroked-button type="button" (click)="disconnect(binding.id)">Disconnect</button> }
             </p>
@@ -93,7 +95,7 @@
     </section>
     <section>
       <h3>Artifact outputs</h3>
-      @for (artifact of descriptor().descriptor.artifacts; track artifact.id) {
+      @for (artifact of descriptorState.descriptor.artifacts; track artifact.id) {
         @if (artifact.direction === 'output') {
           <p>{{ artifact.name }} · {{ artifact.id }}@if (artifact.type) { · {{ artifact.type }} }</p>
         } @else if (artifact.direction === 'input') {

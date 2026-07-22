@@ -1,4 +1,5 @@
 <form class="clearpipe-task-form" [formGroup]="createForm" (ngSubmit)="create()">
+  @let descriptorState = descriptor();
   <p class="clearpipe-task-form__notice">Search authorized base tasks. ClearPipe stores the immutable base task ID, never a runtime or child-task ID.</p>
   <section>
     <h3>Base task</h3>
@@ -6,22 +7,22 @@
                                     (resourceSelected)="selectTask($event)"></sm-clearpipe-resource-selector>
   </section>
 
-  @if (descriptor().status === 'loading') {
+  @if (descriptorState.status === 'loading') {
     <p role="status">Loading the selected task’s safe parameter and artifact descriptor…</p>
-  } @else if (descriptor().status === 'unavailable') {
-    <p class="clearpipe-task-form__error" role="alert">{{ descriptor().message }}</p>
-    @if (descriptor().retryable) { <button mat-stroked-button type="button" (click)="retryDescriptor()">Retry descriptor</button> }
-  } @else if (descriptor().status === 'stale') {
+  } @else if (descriptorState.status === 'unavailable') {
+    <p class="clearpipe-task-form__error" role="alert">{{ descriptorState.message }}</p>
+    @if (descriptorState.retryable) { <button mat-stroked-button type="button" (click)="retryDescriptor()">Retry descriptor</button> }
+  } @else if (descriptorState.status === 'stale') {
     <p role="alert">The selected task changed since the inventory was loaded. The refreshed descriptor is shown below.</p>
     <button mat-stroked-button type="button" (click)="confirmStaleDescriptor()">Use refreshed descriptor</button>
   }
 
-  @if (descriptor().status === 'available' || descriptor().status === 'stale') {
+  @if (descriptorState.status === 'available' || descriptorState.status === 'stale') {
     <p class="clearpipe-task-form__context">
-      {{ descriptor().descriptor.context.project_name ?? 'No project name supplied' }} ·
-      {{ descriptor().descriptor.context.name }} · {{ descriptor().descriptor.identity.task_id }} ·
-      {{ descriptor().descriptor.context.type }} · {{ descriptor().descriptor.context.status }}
-      @if (descriptor().descriptor.context.updated_at) { · updated {{ descriptor().descriptor.context.updated_at }} }
+      {{ descriptorState.descriptor.context.project_name ?? 'No project name supplied' }} ·
+      {{ descriptorState.descriptor.context.name }} · {{ descriptorState.descriptor.identity.task_id }} ·
+      {{ descriptorState.descriptor.context.type }} · {{ descriptorState.descriptor.context.status }}
+      @if (descriptorState.descriptor.context.updated_at) { · updated {{ descriptorState.descriptor.context.updated_at }} }
     </p>
     <mat-form-field appearance="outline"><mat-label>Step name</mat-label><input matInput formControlName="name" required></mat-form-field>
     <mat-form-field appearance="outline"><mat-label>Card label</mat-label><input matInput formControlName="label" required></mat-form-field>
@@ -47,7 +48,7 @@
     </section>
     <section>
       <h3>Artifact outputs</h3>
-      @for (artifact of descriptor().descriptor.artifacts; track artifact.id) {
+      @for (artifact of descriptorState.descriptor.artifacts; track artifact.id) {
         @if (artifact.direction === 'output') {
           <p>{{ artifact.name }} · {{ artifact.id }}@if (artifact.type) { · {{ artifact.type }} }</p>
         } @else if (artifact.direction === 'input') {
