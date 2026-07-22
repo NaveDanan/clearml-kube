@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "document": {
+    "id": "graph-store-fixture",
+    "revision": 1,
+    "name": "graph_store_fixture",
+    "project": "examples",
+    "tags": ["pipeline", "clearpipe"]
+  },
+  "settings": {"default_execution_queue_id": "queue-default"},
+  "parameters": [
+    {"id": "prefix", "name": "prefix", "required": false, "order": 0, "default": "value="}
+  ],
+  "resources": [
+    {"id": "queue-default", "kind": "queue", "resource_id": "default", "label": "default"}
+  ],
+  "outputs": [
+    {"id": "output-text", "name": "text", "source": {"kind": "port", "node_id": "format", "port_id": "out-text"}}
+  ],
+  "nodes": [
+    {
+      "id": "normalize",
+      "kind": "function",
+      "name": "normalize",
+      "label": "Normalize",
+      "signature": "def normalize(value: int) -> int",
+      "source": "def normalize(value: int) -> int:\n    return value + 1\n",
+      "ports": [
+        {"id": "in-value", "kind": "port", "name": "value", "direction": "input", "role": "data", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["data"], "order": 0, "default": 1},
+        {"id": "out-value", "kind": "port", "name": "value", "direction": "output", "role": "data", "required": false, "multiplicity": "many", "accepted_binding_kinds": ["data"], "order": 0}
+      ],
+      "configuration": {"task_type": "data_processing"},
+      "visual": {"position": {"x": 0, "y": 0}}
+    },
+    {
+      "id": "format",
+      "kind": "function",
+      "name": "format",
+      "label": "Format",
+      "signature": "def format(value: int, prefix: str = 'value=') -> str",
+      "source": "def format(value: int, prefix: str = 'value=') -> str:\n    return f\"{prefix}{value}\"\n",
+      "ports": [
+        {"id": "in-value", "kind": "port", "name": "value", "direction": "input", "role": "data", "required": true, "multiplicity": "single", "accepted_binding_kinds": ["data"], "order": 0},
+        {"id": "in-prefix", "kind": "port", "name": "prefix", "direction": "input", "role": "parameter", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["parameter"], "order": 1},
+        {"id": "out-text", "kind": "port", "name": "text", "direction": "output", "role": "data", "required": false, "multiplicity": "many", "accepted_binding_kinds": ["data"], "order": 0}
+      ],
+      "configuration": {"task_type": "qc"},
+      "visual": {"position": {"x": 360, "y": 0}}
+    }
+  ],
+  "bindings": [
+    {"id": "bind-data", "kind": "data", "source": {"kind": "port", "node_id": "normalize", "port_id": "out-value"}, "target": {"kind": "port", "node_id": "format", "port_id": "in-value"}},
+    {"id": "bind-parameter", "kind": "parameter", "source": {"kind": "parameter", "parameter_id": "prefix"}, "target": {"kind": "port", "node_id": "format", "port_id": "in-prefix"}}
+  ],
+  "visual": {"viewport": {"x": 0, "y": 0}, "zoom": 1}
+}
