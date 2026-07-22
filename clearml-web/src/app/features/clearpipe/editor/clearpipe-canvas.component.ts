@@ -1,110 +1,389 @@
-import {ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, signal, viewChild} from '@angular/core';
-import {CdkDrag, CdkDragDrop, CdkDragEnd, CdkDropList} from '@angular/cdk/drag-drop';
-import {ClearpipeStateService} from '../clearpipe-state.service';
-import {ClearpipeEdge, ClearpipeNode, ClearpipeNodeType, CLEARPIPE_NODE_TYPES} from '../clearpipe.models';
-import {MatIconModule} from '@angular/material/icon';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  input,
+  signal,
+  TemplateRef,
+  viewChild,
+} from '@angular/core';
+import {CdkDrag, CdkDragEnd, CdkDragStart} from '@angular/cdk/drag-drop';
+import {DecimalPipe, NgTemplateOutlet} from '@angular/common';
 import {MatButtonModule} from '@angular/material/button';
-import {DecimalPipe} from '@angular/common';
+import {MatIconModule} from '@angular/material/icon';
+import {GraphNode, GraphVisual, Point} from '../domain/graph-v2.types';
+import {GraphStoreService} from '../domain/graph-store.service';
+import {
+  basicCanvasBindingPath,
+  basicCanvasBindings,
+  canvasGraphPointFromMinimapClientPoint,
+  canvasGraphTransform,
+  canvasMinimapLayout,
+  canvasMinimapNode,
+  canvasMinimapViewport,
+  canvasNodeTransform,
+  canvasPointFromClientPoint,
+  canvasPositionAfterDrag,
+  canvasVisualAtClientZoom,
+  CanvasClientPoint, CanvasMinimapNode, CanvasMinimapViewport, CanvasNodeDimensions, CanvasNodePlacement,
+  CanvasNodeView, CanvasProfileMark, CanvasProfiler, CanvasSurfaceBounds,
+  fitCanvasVisual,
+  normalizeCanvasDimensions,
+  placementResult,
+} from './clearpipe-canvas.adapter';
+
+export interface ClearpipeCanvasNodeContext {
+  $implicit: GraphNode;
+  node: GraphNode;
+  selected: boolean;
+  hovered: boolean;
+  dragging: boolean;
+}
+
+interface CanvasSize {
+  width: number;
+  height: number;
+}
+
+const EMPTY_VIEWPORT: GraphVisual = {viewport: {x: 0, y: 0}, zoom: 1};
+const DEFAULT_CANVAS_SIZE: CanvasSize = {width: 800, height: 600};
 
 @Component({
   selector: 'sm-clearpipe-canvas',
   templateUrl: './clearpipe-canvas.component.html',
   styleUrl: './clearpipe-canvas.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CdkDrag, CdkDropList, MatIconModule, MatButtonModule, DecimalPipe],
+  imports: [CdkDrag, DecimalPipe, MatButtonModule, MatIconModule, NgTemplateOutlet],
 })
 export class ClearpipeCanvasComponent {
-  protected state = inject(ClearpipeStateService);
-  protected nodeTypes = CLEARPIPE_NODE_TYPES;
+  protected readonly commands = inject(GraphStoreService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly canvas = viewChild<ElementRef<HTMLDivElement>>('canvas');
+  private readonly minimapContent = viewChild<ElementRef<HTMLSpanElement>>('minimapContent');
+  private readonly previewViewport = signal<GraphVisual | null>(null);
+  private readonly canvasSize = signal<CanvasSize>(DEFAULT_CANVAS_SIZE);
+  private viewportCommitTimer: ReturnType<typeof setTimeout> | null = null;
+  private panStart: {clientX: number; clientY: number; visual: GraphVisual} | null = null;
+
+  /** CP-17 supplies card/port content through this hook; CP-16 only positions it. */
+  readonly nodeTemplate = input<TemplateRef<ClearpipeCanvasNodeContext> | null>(null);
+  /** Renderer geometry drives the neutral placement shell and visual binding anchors. */
+  readonly nodeDimensions = input<(node: GraphNode) => CanvasNodeDimensions>(
+    (node) => normalizeCanvasDimensions(node.visual.dimensions),
+  );
+  readonly nodeAriaLabel = input<(node: GraphNode) => string>((node) => `${node.label}, ${node.kind} node`);
   readonly readonly = input(false);
-  private canvas = viewChild<ElementRef<HTMLDivElement>>('canvas');
-  private panStart: {clientX: number; clientY: number; x: number; y: number} | null = null;
-  protected panning = signal(false);
-  protected viewport = computed(() => this.state.definition().viewport);
-  protected transform = computed(() => {
-    const viewport = this.viewport();
-    return `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`;
+  /** Optional CP-30 hook; it receives counts only and never a library event. */
+  readonly profiler = input<CanvasProfiler | null>(null);
+
+  protected readonly gridVisible = signal(true);
+  protected readonly panning = signal(false);
+  protected readonly graph = this.commands.graph;
+  protected readonly nodes = this.commands.nodes;
+  protected readonly selectedNodeId = this.commands.selectedNodeId;
+  protected readonly hoveredNodeId = this.commands.hoveredNodeId;
+  protected readonly draggingNodeId = this.commands.draggingNodeId;
+  protected readonly canEdit = computed(() => !this.readonly() && !this.commands.readOnly());
+  protected readonly viewport = computed(() => this.previewViewport() ?? this.graph()?.visual ?? EMPTY_VIEWPORT);
+  protected readonly transform = computed(() => canvasGraphTransform(this.viewport()));
+  protected readonly graphLoaded = computed(() => this.graph() !== null);
+  protected readonly nodeViews = computed<readonly CanvasNodeView[]>(() => {
+    const dimensions = this.nodeDimensions();
+    return this.nodes().map((node) => ({node, dimensions: normalizeCanvasDimensions(dimensions(node))}));
+  });
+  protected readonly bindings = computed(() => basicCanvasBindings(this.nodeViews(), this.commands.bindings()));
+  protected readonly selectedNode = computed(() =>
+    this.nodes().find((node) => node.id === this.selectedNodeId()) ?? null);
+  protected readonly gridSize = computed(() => `${24 * this.viewport().zoom}px ${24 * this.viewport().zoom}px`);
+  protected readonly gridPosition = computed(() => `${this.viewport().viewport.x}px ${this.viewport().viewport.y}px`);
+  protected readonly minimapLayout = computed(() => canvasMinimapLayout(this.nodeViews()));
+  protected readonly minimapNodes = computed<readonly CanvasMinimapNode[]>(() => {
+    const layout = this.minimapLayout();
+    return layout ? this.nodeViews().map((view) => canvasMinimapNode(view, layout)) : [];
+  });
+  protected readonly minimapViewport = computed<CanvasMinimapViewport | null>(() => {
+    const layout = this.minimapLayout();
+    return layout ? canvasMinimapViewport(this.viewport(), this.canvasSize(), layout) : null;
   });
 
-  protected addPaletteNode(type: ClearpipeNodeType): void {
-    if (!this.readonly()) this.state.addNode(type, {x: 120, y: 120});
-  }
-
-  protected dropNode(event: CdkDragDrop<unknown>): void {
-    if (this.readonly()) return;
-    const type = event.item.data as ClearpipeNodeType;
-    if (!this.nodeTypes.some(item => item.type === type)) return;
-    const rect = this.canvas()!.nativeElement.getBoundingClientRect();
-    const viewport = this.viewport();
-    this.state.addNode(type, {
-      x: (event.dropPoint.x - rect.left - viewport.x) / viewport.zoom,
-      y: (event.dropPoint.y - rect.top - viewport.y) / viewport.zoom,
+  constructor() {
+    afterNextRender(() => {
+      this.observeCanvasSize();
+    });
+    this.destroyRef.onDestroy(() => {
+      if (this.viewportCommitTimer !== null) clearTimeout(this.viewportCommitTimer);
     });
   }
 
-  protected nodeDragEnd(node: ClearpipeNode, event: CdkDragEnd): void {
-    const zoom = this.viewport().zoom;
-    this.state.moveNode(node.id, {x: node.position.x + event.distance.x / zoom, y: node.position.y + event.distance.y / zoom});
-    event.source.reset();
+  /**
+   * The catalog/form owner supplies a complete canonical node request. The canvas
+   * translates the pointer to an approved visual position and issues one command.
+   */
+  placeNode(placement: CanvasNodePlacement, clientPoint: CanvasClientPoint): void {
+    if (!this.canEdit()) return;
+    const result = placementResult(placement, this.clientPointToGraphPoint(clientPoint), this.commands);
+    if (result.ok && result.id) this.commands.selectNode(result.id);
+    this.markProfile('placement');
   }
 
-  protected wheel(event: WheelEvent): void {
-    event.preventDefault();
-    const viewport = this.viewport();
-    const zoom = Math.min(2, Math.max(.35, viewport.zoom * (event.deltaY > 0 ? .9 : 1.1)));
-    this.state.setViewport({...viewport, zoom});
+  protected nodeContext(view: CanvasNodeView): ClearpipeCanvasNodeContext {
+    const nodeId = view.node.id;
+    return {
+      $implicit: view.node,
+      node: view.node,
+      selected: this.selectedNodeId() === nodeId,
+      hovered: this.hoveredNodeId() === nodeId,
+      dragging: this.draggingNodeId() === nodeId,
+    };
+  }
+
+  protected nodeTransform(view: CanvasNodeView): string {
+    return canvasNodeTransform(view.node.visual.position);
+  }
+
+  protected bindingPath(binding: ReturnType<typeof basicCanvasBindings>[number]): string {
+    return basicCanvasBindingPath(binding);
+  }
+
+  protected selectNode(event: Event, nodeId: string): void {
+    event.stopPropagation();
+    this.commands.selectNode(nodeId);
+    this.focusCanvasAfterNodeSelection(event.target);
+  }
+
+  protected hoverNode(nodeId: string | null): void {
+    this.commands.setHoveredNode(nodeId);
+  }
+
+  protected beginNodeDrag(nodeId: string, event: CdkDragStart): void {
+    if (!this.canEdit()) return;
+    // Cdk only provides the drag lifecycle; no Cdk event is retained in graph state.
+    void event;
+    this.commands.setDraggingNode(nodeId);
+  }
+
+  protected nodeDragEnd(node: GraphNode, event: CdkDragEnd): void {
+    const distance: Point = {x: event.distance.x, y: event.distance.y};
+    event.source.reset();
+    this.commands.setDraggingNode(null);
+    if (!this.canEdit()) return;
+    this.commands.setNodePosition(node.id, canvasPositionAfterDrag(node.visual.position, distance, this.viewport().zoom));
+    this.markProfile('move');
   }
 
   protected beginPan(event: MouseEvent): void {
-    if (event.button !== 1 && !(event.button === 0 && (event.target as HTMLElement).classList.contains('canvas-surface'))) return;
-    const viewport = this.viewport();
-    this.panStart = {clientX: event.clientX, clientY: event.clientY, x: viewport.x, y: viewport.y};
+    if (!this.canEdit() || (event.button !== 1 && !(event.button === 0 && event.target === event.currentTarget))) return;
+    event.preventDefault();
+    this.focusCanvas();
+    this.panStart = {clientX: event.clientX, clientY: event.clientY, visual: this.viewport()};
     this.panning.set(true);
   }
 
   protected pan(event: MouseEvent): void {
     if (!this.panStart) return;
-    this.state.setViewport({...this.viewport(), x: this.panStart.x + event.clientX - this.panStart.clientX, y: this.panStart.y + event.clientY - this.panStart.clientY});
+    this.previewViewport.set({
+      ...this.panStart.visual,
+      viewport: {
+        x: this.panStart.visual.viewport.x + event.clientX - this.panStart.clientX,
+        y: this.panStart.visual.viewport.y + event.clientY - this.panStart.clientY,
+      },
+    });
   }
 
   protected endPan(): void {
+    if (!this.panStart) return;
     this.panStart = null;
     this.panning.set(false);
+    this.commitPreviewViewport('pan');
   }
 
-  protected selectNode(event: MouseEvent, nodeId: string): void {
-    event.stopPropagation();
-    this.state.selectedNodeId.set(nodeId);
-  }
-
-  protected connect(event: MouseEvent, nodeId: string): void {
-    event.stopPropagation();
-    if (!this.readonly()) this.state.selectConnectionNode(nodeId);
-  }
-
-  protected nodeCenter(nodeId: string): {x: number; y: number} {
-    const node = this.state.definition().nodes.find(item => item.id === nodeId);
-    return node ? {x: node.position.x + 92, y: node.position.y + 36} : {x: 0, y: 0};
-  }
-
-  protected edgePath(edge: ClearpipeEdge): string {
-    const source = this.nodeCenter(edge.source);
-    const target = this.nodeCenter(edge.target);
-    const dx = Math.max(60, Math.abs(target.x - source.x) * .5);
-    return `M ${source.x + 92} ${source.y} C ${source.x + dx} ${source.y}, ${target.x - dx} ${target.y}, ${target.x - 92} ${target.y}`;
-  }
-
-  protected centerGraph(): void {
-    this.state.setViewport({x: 60, y: 60, zoom: 1});
+  protected wheel(event: WheelEvent): void {
+    if (!this.canEdit()) return;
+    if (event.cancelable) event.preventDefault();
+    const zoom = this.viewport().zoom * (event.deltaY > 0 ? .9 : 1.1);
+    this.previewViewport.set(canvasVisualAtClientZoom(
+      this.viewport(),
+      {clientX: event.clientX, clientY: event.clientY},
+      this.surfaceBounds(),
+      zoom,
+    ));
+    this.scheduleViewportCommit();
   }
 
   protected changeZoom(delta: number, event: MouseEvent): void {
     event.stopPropagation();
-    const viewport = this.viewport();
-    this.state.setViewport({...viewport, zoom: Math.min(2, Math.max(.35, viewport.zoom + delta))});
+    if (!this.canEdit()) return;
+    const bounds = this.surfaceBounds();
+    const point = {clientX: bounds.left + bounds.width / 2, clientY: bounds.top + bounds.height / 2};
+    this.previewViewport.set(canvasVisualAtClientZoom(this.viewport(), point, bounds, this.viewport().zoom + delta));
+    this.commitPreviewViewport('zoom');
   }
 
-  protected nodeIcon(type: ClearpipeNodeType): string {
-    return this.nodeTypes.find(item => item.type === type)?.icon ?? 'al-ico-pipeline';
+  protected fitGraph(event?: Event): void {
+    event?.stopPropagation();
+    if (!this.canEdit()) return;
+    const visual = fitCanvasVisual(this.nodeViews(), this.surfaceBounds());
+    if (!visual) return;
+    this.previewViewport.set(visual);
+    this.commitPreviewViewport('fit');
+  }
+
+  protected resetViewport(event: Event): void {
+    event.stopPropagation();
+    if (!this.canEdit()) return;
+    this.previewViewport.set(EMPTY_VIEWPORT);
+    this.commitPreviewViewport('zoom');
+  }
+
+  protected toggleGrid(event: Event): void {
+    event.stopPropagation();
+    this.gridVisible.update((visible) => !visible);
+  }
+
+  protected clearSelection(event?: Event): void {
+    event?.stopPropagation();
+    this.commands.selectNode(null);
+  }
+
+  protected selectCanvasBackground(event: MouseEvent): void {
+    this.clearSelection(event);
+    this.focusCanvas();
+  }
+
+  protected deleteSelectedNode(event: Event): void {
+    event.stopPropagation();
+    if (!this.canEdit()) return;
+    const selected = this.selectedNode();
+    if (!selected) return;
+    this.commands.removeNode(selected.id);
+    this.markProfile('delete');
+  }
+
+  protected handleCanvasKeydown(event: KeyboardEvent): void {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'Escape') {
+      this.clearSelection();
+      return;
+    }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && this.selectedNode()) {
+      event.preventDefault();
+      this.deleteSelectedNode(event);
+      return;
+    }
+    const pan = event.key === 'ArrowLeft' ? {x: 24, y: 0}
+      : event.key === 'ArrowRight' ? {x: -24, y: 0}
+        : event.key === 'ArrowUp' ? {x: 0, y: 24}
+          : event.key === 'ArrowDown' ? {x: 0, y: -24}
+            : null;
+    if (!pan || !this.canEdit()) return;
+    event.preventDefault();
+    this.previewViewport.set({
+      ...this.viewport(),
+      viewport: {
+        x: this.viewport().viewport.x + pan.x,
+        y: this.viewport().viewport.y + pan.y,
+      },
+    });
+    this.commitPreviewViewport('pan');
+  }
+
+  protected minimapNavigate(event: MouseEvent): void {
+    if (!this.canEdit()) return;
+    const minimap = this.minimapContent()?.nativeElement;
+    const layout = this.minimapLayout();
+    if (!minimap || !layout) return;
+    const minimapRect = minimap.getBoundingClientRect();
+    const surface = this.surfaceBounds();
+    const graphPoint = canvasGraphPointFromMinimapClientPoint(
+      {clientX: event.clientX, clientY: event.clientY},
+      {left: minimapRect.left, top: minimapRect.top, width: minimapRect.width, height: minimapRect.height},
+      layout,
+    );
+    this.previewViewport.set({
+      ...this.viewport(),
+      viewport: {
+        x: surface.width / 2 - graphPoint.x * this.viewport().zoom,
+        y: surface.height / 2 - graphPoint.y * this.viewport().zoom,
+      },
+    });
+    this.commitPreviewViewport('pan');
+  }
+
+  protected minimapKeyboardNavigate(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      const minimap = this.minimapContent()?.nativeElement.getBoundingClientRect();
+      if (!minimap) return;
+      this.minimapNavigate(new MouseEvent('click', {
+        clientX: minimap.left + minimap.width / 2,
+        clientY: minimap.top + minimap.height / 2,
+      }));
+    }
+  }
+
+  private clientPointToGraphPoint(point: CanvasClientPoint): Point {
+    return canvasPointFromClientPoint(point, this.surfaceBounds(), this.viewport());
+  }
+
+  private scheduleViewportCommit(): void {
+    if (this.viewportCommitTimer !== null) clearTimeout(this.viewportCommitTimer);
+    this.viewportCommitTimer = setTimeout(() => this.commitPreviewViewport('zoom'), 120);
+  }
+
+  private commitPreviewViewport(phase: Extract<CanvasProfileMark['phase'], 'pan' | 'zoom' | 'fit'>): void {
+    if (this.viewportCommitTimer !== null) {
+      clearTimeout(this.viewportCommitTimer);
+      this.viewportCommitTimer = null;
+    }
+    const visual = this.previewViewport();
+    this.previewViewport.set(null);
+    if (!visual || !this.canEdit()) return;
+    this.commands.setViewport(visual);
+    this.markProfile(phase);
+  }
+
+  private surfaceBounds(): CanvasSurfaceBounds {
+    const rect = this.canvas()?.nativeElement.getBoundingClientRect();
+    return rect
+      ? {left: rect.left, top: rect.top, width: rect.width, height: rect.height}
+      : {left: 0, top: 0, ...this.canvasSize()};
+  }
+
+  private observeCanvasSize(): void {
+    const canvas = this.canvas()?.nativeElement;
+    if (!canvas) return;
+    const updateSize = (): void => {
+      const {width, height} = canvas.getBoundingClientRect();
+      this.canvasSize.set({width: width || DEFAULT_CANVAS_SIZE.width, height: height || DEFAULT_CANVAS_SIZE.height});
+    };
+    updateSize();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(canvas);
+    this.destroyRef.onDestroy(() => observer.disconnect());
+  }
+
+  private focusCanvasAfterNodeSelection(target: EventTarget | null): void {
+    const element = target instanceof HTMLElement ? target : null;
+    if (element?.closest('a, button, input, select, textarea, [contenteditable="true"], [role="combobox"], [role="slider"], [role="spinbutton"], [role="textbox"]')) {
+      return;
+    }
+    this.focusCanvas();
+  }
+
+  private focusCanvas(): void {
+    this.canvas()?.nativeElement.focus({preventScroll: true});
+  }
+
+  private markProfile(phase: CanvasProfileMark['phase']): void {
+    this.profiler()?.mark({
+      phase,
+      nodeCount: this.nodes().length,
+      bindingCount: this.commands.bindings().length,
+    });
   }
 }

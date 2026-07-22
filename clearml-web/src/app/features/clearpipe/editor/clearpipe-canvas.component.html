@@ -1,59 +1,129 @@
-<aside class="palette" aria-label="Node palette" cdkDropList id="clearpipePalette"
-       [cdkDropListConnectedTo]="['clearpipeCanvasDrop']" [cdkDropListSortingDisabled]="true">
-  <h2>Nodes</h2>
-  @for (nodeType of nodeTypes; track nodeType.type) {
-    <div class="palette-node" role="button" tabindex="0" cdkDrag [cdkDragData]="nodeType.type"
-         (keydown.enter)="addPaletteNode(nodeType.type)" [attr.data-node-type]="nodeType.type">
-      <mat-icon fontSet="al" [fontIcon]="nodeType.icon"></mat-icon>
-      <span><strong>{{ nodeType.label }}</strong><small>{{ nodeType.description }}</small></span>
-    </div>
-  }
-  <p class="hint">Drag a node onto the canvas. Use the connector dots to create dependencies.</p>
-</aside>
+<div #canvas
+     class="canvas-surface"
+     [class.canvas-surface--panning]="panning()"
+     [class.canvas-surface--grid]="gridVisible()"
+     [style.background-size]="gridSize()"
+     [style.background-position]="gridPosition()"
+     role="application"
+     tabindex="0"
+     aria-label="ClearPipe graph canvas"
+     aria-describedby="clearpipe-canvas-instructions"
+     (wheel)="wheel($event)"
+     (mousedown)="beginPan($event)"
+     (mousemove)="pan($event)"
+     (mouseup)="endPan()"
+     (mouseleave)="endPan()"
+     (click)="selectCanvasBackground($event)"
+     (keydown)="handleCanvasKeydown($event)">
+  <p id="clearpipe-canvas-instructions" class="visually-hidden">
+    Select a node to inspect it. Drag nodes to move them. Use the canvas controls to zoom, fit, and pan.
+    Press Delete to remove the selected node and Escape to clear selection.
+  </p>
 
-<div #canvas class="canvas-surface" [class.panning]="panning()" cdkDropList id="clearpipeCanvasDrop"
-     [cdkDropListConnectedTo]="['clearpipePalette']" [cdkDropListSortingDisabled]="true"
-     (cdkDropListDropped)="dropNode($event)" (wheel)="wheel($event)"
-     (mousedown)="beginPan($event)" (mousemove)="pan($event)" (mouseup)="endPan()" (mouseleave)="endPan()"
-     (click)="state.selectedNodeId.set(null)" (keydown.escape)="state.selectedNodeId.set(null)" tabindex="0">
-  <div class="graph" [style.transform]="transform()">
-    <svg class="edges" aria-label="Pipeline connections">
-      @for (edge of state.definition().edges; track edge.id) {
-        <path class="edge-hit" [attr.d]="edgePath(edge)" (dblclick)="!readonly() && state.removeEdge(edge.id)"></path>
-        <path class="edge" [attr.d]="edgePath(edge)"></path>
+  @if (graphLoaded()) {
+    <div class="canvas-graph" [style.transform]="transform()">
+      <svg class="canvas-bindings"
+           role="img"
+           aria-label="Basic visual bindings. Compatibility is not indicated by these lines.">
+        @for (binding of bindings(); track binding.id) {
+          <path class="canvas-binding" [attr.d]="bindingPath(binding)"></path>
+        }
+      </svg>
+
+      @for (view of nodeViews(); track view.node.id) {
+        <article class="canvas-node-drag"
+                 cdkDrag
+                 [cdkDragDisabled]="!canEdit()"
+                 [cdkDragScale]="viewport().zoom"
+                 [attr.data-node-id]="view.node.id"
+                 (cdkDragStarted)="beginNodeDrag(view.node.id, $event)"
+                 (cdkDragEnded)="nodeDragEnd(view.node, $event)">
+          <div class="canvas-node-position"
+               [style.transform]="nodeTransform(view)"
+               [style.width.px]="view.dimensions.width"
+               [style.min-height.px]="view.dimensions.height"
+               tabindex="0"
+               role="button"
+               [attr.aria-label]="nodeAriaLabel()(view.node)"
+               [class.canvas-node-position--selected]="selectedNodeId() === view.node.id"
+               [class.canvas-node-position--hovered]="hoveredNodeId() === view.node.id"
+               (click)="selectNode($event, view.node.id)"
+               (mouseenter)="hoverNode(view.node.id)"
+               (mouseleave)="hoverNode(null)"
+               (keydown.enter)="selectNode($event, view.node.id)"
+               (keydown.space)="selectNode($event, view.node.id)">
+            @if (nodeTemplate(); as renderer) {
+              <ng-container [ngTemplateOutlet]="renderer" [ngTemplateOutletContext]="nodeContext(view)"></ng-container>
+            } @else {
+              <span class="canvas-node-fallback">{{ view.node.label }}</span>
+            }
+          </div>
+        </article>
       }
-    </svg>
-    @for (node of state.definition().nodes; track node.id) {
-      <article class="node" cdkDrag [cdkDragDisabled]="readonly()" [cdkDragFreeDragPosition]="node.position"
-               (cdkDragEnded)="nodeDragEnd(node, $event)" (click)="selectNode($event, node.id)"
-               (keydown.enter)="state.selectedNodeId.set(node.id)" tabindex="0"
-               [class.selected]="state.selectedNodeId() === node.id" [class.connecting]="state.connectionSource() === node.id">
-        <button class="connector input" (click)="connect($event, node.id)" aria-label="Connect into node"></button>
-        <mat-icon fontSet="al" [fontIcon]="nodeIcon(node.type)"></mat-icon>
-        <span><strong>{{ node.label }}</strong><small>{{ node.type }}</small></span>
-        <button class="connector output" (click)="connect($event, node.id)" aria-label="Connect from node"></button>
-      </article>
-    }
-  </div>
+    </div>
 
-  @if (!state.definition().nodes.length) {
-    <div class="canvas-empty">
+    @if (!nodes().length) {
+      <div class="canvas-empty" aria-live="polite">
+        <mat-icon fontSet="al" fontIcon="al-ico-pipeline"></mat-icon>
+        <strong>Build a ClearPipe graph</strong>
+        <span>Add an approved task or function from the authoring catalog.</span>
+      </div>
+    }
+
+    <div class="canvas-controls" role="toolbar" aria-label="Canvas controls">
+      <button mat-icon-button type="button" (click)="changeZoom(.1, $event)" [disabled]="!canEdit()" aria-label="Zoom in">
+        <mat-icon fontSet="al" fontIcon="al-ico-zoom-in"></mat-icon>
+      </button>
+      <span aria-live="polite">{{ viewport().zoom * 100 | number:'1.0-0' }}%</span>
+      <button mat-icon-button type="button" (click)="changeZoom(-.1, $event)" [disabled]="!canEdit()" aria-label="Zoom out">
+        <mat-icon fontSet="al" fontIcon="al-ico-zoom-out"></mat-icon>
+      </button>
+      <button mat-icon-button type="button" (click)="fitGraph($event)" [disabled]="!canEdit() || !nodes().length" aria-label="Fit graph">
+        <mat-icon fontSet="al" fontIcon="al-ico-zoom-to-fit"></mat-icon>
+      </button>
+      <button mat-icon-button type="button" (click)="resetViewport($event)" [disabled]="!canEdit()" aria-label="Reset viewport">
+        <mat-icon>center_focus_strong</mat-icon>
+      </button>
+      <button mat-icon-button type="button" (click)="toggleGrid($event)" [attr.aria-pressed]="gridVisible()" aria-label="Toggle canvas grid">
+        <mat-icon>grid_on</mat-icon>
+      </button>
+      @if (selectedNode()) {
+        <button mat-icon-button type="button" (click)="deleteSelectedNode($event)" [disabled]="!canEdit()" aria-label="Delete selected node">
+          <mat-icon>delete</mat-icon>
+        </button>
+      }
+    </div>
+
+    @if (nodes().length) {
+      <button
+              type="button"
+              class="canvas-minimap"
+              aria-label="Center the canvas from the minimap"
+              (click)="minimapNavigate($event)"
+              (keydown)="minimapKeyboardNavigate($event)">
+        <span #minimapContent class="canvas-minimap__content" aria-hidden="true">
+          @for (node of minimapNodes(); track node.id) {
+            <i class="canvas-minimap__node"
+               [style.left.px]="node.left"
+               [style.top.px]="node.top"
+               [style.width.px]="node.width"></i>
+          }
+          @if (minimapViewport(); as viewport) {
+            <i class="canvas-minimap__viewport"
+               [style.left.px]="viewport.left"
+               [style.top.px]="viewport.top"
+               [style.width.px]="viewport.width"
+               [style.height.px]="viewport.height"></i>
+          }
+        </span>
+        <span>Minimap</span>
+      </button>
+    }
+  } @else {
+    <div class="canvas-empty" role="status">
       <mat-icon fontSet="al" fontIcon="al-ico-pipeline"></mat-icon>
-      <strong>Build your pipeline</strong>
-      <span>Drag a node from the palette to get started.</span>
+      <strong>ClearPipe graph unavailable</strong>
+      <span>The canvas opens when a canonical graph is loaded.</span>
     </div>
   }
-
-  <div class="zoom-controls">
-    <button mat-icon-button (click)="changeZoom(.1, $event)" aria-label="Zoom in"><mat-icon fontSet="al" fontIcon="al-ico-zoom-in"></mat-icon></button>
-    <span>{{ viewport().zoom * 100 | number:'1.0-0' }}%</span>
-    <button mat-icon-button (click)="changeZoom(-.1, $event)" aria-label="Zoom out"><mat-icon fontSet="al" fontIcon="al-ico-zoom-out"></mat-icon></button>
-    <button mat-icon-button (click)="centerGraph(); $event.stopPropagation()" aria-label="Center graph"><mat-icon fontSet="al" fontIcon="al-ico-zoom-to-fit"></mat-icon></button>
-  </div>
-
-  <div class="minimap" aria-label="Pipeline minimap">
-    @for (node of state.definition().nodes; track node.id) {
-      <i [style.left.px]="node.position.x / 12" [style.top.px]="node.position.y / 12"></i>
-    }
-  </div>
 </div>

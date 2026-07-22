@@ -1,0 +1,12 @@
+{
+  "extends": "../../../../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../../../../out-tsc/clearpipe-canvas-spec",
+    "types": ["jasmine", "node"]
+  },
+  "files": ["../../../../test.ts", "../../../../polyfills.ts"],
+  "include": [
+    "./clearpipe-canvas*.spec.ts",
+    "../../../../**/*.d.ts"
+  ]
+}
