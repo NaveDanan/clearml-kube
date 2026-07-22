@@ -27,10 +27,10 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [ ] | [CP-21](./cp_21_dataset-browser-integration.md) | 5 | 5 | cp-21-dataset-browser | In progress | copilot/cp-21 | Dataset browser and safe dataset-reference integration worktree active. |
 | [x] | [CP-22](./cp_22_import-export-unsaved-guards.md) | 5 | 5 | cp-22-import-export | Done | 99377c9 | Versioned safe transfer and unsaved-change guards integrated; unsupported generated source fails closed. |
 | [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
-| [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
-| [ ] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 |  | Not started |  |  |
+| [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | In progress | copilot/cp-24 | Task-backed catalog, inspector, and canonical authoring worktree active. |
+| [ ] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 | cp-25-function-authoring | In progress | copilot/cp-25 | Constrained function/component authoring worktree active. |
 | [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | In progress | copilot/cp-26 | Preflight, real execution adapter, and status handoff worktree active. |
-| [ ] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 |  | Not started |  |  |
+| [ ] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | In progress | copilot/cp-27 | History, clipboard, keyboard, and layout operations worktree active. |
 | [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 |  | Not started |  |  |
 | [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 |  | Not started |  |  |
 | [ ] | [CP-30](./cp_30_accessibility-responsive-performance.md) | 8 | 8 |  | Not started |  |  |
