@@ -105,6 +105,27 @@ export const routes: Routes = [
         ]
       },
       {
+        path: 'pipelines/clearpipe',
+        pathMatch: 'full',
+        canMatch: [clearpipeEnabledGuard],
+        redirectTo: 'clearpipe',
+        data: {clearpipeEntry: true},
+      },
+      {
+        path: 'pipelines/clearpipe/new',
+        pathMatch: 'full',
+        canMatch: [clearpipeEnabledGuard],
+        redirectTo: 'clearpipe/new',
+        data: {clearpipeEntry: true},
+      },
+      {
+        path: 'pipelines/clearpipe/:taskId/edit',
+        pathMatch: 'full',
+        canMatch: [clearpipeEnabledGuard],
+        redirectTo: 'clearpipe/:taskId/edit',
+        data: {clearpipeEntry: true},
+      },
+      {
         path: 'pipelines',
         data: {search: true, autoSearchTab: 'pipelines'},
         loadChildren: () => import('@common/pipelines/pipelines.module').then(m => m.PipelinesModule),

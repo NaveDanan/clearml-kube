@@ -12,6 +12,12 @@ export const clearpipeRoutes: Routes = [
     canDeactivate: [generalLeavingBeforeSaveAlertGuard],
   },
   {
+    path: ':taskId/edit',
+    loadComponent: () => import('./editor/clearpipe-editor.component').then(m => m.ClearpipeEditorComponent),
+    canDeactivate: [generalLeavingBeforeSaveAlertGuard],
+    data: {clearpipeVisualEdit: true},
+  },
+  {
     path: ':taskId',
     loadComponent: () => import('./editor/clearpipe-editor.component').then(m => m.ClearpipeEditorComponent),
     canDeactivate: [generalLeavingBeforeSaveAlertGuard],
