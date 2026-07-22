@@ -43,13 +43,24 @@
   <div class="workspace-toolbar" role="toolbar" aria-label="ClearPipe toolbar">
     <div class="toolbar-primary" smClearpipeWorkspaceSlot="workspace.toolbar.primary">
       <sm-clearpipe-toolbar
+        [runAction]="execution.toolbarAction()"
         (openRequested)="openLibrary()"
         (validateRequested)="validate()"
         (previewRequested)="previewOpen.set(true)"
-        (settingsRequested)="openPanel('inspector', $any($event.currentTarget))">
+        (runRequested)="submitExecution()"
+        (saved)="execution.refresh()"
+        (settingsRequested)="openPanel('inspector')">
       </sm-clearpipe-toolbar>
     </div>
   </div>
+
+  <sm-clearpipe-execution-results
+    [presentation]="execution.presentation()"
+    (openPipelineRequested)="execution.openPipelineRun()"
+    (openTaskRequested)="openExecutionTask($event)"
+    (openDatasetRequested)="openExecutionDataset($event)"
+    (openModelRequested)="openExecutionModel($event)">
+  </sm-clearpipe-execution-results>
 
   <div class="workspace-regions">
     @if (isNarrow() && activeDrawer()) {

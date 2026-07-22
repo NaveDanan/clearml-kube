@@ -1,4 +1,5 @@
 import {ClearpipeLifecycleService} from './clearpipe-lifecycle.service';
+import {ClearpipeExecutionAction} from './execution/clearpipe-execution.models';
 
 export type ClearpipeToolbarActionId =
   | 'new'
@@ -21,6 +22,10 @@ export interface ClearpipeToolbarAction {
 export const clearpipeToolbarActions = (
   lifecycle: ClearpipeLifecycleService,
   validationEnabled: boolean,
+  runAction: ClearpipeExecutionAction = {
+    disabled: true,
+    disabledReason: 'Run checks are not available for this ClearPipe definition.',
+  },
 ): readonly ClearpipeToolbarAction[] => [
   {
     id: 'new',
@@ -77,8 +82,8 @@ export const clearpipeToolbarActions = (
   {
     id: 'run',
     label: 'Run',
-    disabled: true,
-    disabledReason: 'Run is owned by CP-26 and is unavailable until its approved execution hook is delivered.',
+    disabled: runAction.disabled,
+    disabledReason: runAction.disabledReason,
   },
   {
     id: 'settings',

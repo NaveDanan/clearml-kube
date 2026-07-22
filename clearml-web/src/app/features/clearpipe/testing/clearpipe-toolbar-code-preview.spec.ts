@@ -29,7 +29,7 @@ describe('ClearPipe toolbar and code preview', () => {
     capabilities: signal(overrides.capabilities ?? null),
   }) as unknown as ClearpipeLifecycleService;
 
-  it('exposes lifecycle actions and keeps only execution dependency-owned', () => {
+  it('exposes lifecycle actions and accepts the execution owner action state', () => {
     const actions = clearpipeToolbarActions(lifecycle(), true);
     expect(actions.map(action => action.id)).toEqual([
       'new', 'save', 'open', 'validate', 'import', 'export', 'preview', 'run', 'settings',
@@ -38,7 +38,7 @@ describe('ClearPipe toolbar and code preview', () => {
     expect(actions.find(action => action.id === 'export')?.disabled).toBeFalse();
     expect(actions.find(action => action.id === 'run')).toEqual(jasmine.objectContaining({
       disabled: true,
-      disabledReason: jasmine.stringContaining('CP-26'),
+      disabledReason: jasmine.stringContaining('Run checks'),
     }));
   });
 

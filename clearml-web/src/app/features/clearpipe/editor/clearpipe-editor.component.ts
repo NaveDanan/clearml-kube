@@ -29,12 +29,15 @@ import {
   ClearpipeValidationPresentation,
 } from './framework/clearpipe-ui.types';
 import {ClearpipeConfigPanelComponent} from './clearpipe-config-panel.component';
+import {ClearpipeExecutionService} from './execution/clearpipe-execution.service';
+import {ClearpipeExecutionResultsComponent} from './execution/clearpipe-execution-results.component';
 
 @Component({
   selector: 'sm-clearpipe-editor',
   templateUrl: './clearpipe-editor.component.html',
   styleUrl: './clearpipe-editor.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [ClearpipeExecutionService],
   imports: [
     RouterLink,
     ClearpipeCanvasComponent,
@@ -42,6 +45,7 @@ import {ClearpipeConfigPanelComponent} from './clearpipe-config-panel.component'
     ClearpipeCatalogComponent,
     ClearpipeConfigPanelComponent,
     ClearpipeToolbarComponent,
+    ClearpipeExecutionResultsComponent,
     ClearpipeWorkspaceSlotDirective,
     MatButtonModule,
     MatIconModule,
@@ -52,6 +56,7 @@ export class ClearpipeEditorComponent {
   protected readonly state = this.lifecycle.graphStore;
   protected readonly extensionRegistry = inject(ClearpipeExtensionRegistry);
   private readonly adapter = inject(ClearpipeAdapterService);
+  protected readonly execution = inject(ClearpipeExecutionService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -108,7 +113,7 @@ export class ClearpipeEditorComponent {
       summary: extension?.summarize?.(node as never)?.text,
       readOnly: this.readOnly(),
       readOnlyReason: this.readOnly() ? 'This definition is read-only. Values remain available for review.' : undefined,
-      statuses: extension?.statusPresentation,
+      statuses: [...(extension?.statusPresentation ?? []), ...this.execution.nodeStatuses(node.id)],
       validations: this.inspectorValidations(node.id),
     };
   });
@@ -119,12 +124,14 @@ export class ClearpipeEditorComponent {
   constructor() {
     this.route.paramMap.subscribe(params => {
       const taskId = params.get('taskId');
+      this.execution.reset();
       if (taskId && taskId !== 'new') this.load(taskId);
       else {
         this.lifecycle.new();
         this.routeSurface.set('ready');
         this.routeError.set('');
         this.announce('New ClearPipe draft');
+        void this.execution.refresh();
       }
     });
   }
@@ -168,7 +175,7 @@ export class ClearpipeEditorComponent {
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      void this.lifecycle.save();
+      void this.saveAndRefresh();
     } else if (!editing && ['Delete', 'Backspace'].includes(event.key) && this.state.selectedNodeId() && this.canEdit()) {
       event.preventDefault();
       this.state.removeNode(this.state.selectedNodeId()!);
@@ -285,6 +292,27 @@ export class ClearpipeEditorComponent {
     });
   }
 
+  protected submitExecution(): void {
+    void this.execution.submit();
+  }
+
+  protected async saveAndRefresh(): Promise<void> {
+    await this.lifecycle.save();
+    await this.execution.refresh();
+  }
+
+  protected openExecutionTask(taskId: string): void {
+    void this.execution.openTask(taskId);
+  }
+
+  protected openExecutionDataset(datasetId: string): void {
+    void this.execution.openResource('dataset', datasetId);
+  }
+
+  protected openExecutionModel(modelId: string): void {
+    void this.execution.openResource('model', modelId);
+  }
+
   private async load(taskId: string): Promise<void> {
     this.requestedTaskId = taskId;
     this.routeSurface.set('loading');
@@ -304,6 +332,7 @@ export class ClearpipeEditorComponent {
       this.routeSurface.set('ready');
       this.announce(this.readOnly() ? 'ClearPipe definition loaded read-only' : 'ClearPipe definition loaded');
     }
+    await this.execution.refresh();
   }
 
   private openDrawer(panel: WorkspacePanel, invoker?: HTMLElement): void {

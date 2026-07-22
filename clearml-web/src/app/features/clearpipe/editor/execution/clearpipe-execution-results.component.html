@@ -1,0 +1,85 @@
+@if (presentation().preflight.state === 'blocked' && presentation().preflight.reasons[0]; as reason) {
+  <p class="execution-preflight" role="status"><strong>Run unavailable:</strong> {{ reason.message }}</p>
+}
+
+@if (presentation().run.runTaskId; as runTaskId) {
+  <section class="execution-result" aria-live="polite" aria-label="ClearPipe execution">
+    <header>
+      <div>
+        <strong>Run {{ presentation().run.state === 'submitted_unwatched' ? 'submitted without an observed queue worker' : 'submitted' }}</strong>
+        <span>Pipeline run {{ runTaskId }}</span>
+      </div>
+      <button mat-stroked-button type="button" (click)="openPipelineRequested.emit()">Open pipeline run</button>
+    </header>
+    @if (presentation().run.message) {
+      <p class="execution-result__message">{{ presentation().run.message }}</p>
+    }
+    @if (presentation().tracking.controller; as controller) {
+      <p class="execution-result__controller">
+        Controller {{ controller.status }}
+        @if (controller.startedAt) { · Started {{ controller.startedAt }} }
+        @if (controller.completedAt) { · Completed {{ controller.completedAt }} }
+        @if (controller.updatedAt) { · Updated {{ controller.updatedAt }} }
+      </p>
+    }
+    @if (presentation().tracking.message) {
+      <p class="execution-result__message" [class.execution-result__message--warning]="presentation().tracking.state !== 'polling'">
+        {{ presentation().tracking.message }}
+      </p>
+    }
+    @if (presentation().tracking.totalNodes !== null) {
+      <p class="execution-result__coverage">
+        Runtime map records received: {{ presentation().tracking.receivedNodes }} of {{ presentation().tracking.totalNodes }}
+      </p>
+    }
+    @if (presentation().nodes.length) {
+      <ul class="execution-result__nodes" aria-label="Authorized node runtime records">
+        @for (node of presentation().nodes; track node.graphNodeId) {
+          <li>
+            <div>
+              <strong>{{ node.graphNodeId }}</strong>
+              <span>{{ node.availability === 'unavailable' ? 'Runtime record unavailable' : node.state ?? 'Runtime record received' }}</span>
+              @if (node.updatedAt) { <small>Updated {{ node.updatedAt }}</small> }
+              @if (node.failureDetail) { <small class="execution-result__failure">{{ node.failureDetail }}</small> }
+            </div>
+            <div class="execution-result__links">
+              @if (node.taskId) {
+                <button mat-button type="button" (click)="openTaskRequested.emit(node.taskId)">Open task</button>
+              }
+              @if (node.logTaskId) {
+                <button mat-button type="button" (click)="openTaskRequested.emit(node.logTaskId)">Open logs</button>
+              }
+            </div>
+            @if (node.artifacts.length || node.models.input.length || node.models.output.length || node.datasets.length) {
+              <div class="execution-result__outputs">
+                @if (node.artifacts.length) {
+                  <span>Artifacts: @for (artifact of node.artifacts; track artifact.id) { {{ artifact.name }}@if (!$last) {, } }</span>
+                  @if (node.artifactsTruncated) { <small>Additional authorized artifacts are available in task details.</small> }
+                }
+                @if (node.models.input.length || node.models.output.length) {
+                  <span>Models:
+                    @for (model of node.models.input; track model.id) {
+                      <button mat-button type="button" (click)="openModelRequested.emit(model.id)">{{ model.name ?? model.id }}</button>
+                    }
+                    @for (model of node.models.output; track model.id) {
+                      <button mat-button type="button" (click)="openModelRequested.emit(model.id)">{{ model.name ?? model.id }}</button>
+                    }
+                  </span>
+                }
+                @if (node.datasets.length) {
+                  <span>Datasets:
+                    @for (dataset of node.datasets; track dataset.taskId) {
+                      <button mat-button type="button" (click)="openDatasetRequested.emit(dataset.taskId)">{{ dataset.name }}</button>
+                    }
+                  </span>
+                }
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    }
+  </section>
+} @else if (presentation().run.state === 'failed' && presentation().run.message) {
+  <p class="execution-error" role="alert">{{ presentation().run.message }}</p>
+}
