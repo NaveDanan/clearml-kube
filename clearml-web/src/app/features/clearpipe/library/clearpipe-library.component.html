@@ -39,7 +39,7 @@
       @for (pipeline of pipelines(); track pipeline.task_id || pipeline.id) {
         <button class="table-row pipeline" role="row" (click)="open(pipeline)" [attr.data-id]="'clearpipe-' + pipeline.name">
           <span class="name-cell">
-            <mat-icon fontSet="al" fontIcon="al-ico-pipeline"></mat-icon>
+            <mat-icon fontSet="al" fontIcon="al-ico-pipelines"></mat-icon>
             <span><strong>{{ pipeline.name }}</strong><small>{{ pipeline.description || 'No description' }}</small></span>
           </span>
           <span>{{ pipeline.owner?.name || '—' }}</span>

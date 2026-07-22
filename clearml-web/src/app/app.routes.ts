@@ -1,4 +1,4 @@
-import {CanActivateFn, Router, Routes} from '@angular/router';
+import {CanActivateFn, Router, RouterStateSnapshot, Routes} from '@angular/router';
 import {projectRedirectGuardGuard} from '@common/shared/guards/project-redirect.guard';
 import {EntityTypeEnum} from '~/shared/constants/non-common-consts';
 import {resetContextMenuGuard} from '@common/shared/guards/resetContextMenuGuard.guard';
@@ -30,6 +30,17 @@ const clearpipeEnabledGuard: CanActivateFn = () => {
   const router = inject(Router);
   const configuration = inject(ConfigurationService).configuration;
   return configuration().clearpipeEnabled !== false || router.parseUrl('/404');
+};
+
+const clearpipeAuthenticationGuard: CanActivateFn = (_route, state: RouterStateSnapshot) => {
+  const router = inject(Router);
+  const store = inject(Store);
+
+  return store.select(selectCurrentUser).pipe(
+    map(user => user
+      ? true
+      : router.createUrlTree(['/login'], {queryParams: {redirect: state.url}}))
+  );
 };
 
 export const routes: Routes = [
@@ -130,6 +141,7 @@ export const routes: Routes = [
       {
         path: 'clearpipe',
         canMatch: [clearpipeEnabledGuard],
+        canActivate: [clearpipeAuthenticationGuard],
         loadChildren: () => import('./features/clearpipe/clearpipe.routes').then(m => m.clearpipeRoutes),
         data: {search: false},
       },
