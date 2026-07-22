@@ -2,7 +2,7 @@ import {routes} from '~/app.routes';
 import {ClearpipeAdapterService} from './clearpipe-adapter.service';
 
 describe('ClearPipe route integration', () => {
-  it('adds feature-guarded visual entry redirects before the existing pipelines route', () => {
+  it('redirects legacy visual entries before the existing pipelines route and guards their destination', () => {
     const children = routes[0].children!;
     const entryPaths = children
       .filter(route => route.data?.['clearpipeEntry'])
@@ -19,9 +19,10 @@ describe('ClearPipe route integration', () => {
     expect(children[firstPipelineRoute].loadChildren).toBeDefined();
     expect(children.filter(route => route.path === 'pipelines').length).toBe(2);
     children.filter(route => route.data?.['clearpipeEntry']).forEach(route => {
-      expect(route.canMatch?.length).toBe(1);
+      expect(route.canMatch).toBeUndefined();
       expect(route.redirectTo).toContain('clearpipe');
     });
+    expect(children.find(route => route.path === 'clearpipe')?.canMatch?.length).toBe(1);
   });
 
   it('keeps semantic route construction inside the platform adapter', () => {
