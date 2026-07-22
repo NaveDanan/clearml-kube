@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "document": {
+    "id": "cp03-two-step-task",
+    "revision": 1,
+    "name": "iris_task_pipeline",
+    "project": "examples",
+    "version": "1.0.0",
+    "tags": ["clearpipe", "pipeline"]
+  },
+  "settings": {"default_execution_queue_id": "queue-default"},
+  "parameters": [
+    {
+      "id": "dataset-url",
+      "name": "dataset_url",
+      "required": false,
+      "order": 0,
+      "default": "https://example.invalid/iris.pkl",
+      "description": "Dataset URL"
+    }
+  ],
+  "resources": [
+    {"id": "queue-default", "kind": "queue", "resource_id": "default", "label": "default"}
+  ],
+  "outputs": [],
+  "nodes": [
+    {
+      "id": "stage-data",
+      "kind": "task",
+      "name": "stage_data",
+      "label": "Stage data",
+      "base_task": {"kind": "task-name", "project": "examples", "name": "Pipeline step 1 dataset artifact"},
+      "ports": [
+        {"id": "in-dataset-url", "kind": "port", "name": "General/dataset_url", "direction": "input", "role": "parameter", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["parameter"], "order": 0},
+        {"id": "out-dataset-url", "kind": "port", "name": "artifacts.dataset.url", "direction": "output", "role": "artifact", "required": false, "multiplicity": "many", "accepted_binding_kinds": ["artifact"], "order": 0}
+      ],
+      "configuration": {"clone_base_task": true, "cache": false},
+      "visual": {"position": {"x": 0, "y": 0}, "dimensions": {"width": 260, "height": 150}}
+    },
+    {
+      "id": "stage-process",
+      "kind": "task",
+      "name": "stage_process",
+      "label": "Stage process",
+      "base_task": {"kind": "task-name", "project": "examples", "name": "Pipeline step 2 process dataset"},
+      "ports": [
+        {"id": "in-dataset-url", "kind": "port", "name": "General/dataset_url", "direction": "input", "role": "artifact", "required": true, "multiplicity": "single", "accepted_binding_kinds": ["artifact"], "order": 0},
+        {"id": "in-test-size", "kind": "port", "name": "General/test_size", "direction": "input", "role": "parameter", "required": false, "multiplicity": "single", "accepted_binding_kinds": ["parameter"], "order": 1, "default": 0.25}
+      ],
+      "configuration": {"clone_base_task": true, "cache": false},
+      "visual": {"position": {"x": 360, "y": 0}, "dimensions": {"width": 260, "height": 150}}
+    }
+  ],
+  "bindings": [
+    {"id": "bind-artifact-dataset-url", "kind": "artifact", "source": {"kind": "port", "node_id": "stage-data", "port_id": "out-dataset-url"}, "target": {"kind": "port", "node_id": "stage-process", "port_id": "in-dataset-url"}},
+    {"id": "bind-execution-stage-data-stage-process", "kind": "execution-only", "source": {"kind": "node", "node_id": "stage-data"}, "target": {"kind": "node", "node_id": "stage-process"}},
+    {"id": "bind-parameter-dataset-url", "kind": "parameter", "source": {"kind": "parameter", "parameter_id": "dataset-url"}, "target": {"kind": "port", "node_id": "stage-data", "port_id": "in-dataset-url"}}
+  ],
+  "visual": {"viewport": {"x": 0, "y": 0}, "zoom": 1}
+}
