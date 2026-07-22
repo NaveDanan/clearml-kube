@@ -29,7 +29,7 @@ Use one row per task. Keep the **Status** field to one of: `Not started`, `Ready
 | [x] | [CP-23](./cp_23_toolbar-code-preview.md) | 5 | 5 | cp-23-toolbar-preview | Done | 83963aa | Lifecycle toolbar and latest-wins read-only code preview integrated; unavailable compiler source fails closed. |
 | [ ] | [CP-24](./cp_24_task-backed-authoring.md) | 6 | 8 | cp-24-task-authoring | Blocked | 508b921 | Awaiting server task-retry/secret/base-eligibility parity and paginated authorized task inventory; local stale handling returned to owner. |
 | [x] | [CP-25](./cp_25_code-backed-authoring.md) | 6 | 8 | cp-25-function-authoring | Done | 715effc | Constrained function authoring is host-wired with typed persistence, explicit source fallback, and protected bound ports. |
-| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | In progress | copilot/cp-26-final | V2 execution, signed runtime snapshots, and typed adapter polling integrated; execution UI resumed. |
+| [ ] | [CP-26](./cp_26_execution-integration.md) | 6 | 8 | cp-26-execution | Blocked | dfd0e5a | Awaiting route-scope/polling remediation and server-enforced idempotent submission before execution UI can be accepted. |
 | [x] | [CP-27](./cp_27_advanced-editor-operations.md) | 6 | 8 | cp-27-advanced-editor | Done | f9e579b | Advanced history, clipboard, keyboard, selection, and layout operations integrated with atomic restore safety. |
 | [ ] | [CP-28](./cp_28_complete-task-vertical-slice.md) | 7 | 5 |  | Not started |  |  |
 | [ ] | [CP-29](./cp_29_edit-existing-pipelines.md) | 7 | 8 |  | Not started |  |  |
