@@ -124,13 +124,15 @@ export class ClearpipeEditorComponent {
   constructor() {
     this.route.paramMap.subscribe(params => {
       const taskId = params.get('taskId');
-      this.execution.reset();
       if (taskId && taskId !== 'new') this.load(taskId);
       else {
+        this.requestedTaskId = null;
+        this.execution.setRouteContext(null, false);
         this.lifecycle.new();
         this.routeSurface.set('ready');
         this.routeError.set('');
         this.announce('New ClearPipe draft');
+        this.execution.setRouteContext(null, true);
         void this.execution.refresh();
       }
     });
@@ -298,7 +300,7 @@ export class ClearpipeEditorComponent {
 
   protected async saveAndRefresh(): Promise<void> {
     await this.lifecycle.save();
-    await this.execution.refresh();
+    if (this.execution.routeReady()) await this.execution.refresh();
   }
 
   protected openExecutionTask(taskId: string): void {
@@ -315,11 +317,19 @@ export class ClearpipeEditorComponent {
 
   private async load(taskId: string): Promise<void> {
     this.requestedTaskId = taskId;
+    this.execution.setRouteContext(taskId, false);
     this.routeSurface.set('loading');
     this.routeError.set('');
     await this.lifecycle.open(taskId);
+    if (this.requestedTaskId !== taskId) return;
     const status = this.lifecycle.status();
-    if (status === 'read-only') {
+    const identity = this.lifecycle.identity();
+    if (status === 'ready' && identity?.taskId === taskId) {
+      this.routeSurface.set('ready');
+      this.execution.setRouteContext(taskId, true);
+      this.announce(this.readOnly() ? 'ClearPipe definition loaded read-only' : 'ClearPipe definition loaded');
+      await this.execution.refresh();
+    } else if (status === 'read-only') {
       this.routeSurface.set('unsupported');
       this.routeError.set(this.lifecycle.problem()?.message ?? 'This definition is read-only.');
     } else if (status === 'permission-disabled') {
@@ -329,10 +339,10 @@ export class ClearpipeEditorComponent {
       this.routeSurface.set('error');
       this.routeError.set(this.lifecycle.problem()?.message ?? 'ClearPipe could not load this definition.');
     } else {
-      this.routeSurface.set('ready');
-      this.announce(this.readOnly() ? 'ClearPipe definition loaded read-only' : 'ClearPipe definition loaded');
+      this.routeSurface.set('error');
+      this.routeError.set(this.lifecycle.problem()?.message ?? 'ClearPipe could not load this definition.');
     }
-    await this.execution.refresh();
+    this.execution.setRouteContext(taskId, false);
   }
 
   private openDrawer(panel: WorkspacePanel, invoker?: HTMLElement): void {

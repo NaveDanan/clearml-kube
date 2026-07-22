@@ -31,6 +31,8 @@ export type ClearpipeExecutionPreflightReasonCode =
   | 'resource_unavailable'
   | 'generated_output_unavailable'
   | 'runtime_mapping_unavailable'
+  | 'route_not_ready'
+  | 'route_identity_mismatch'
   | 'request_failed';
 
 export interface ClearpipeExecutionPreflightReason {
@@ -66,10 +68,12 @@ export interface ClearpipeExecutionAction {
 }
 
 export interface ClearpipeExecutionRunState {
-  readonly state: 'idle' | 'submitting' | 'submitted' | 'submitted_unwatched' | 'failed';
+  readonly state: 'idle' | 'submitting' | 'reconciling' | 'submitted' | 'submitted_unwatched' | 'failed';
   readonly runTaskId: string | null;
   readonly message: string | null;
   readonly reason?: ClearpipeExecutionPreflightReasonCode;
+  /** Retained until the adapter confirms or reconciles this submission. */
+  readonly idempotencyKey?: string;
 }
 
 export interface ClearpipeExecutionController {
@@ -124,7 +128,7 @@ export interface ClearpipeNodeExecution {
 }
 
 export interface ClearpipeExecutionTracking {
-  readonly state: 'idle' | 'polling' | 'partial' | 'stale' | 'denied' | 'unavailable' | 'failed';
+  readonly state: 'idle' | 'polling' | 'completed' | 'partial' | 'stale' | 'denied' | 'unavailable' | 'failed';
   readonly message: string | null;
   readonly controller: ClearpipeExecutionController | null;
   readonly receivedNodes: number;

@@ -31,11 +31,22 @@ supplies read-only status projections for inspector and node-card consumers;
 runtime associations use the server compiler manifest and snapshot records,
 never source-line parsing.
 
+The editor marks a route runnable only after the requested definition loaded
+successfully and still matches the current lifecycle identity. A failed or
+superseded load cannot validate or submit the prior definition. Snapshot page
+cycles use non-queueing polling and stop after a complete terminal controller
+snapshot.
+
+Transport uncertainty retains a locally generated idempotency key and keeps
+Run in the visible reconciliation state. The CP-14 typed reconciliation call
+is not yet available on this branch, so the key is not sent until that adapter
+handoff lands; the UI deliberately does not retry or re-enable Run meanwhile.
+
 ## Verification
 
 - `npx tsc --noEmit -p tsconfig.clearpipe.spec.json`
 - `npm run test-clearpipe -- --include src/app/features/clearpipe/testing/clearpipe-execution.spec.ts --browsers ChromeHeadless --watch=false`
 - `npm run test-clearpipe -- --include src/app/features/clearpipe/testing/clearpipe-toolbar-code-preview.spec.ts --browsers ChromeHeadless --watch=false`
-- `npm run test-clearpipe -- --browsers ChromeHeadless --watch=false` — 96 specs passed.
+- `npm run test-clearpipe -- --browsers ChromeHeadless --watch=false` — 101 specs passed.
 - `npx eslint src/app/features/clearpipe/editor/execution src/app/features/clearpipe/editor/clearpipe-editor.component.ts src/app/features/clearpipe/editor/clearpipe-toolbar.component.ts src/app/features/clearpipe/editor/clearpipe-toolbar.model.ts src/app/features/clearpipe/testing/clearpipe-execution.spec.ts src/app/features/clearpipe/testing/clearpipe-toolbar-code-preview.spec.ts`
 - `npx ng build`

@@ -54,13 +54,15 @@
     </div>
   </div>
 
-  <sm-clearpipe-execution-results
-    [presentation]="execution.presentation()"
-    (openPipelineRequested)="execution.openPipelineRun()"
-    (openTaskRequested)="openExecutionTask($event)"
-    (openDatasetRequested)="openExecutionDataset($event)"
-    (openModelRequested)="openExecutionModel($event)">
-  </sm-clearpipe-execution-results>
+  @if (execution.routeReady()) {
+    <sm-clearpipe-execution-results
+      [presentation]="execution.presentation()"
+      (openPipelineRequested)="execution.openPipelineRun()"
+      (openTaskRequested)="openExecutionTask($event)"
+      (openDatasetRequested)="openExecutionDataset($event)"
+      (openModelRequested)="openExecutionModel($event)">
+    </sm-clearpipe-execution-results>
+  }
 
   <div class="workspace-regions">
     @if (isNarrow() && activeDrawer()) {

@@ -82,4 +82,6 @@
   </section>
 } @else if (presentation().run.state === 'failed' && presentation().run.message) {
   <p class="execution-error" role="alert">{{ presentation().run.message }}</p>
+} @else if (presentation().run.state === 'reconciling' && presentation().run.message) {
+  <p class="execution-reconciling" role="status">{{ presentation().run.message }}</p>
 }

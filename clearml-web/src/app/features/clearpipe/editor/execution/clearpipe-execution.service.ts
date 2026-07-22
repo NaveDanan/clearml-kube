@@ -1,6 +1,6 @@
 import {computed, DestroyRef, effect, inject, Injectable, signal} from '@angular/core';
-import {firstValueFrom, Observable, of, Subject, Subscription} from 'rxjs';
-import {concatMap, defaultIfEmpty, expand, filter, take, takeUntil} from 'rxjs/operators';
+import {firstValueFrom, Observable, of, Subject, Subscription, timer} from 'rxjs';
+import {defaultIfEmpty, exhaustMap, expand, filter, take, takeUntil} from 'rxjs/operators';
 import {
   ClearpipeExecutionSnapshot,
   ClearpipeExecutionSnapshotRequest,
@@ -33,6 +33,7 @@ import {ClearpipeStatusPresentation} from '../framework/clearpipe-ui.types';
 
 const POLL_INTERVAL_MS = 5000;
 const SNAPSHOT_PAGE_SIZE = 100;
+const terminalControllerStatuses = new Set(['completed', 'failed', 'stopped', 'aborted', 'closed', 'published']);
 
 const idlePreflight = (): ClearpipeExecutionPreflight => ({
   scopeKey: null,
@@ -68,6 +69,7 @@ export class ClearpipeExecutionService {
   private preflightRequest = 0;
   private snapshotRanges = new Map<number, number>();
   private nodeRecords = new Map<string, ClearpipeNodeExecution>();
+  private readonly routeContext = signal<{taskId: string | null; ready: boolean}>({taskId: null, ready: false});
 
   readonly preflight = signal<ClearpipeExecutionPreflight>(idlePreflight());
   readonly run = signal<ClearpipeExecutionRunState>(idleRun());
@@ -84,7 +86,7 @@ export class ClearpipeExecutionService {
     return preflight.state === 'ready'
       && preflight.scopeKey === this.scopeKey()
       && !this.localReasons().length
-      && this.run().state !== 'submitting';
+      && !['submitting', 'reconciling'].includes(this.run().state);
   });
   readonly toolbarAction = computed<ClearpipeExecutionAction>(() => ({
     disabled: !this.canRun(),
@@ -107,6 +109,25 @@ export class ClearpipeExecutionService {
   reset(): void {
     this.resetForScope(this.scopeKey());
   }
+
+  /**
+   * The editor declares a route runnable only after its load has completed for
+   * that exact definition. This prevents a failed or superseded load from
+   * borrowing a prior definition's lifecycle identity.
+   */
+  setRouteContext(taskId: string | null, ready: boolean): void {
+    const next = {taskId, ready};
+    const current = this.routeContext();
+    if (current.taskId === next.taskId && current.ready === next.ready) return;
+    this.routeContext.set(next);
+    this.resetForScope(this.scopeKey());
+  }
+
+  readonly routeReady = computed(() => {
+    const route = this.routeContext();
+    const identity = this.lifecycle.identity();
+    return route.ready && (!route.taskId || route.taskId === identity?.taskId);
+  });
 
   async refresh(): Promise<void> {
     const scopeKey = this.scopeKey();
@@ -159,7 +180,7 @@ export class ClearpipeExecutionService {
   }
 
   async submit(): Promise<void> {
-    if (this.run().state === 'submitting') return;
+    if (this.run().state === 'submitting' || this.run().state === 'reconciling') return;
     if (!this.canRun()) {
       await this.refresh();
       if (!this.canRun()) return;
@@ -172,7 +193,8 @@ export class ClearpipeExecutionService {
     this.nodeRecords.clear();
     this.nodes.set([]);
     this.tracking.set(idleTracking());
-    this.run.set({state: 'submitting', runTaskId: null, message: null});
+    const idempotencyKey = this.newIdempotencyKey();
+    this.run.set({state: 'submitting', runTaskId: null, message: null, idempotencyKey});
     const outcome = await this.finalOutcome(
       this.adapter.submit({
         task: identity.taskId,
@@ -201,6 +223,17 @@ export class ClearpipeExecutionService {
       });
       const evidence = this.preflight().evidence;
       if (evidence) this.startPolling(scopeKey, runTaskId, identity.taskId, identity.revision, evidence.graphDigest);
+      return;
+    }
+
+    if (outcome.status === 'failed') {
+      this.run.set({
+        state: 'reconciling',
+        runTaskId: null,
+        message: 'The submission outcome is uncertain. Reconciliation is required before another run can be submitted.',
+        reason: 'request_failed',
+        idempotencyKey,
+      });
       return;
     }
 
@@ -249,10 +282,8 @@ export class ClearpipeExecutionService {
       node_limit: SNAPSHOT_PAGE_SIZE,
     };
     this.tracking.set({...idleTracking(), state: 'polling', message: 'Retrieving authorized runtime records.'});
-    this.pollSubscription = this.adapter.pollExecutionSnapshot(request, POLL_INTERVAL_MS).pipe(
-      filter((outcome): outcome is Exclude<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>, {status: 'loading'}> =>
-        outcome.status !== 'loading'),
-      concatMap(outcome => this.snapshotPages(outcome, request)),
+    this.pollSubscription = timer(0, POLL_INTERVAL_MS).pipe(
+      exhaustMap(() => this.snapshotPages(request)),
       takeUntil(this.scopeCancelled),
     ).subscribe(outcome => this.consumeSnapshotOutcome(
       scopeKey,
@@ -265,24 +296,29 @@ export class ClearpipeExecutionService {
   }
 
   private snapshotPages(
-    initial: Exclude<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>, {status: 'loading'}>,
     request: ClearpipeExecutionSnapshotRequest,
   ): Observable<Exclude<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>, {status: 'loading'}>> {
-    return of(initial).pipe(
+    return this.snapshotOutcome(request).pipe(
       expand(outcome => {
         if (outcome.status !== 'ready' || outcome.data.status !== 'available' || !outcome.data.snapshot) return of();
         const snapshot = outcome.data.snapshot;
         if (!snapshot.truncated || snapshot.next_node_offset === undefined || snapshot.next_node_offset <= snapshot.node_offset) return of();
-        return this.adapter.executionSnapshot({
+        return this.snapshotOutcome({
           ...request,
           node_offset: snapshot.next_node_offset,
           node_limit: SNAPSHOT_PAGE_SIZE,
-        }).pipe(
-          filter((page): page is Exclude<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>, {status: 'loading'}> =>
-            page.status !== 'loading'),
-          take(1),
-        );
+        });
       }),
+    );
+  }
+
+  private snapshotOutcome(
+    request: ClearpipeExecutionSnapshotRequest,
+  ): Observable<Exclude<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>, {status: 'loading'}>> {
+    return this.adapter.executionSnapshot(request).pipe(
+      filter((outcome): outcome is Exclude<ClearpipeAdapterOutcome<ClearpipeExecutionSnapshotResponse>, {status: 'loading'}> =>
+        outcome.status !== 'loading'),
+      take(1),
     );
   }
 
@@ -324,19 +360,22 @@ export class ClearpipeExecutionService {
       return;
     }
 
-    this.consumeSnapshot(response.snapshot);
+    if (this.consumeSnapshot(response.snapshot)) {
+      this.tracking.update(tracking => ({...tracking, state: 'completed'}));
+      this.stopPolling();
+    }
   }
 
-  private consumeSnapshot(snapshot: ClearpipeExecutionSnapshot): void {
+  private consumeSnapshot(snapshot: ClearpipeExecutionSnapshot): boolean {
     const evidence = this.preflight().evidence;
-    if (!evidence) return;
+    if (!evidence) return false;
     if (snapshot.node_offset === 0) this.snapshotRanges.clear();
     const pageEnd = snapshot.truncated
       ? snapshot.next_node_offset
       : snapshot.node_offset + snapshot.nodes.length;
     if (pageEnd === undefined || pageEnd < snapshot.node_offset || pageEnd > snapshot.total_nodes) {
       this.tracking.set({...this.tracking(), state: 'partial', message: 'Live execution data has an incomplete page boundary.'});
-      return;
+      return false;
     }
     this.snapshotRanges.set(snapshot.node_offset, pageEnd);
 
@@ -363,6 +402,7 @@ export class ClearpipeExecutionService {
       receivedNodes: [...this.snapshotRanges.entries()].reduce((sum, [offset, end]) => sum + end - offset, 0),
       totalNodes: snapshot.total_nodes,
     });
+    return complete && !unmatched && terminalControllerStatuses.has(snapshot.controller.status.toLowerCase());
   }
 
   private pagesCoverSnapshot(totalNodes: number): boolean {
@@ -379,6 +419,14 @@ export class ClearpipeExecutionService {
     const identity = this.lifecycle.identity();
     const capabilities = this.lifecycle.capabilities();
     const reasons: ClearpipeExecutionPreflightReason[] = [];
+    const route = this.routeContext();
+    if (!route.ready) {
+      reasons.push({code: 'route_not_ready', message: 'Wait for this ClearPipe definition to finish loading before running it.'});
+    } else if (route.taskId && route.taskId !== identity?.taskId) {
+      reasons.push({code: 'route_identity_mismatch', message: 'This route no longer matches the loaded ClearPipe definition. Reload it before running.'});
+    } else if (route.taskId && !['ready', 'saved'].includes(this.lifecycle.status())) {
+      reasons.push({code: 'route_not_ready', message: 'This ClearPipe definition did not load successfully. Retry the requested definition before running.'});
+    }
     if (!graph) reasons.push({code: 'no_graph', message: 'There is no supported ClearPipe graph to run.'});
     else if (!graph.nodes.length) reasons.push({code: 'empty_graph', message: 'Add at least one validated ClearPipe node before running.'});
     if (this.lifecycle.readOnly()) reasons.push({code: 'read_only', message: 'This read-only ClearPipe definition cannot be run.'});
@@ -496,5 +544,11 @@ export class ClearpipeExecutionService {
 
   private safeNavigationId(value: string): string | null {
     return /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value) ? value : null;
+  }
+
+  private newIdempotencyKey(): string {
+    return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `clearpipe-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 }
