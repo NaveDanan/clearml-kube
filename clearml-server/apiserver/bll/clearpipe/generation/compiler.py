@@ -648,6 +648,7 @@ def _generation_digest_document(graph: GraphV2) -> str:
         resource.pop("label", None)
     for node in document["nodes"]:
         node.pop("label", None)
+        node.pop("description", None)
         node.pop("visual", None)
     return _canonical_digest_json(document)
 

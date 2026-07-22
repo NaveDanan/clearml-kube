@@ -301,11 +301,17 @@ class FunctionConfiguration:
     task_type: str
     cache: bool = False
     queue_resource_id: Optional[str] = None
+    packages: Tuple[str, ...] = ()
+    retry_on_failure: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         value = {"task_type": self.task_type, "cache": self.cache}
         if self.queue_resource_id is not None:
             value["queue_resource_id"] = self.queue_resource_id
+        if self.packages:
+            value["packages"] = list(self.packages)
+        if self.retry_on_failure is not None:
+            value["retry_on_failure"] = self.retry_on_failure
         return value
 
 
@@ -343,10 +349,11 @@ class FunctionNode:
     ports: Tuple[Port, ...]
     configuration: FunctionConfiguration
     visual: NodeVisual
+    description: Optional[str] = None
     kind: str = field(init=False, default="function")
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        value = {
             "id": self.id,
             "kind": self.kind,
             "name": self.name,
@@ -357,6 +364,9 @@ class FunctionNode:
             "configuration": self.configuration.to_dict(),
             "visual": self.visual.to_dict(),
         }
+        if self.description is not None:
+            value["description"] = self.description
+        return value
 
 
 GraphNode = Union[TaskNode, FunctionNode]
@@ -841,14 +851,42 @@ def _parse_task_configuration(value: Any, path: str) -> TaskConfiguration:
 
 def _parse_function_configuration(value: Any, path: str) -> FunctionConfiguration:
     raw = _mapping(value, path)
-    _known_fields(raw, {"task_type", "cache", "queue_resource_id"}, path)
+    _known_fields(
+        raw,
+        {"task_type", "cache", "queue_resource_id", "packages", "retry_on_failure"},
+        path,
+    )
     queue_resource_id = _optional_string(raw, "queue_resource_id", path)
     if queue_resource_id is not None:
         _stable_id(queue_resource_id, path + ".queue_resource_id")
+    packages = []
+    if "packages" in raw:
+        for index, package in enumerate(_list(raw["packages"], path + ".packages")):
+            package_path = "{}.packages[{}]".format(path, index)
+            if not isinstance(package, str) or not package:
+                raise GraphV2Error(
+                    "invalid_string",
+                    package_path,
+                    "expected a non-empty package string",
+                )
+            if _is_sensitive_url(package) or _SECRET_ASSIGNMENT_PATTERN.search(package):
+                raise GraphV2Error(
+                    "secret_not_allowed",
+                    package_path,
+                    "secret-bearing package is not allowed",
+                )
+            packages.append(package)
+    retry_on_failure = (
+        _required_int(raw, "retry_on_failure", path)
+        if "retry_on_failure" in raw
+        else None
+    )
     return FunctionConfiguration(
         task_type=_generated_name(_required_string(raw, "task_type", path), path + ".task_type"),
         cache=_optional_bool(raw, "cache", path, False),
         queue_resource_id=queue_resource_id,
+        packages=tuple(packages),
+        retry_on_failure=retry_on_failure,
     )
 
 
@@ -876,11 +914,21 @@ def _parse_node(value: Any, index: int) -> GraphNode:
             visual=_parse_visual(raw.get("visual"), path + ".visual"),
         )
     if kind == "function":
-        _known_fields(raw, common | {"signature", "source"}, path)
+        _known_fields(raw, common | {"signature", "source", "description"}, path)
         signature = _required_string(raw, "signature", path)
         source = _required_string(raw, "source", path)
+        description = _optional_string(raw, "description", path)
         if _SECRET_ASSIGNMENT_PATTERN.search(source) or _SECRET_URL_IN_SOURCE_PATTERN.search(source):
             raise GraphV2Error("secret_not_allowed", path + ".source", "secret-bearing source is not allowed")
+        if description is not None and (
+            _SECRET_ASSIGNMENT_PATTERN.search(description)
+            or _SECRET_URL_IN_SOURCE_PATTERN.search(description)
+        ):
+            raise GraphV2Error(
+                "secret_not_allowed",
+                path + ".description",
+                "secret-bearing description is not allowed",
+            )
         return FunctionNode(
             id=node_id,
             name=name,
@@ -890,6 +938,7 @@ def _parse_node(value: Any, index: int) -> GraphNode:
             ports=ports,
             configuration=_parse_function_configuration(raw.get("configuration"), path + ".configuration"),
             visual=_parse_visual(raw.get("visual"), path + ".visual"),
+            description=description,
         )
     raise UnsupportedGraphError("unsupported_node_kind", path + ".kind")
 

@@ -76,6 +76,63 @@ class ClearPipeGraphV2Tests(unittest.TestCase):
         self.assertTrue(second.is_supported)
         self.assertEqual(serialize_graph_v2(first.graph), serialize_graph_v2(second.graph))
 
+    def test_function_description_packages_and_retry_round_trip(self):
+        raw = fixture("function-graph.v2.json")
+        raw["nodes"][0]["description"] = "Normalize a deterministic value."
+        raw["nodes"][0]["configuration"].update(
+            packages=["pandas==2.2.3", "scikit-learn==1.5.2"],
+            retry_on_failure=2,
+        )
+
+        parsed = read_graph_v2(raw)
+
+        self.assertTrue(parsed.is_supported, parsed)
+        function = parsed.graph.nodes[0]
+        self.assertEqual(function.description, "Normalize a deterministic value.")
+        self.assertEqual(
+            function.configuration.packages,
+            ("pandas==2.2.3", "scikit-learn==1.5.2"),
+        )
+        self.assertEqual(function.configuration.retry_on_failure, 2)
+        serialized = serialize_graph_v2(parsed.graph)
+        reparsed = read_graph_v2(serialized)
+        self.assertTrue(reparsed.is_supported, reparsed)
+        self.assertEqual(canonical_graph_dict(reparsed.graph), canonical_graph_dict(parsed.graph))
+
+    def test_function_execution_extensions_reject_invalid_or_secret_values(self):
+        cases = (
+            ("packages-not-array", {"packages": "numpy"}, "invalid", "invalid_type"),
+            ("empty-package", {"packages": [""]}, "invalid", "invalid_string"),
+            (
+                "secret-package",
+                {"packages": ["https://example.test/pkg?token=must-not-persist"]},
+                "invalid",
+                "secret_not_allowed",
+            ),
+            ("negative-retry", {"retry_on_failure": -1}, "invalid", "invalid_integer"),
+            ("fractional-retry", {"retry_on_failure": 1.5}, "invalid", "invalid_integer"),
+            ("unknown-config", {"unknown": True}, "unsupported", "unsupported_field"),
+        )
+        for name, extension, status, code in cases:
+            with self.subTest(name=name):
+                raw = fixture("function-graph.v2.json")
+                raw["nodes"][0]["configuration"].update(extension)
+
+                result = read_graph_v2(raw)
+
+                self.assertEqual(result.status, status)
+                if status == "invalid":
+                    self.assertEqual(result.errors[0].code, code)
+                else:
+                    self.assertEqual(result.unsupported.reason, code)
+
+        raw = fixture("function-graph.v2.json")
+        raw["nodes"][0]["description"] = "token=must-not-persist"
+        secret_description = read_graph_v2(raw)
+        self.assertEqual(secret_description.status, "invalid")
+        self.assertEqual(secret_description.errors[0].code, "secret_not_allowed")
+        self.assertNotIn("must-not-persist", json.dumps([issue.to_dict() for issue in secret_description.errors]))
+
     def test_invalid_secret_fixture_never_echoes_the_secret(self):
         result = read_graph_v2(fixture("invalid-secret-graph.v2.json"))
         self.assertEqual(result.status, "invalid")

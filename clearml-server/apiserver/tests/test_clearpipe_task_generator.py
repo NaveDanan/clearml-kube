@@ -265,6 +265,39 @@ class ClearPipeTaskGeneratorTests(unittest.TestCase):
         )
         self.assertEqual(generated.manifest.node_ids, ("normalize", "format-result"))
 
+    def test_canonical_function_packages_and_retry_reach_the_compiled_step(self):
+        fixture = graph_fixture("function-graph.v2.json")
+        fixture["nodes"][0]["description"] = "Normalize a value."
+        fixture["nodes"][0]["configuration"].update(
+            packages=["pandas==2.2.3"],
+            retry_on_failure=2,
+        )
+
+        generated = compile_graph(
+            read_graph_v2(fixture).graph,
+            lowerers={"function": lower_function_node},
+        )
+
+        self.assertIn('packages=["pandas==2.2.3"]', generated.source)
+        self.assertIn("retry_on_failure=2", generated.source)
+
+    def test_function_description_does_not_change_generated_source_or_digest(self):
+        original = graph_fixture("function-graph.v2.json")
+        described = deepcopy(original)
+        described["nodes"][0]["description"] = "Normalize a deterministic value."
+
+        first = compile_graph(
+            read_graph_v2(original).graph,
+            lowerers={"function": lower_function_node},
+        )
+        second = compile_graph(
+            read_graph_v2(described).graph,
+            lowerers={"function": lower_function_node},
+        )
+
+        self.assertEqual(first.source, second.source)
+        self.assertEqual(first.manifest.graph_digest, second.manifest.graph_digest)
+
     def test_generator_owned_identifiers_are_rejected_before_source_is_rendered(self):
         fixture = graph_fixture("function-graph.v2.json")
         fixture["nodes"] = [fixture["nodes"][0]]
