@@ -133,7 +133,8 @@ define graph, endpoint, or UX semantics owned by CP-06, CP-07, or CP-08.
 | `clearml-web\src\app\features\clearpipe\testing\clearpipe-fixtures.ts` | Browser-side structural fixtures and invalid-case recipes | Test-only; imports CP-06 graph types but no application services. |
 | `clearml-web\src\app\features\clearpipe\testing\clearpipe-adapter.fake.ts` | Deterministic CP-07-shaped adapter boundary fake | Test-only; CP-14 must not import it. |
 | `clearml-web\src\app\features\clearpipe\testing\clearpipe-harness.spec.ts` | Focused browser harness smoke coverage | Test-only. |
-| `clearml-web\tsconfig.clearpipe.spec.json`, `karma.clearpipe.conf.js`, and `angular.json` target `test-clearpipe` | Isolated ClearPipe browser test target | Adds no global bootstrap or `/pipelines` test change. |
+| `clearml-web\tsconfig.clearpipe.spec.json`, `karma.clearpipe.conf.js`, and `angular.json` target `test-clearpipe` | Isolated ClearPipe harness browser test target | Runs only test-support specs without changing the global test bootstrap. |
+| `clearml-web\src\app\features\clearpipe\testing\tsconfig.pipelines-regression.spec.json` and `angular.json` target `test-pipelines-regression` | Isolated existing `/pipelines` browser regression | Test-only target for the existing pipeline-card menu spec. |
 
 The factories bind to CP-06's merged repository-native v2 contract: server
 builders load its shared canonical JSON documents and browser builders use its
@@ -280,8 +281,8 @@ not install a replacement framework or add a second runner.
 | CP-09 Python smoke | `$env:PYTHONPATH = (Get-Location).Path; py -3 -m unittest apiserver.tests.clearpipe.test_harness` from `clearml-server` | Required; exercises CP-06-valid fixture determinism and both CP-03 AST golden assertions. |
 | Existing server ClearPipe tests | `$env:PYTHONPATH = (Get-Location).Path; py -3 -m unittest apiserver.tests.test_clearpipe apiserver.tests.test_clearpipe_service` from `clearml-server` | Required after a server-facing ClearPipe change. |
 | Schema registration | `$env:PYTHONPATH = (Get-Location).Path; py -3 apiserver\tests\verify_clearpipe_schema.py` from `clearml-server` | Required for CP-07 schema changes. |
-| Focused browser harness | `npm run test-clearpipe` from `clearml-web` | Required; runs only ClearPipe specs through the dedicated target. |
-| Existing `/pipelines` regression | `npm test -- --include="src/app/webapp-common/pipelines-controller/**/*.spec.ts" --watch=false --browsers=ChromeHeadless` from `clearml-web` | Required before modifying global web test wiring or `/pipelines` integration. |
+| Focused browser harness | `npm run test-clearpipe` from `clearml-web` | Required; runs only ClearPipe test-support specs through the dedicated target. |
+| Existing `/pipelines` regression | `npm run test-pipelines-regression` from `clearml-web` | Required before modifying global web test wiring or `/pipelines` integration. |
 | Web lint | `npm run lint -- --lint-file-patterns "src/app/features/clearpipe/**/*.ts"` from `clearml-web` | Required for changed browser harness scope. |
 | Production build | `npm run build` from `clearml-web` | Required when a browser production consumer changes; CP-09 test-only work does not make a build pass claim. |
 
@@ -309,30 +310,20 @@ evidence, and record every blocked environment prerequisite.
 
 ### CP-09 focused verification record
 
-* **Dependencies restored without manifest changes:** `npm ci` completed from
-  `clearml-web` (980 packages). A local `clearml-server\.venv-cp09` was
-  provisioned with `apiserver\requirements.txt` and
-  `apiserver\tests\requirements.txt`, matching the server image's requirement
-  installation mechanism.
-* **Passed:** with `PYTHONPATH` set to `clearml-server`, the local venv command
-  `python -m unittest apiserver.tests.clearpipe.test_harness
-  apiserver.tests.test_clearpipe` ran 23 tests successfully.
+* **Dependencies restored:** `npm ci --no-audit --no-fund` completed from
+  `clearml-web` (1076 packages), including the locked Angular-compatible
+  Jasmine/Karma dependencies.
+* **Passed:** with `PYTHONPATH` set to `clearml-server`, `py -3 -m unittest
+  apiserver.tests.clearpipe.test_harness` ran 3 tests; `py -3
+  apiserver\tests\verify_clearpipe_schema.py` reported `clearpipe-schema: OK`;
+  and `py -3 -m unittest apiserver.tests.test_clearpipe
+  apiserver.tests.test_clearpipe_service` ran 29 tests.
+* **Passed:** `npm run test-clearpipe` ran 3 focused test-support specs in
+  ChromeHeadless. `npm run test-pipelines-regression` ran the existing
+  pipeline-card-menu regression in ChromeHeadless (1 test).
 * **Passed:** `npx tsc --noEmit -p tsconfig.clearpipe.spec.json` and
   `npm run lint -- --lint-file-patterns
   "src/app/features/clearpipe/**/*.ts"` from `clearml-web`. The lint run
   emits the repository's existing `.eslintignore` deprecation warning only.
-* **Blocked:** the installed web tree contains none of `karma`,
-  `karma-jasmine`, `karma-chrome-launcher`, or
-  `karma-coverage-istanbul-reporter`: none is in `package.json` or
-  `package-lock.json`. Consequently `npm run test-clearpipe` and the narrow
-  `/pipelines` command both stop at `Cannot find module 'karma'` in
-  `@angular/build` before collecting tests. CP-09 must not add these missing
-  dependencies without a separate manifest-owner change.
-* **Blocked:** the installed server service and schema commands reach
-  `winfcntl` on Windows/Python 3.14 and fail in the pre-existing
-  `apierrors_generator` path with
-  `TypeError: '_io.TextIOWrapper' object cannot be interpreted as an integer`.
-  This prevents `test_clearpipe_service` collection and
-  `verify_clearpipe_schema.py` before their assertions run.
-* **Passed static checks:** `node --check clearml-web\karma.clearpipe.conf.js`,
+* **Passed static checks:** `node --check karma.clearpipe.conf.js`,
   test-target isolation/JSON parsing, and `git diff --check`.

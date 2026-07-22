@@ -40,7 +40,7 @@ class FixtureHarnessTests(unittest.TestCase):
         self.assertEqual(
             {scenario.name: read_graph_v2(scenario.document).status for scenario in invalid_graphs()},
             {
-                "cycle": "ok",
+                "cycle": "invalid",
                 "duplicate-node-name": "invalid",
                 "embedded-secret": "invalid",
                 "unknown-port": "invalid",
