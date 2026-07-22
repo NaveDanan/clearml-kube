@@ -1,0 +1,18 @@
+{
+  "request": {
+    "task": "definition-1",
+    "revision": 4,
+    "queue": "queue-1",
+    "parameters": {
+      "epochs": 5
+    },
+    "verify_watched_queue": true
+  },
+  "response": {
+    "task": "run-1",
+    "enqueued": true,
+    "queue_watched": false
+  },
+  "adapter_outcome": "submission_succeeded_unwatched",
+  "navigation_target": "pipeline-details"
+}

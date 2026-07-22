@@ -1,0 +1,33 @@
+{
+  "response": {
+    "definition": {
+      "id": "legacy-1",
+      "name": "Legacy pipeline",
+      "revision": 7,
+      "graph": {
+        "schema_version": 1
+      },
+      "representation": "legacy_clearpipe_graph",
+      "capabilities": {
+        "view": true,
+        "edit": true,
+        "save_as": true,
+        "version": false,
+        "run": true,
+        "import": true,
+        "export": true,
+        "source": false,
+        "archive": true,
+        "delete": true
+      }
+    }
+  },
+  "adapter_policy": {
+    "read_only": true,
+    "allow_export": true,
+    "allow_navigation": true,
+    "allow_edit": false,
+    "allow_run": false,
+    "allow_auto_migration": false
+  }
+}

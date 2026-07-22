@@ -1,0 +1,42 @@
+{
+  "request": {
+    "name": "Contract pipeline",
+    "description": "Opaque v2 envelope fixture",
+    "graph": {
+      "schema_version": 2
+    },
+    "tags": [
+      "pipeline",
+      "clearpipe"
+    ],
+    "public": false
+  },
+  "response": {
+    "id": "definition-1",
+    "revision": 1,
+    "definition": {
+      "id": "definition-1",
+      "name": "Contract pipeline",
+      "description": "Opaque v2 envelope fixture",
+      "revision": 1,
+      "graph": {
+        "schema_version": 2
+      },
+      "archived": false,
+      "public": false,
+      "representation": "clearpipe_graph_v2",
+      "capabilities": {
+        "view": true,
+        "edit": true,
+        "save_as": true,
+        "version": false,
+        "run": true,
+        "import": true,
+        "export": true,
+        "source": false,
+        "archive": true,
+        "delete": true
+      }
+    }
+  }
+}

@@ -9,6 +9,23 @@ There is no ClearPipe database, web server, secret store, or deployment. The
 top-level `clearpipe-main` directory is a non-canonical UI/behavior reference
 only and must not be deployed in supported environments.
 
+## Browser integration contract
+
+Browser code uses the existing authenticated `clearpipe.*` service only through
+the ClearPipe platform adapter. Its typed v2.35 request/response envelopes,
+CAS revision handling, capability flags, paging, error outcomes, legacy
+read-only policy, resource-selector boundary, and `/pipelines` handoff are
+specified in
+[`clearpipe-task-plan/CP-07_BACKEND_INTEGRATION_CONTRACT.md`](../../clearpipe-task-plan/CP-07_BACKEND_INTEGRATION_CONTRACT.md).
+`/pipelines` remains the controller/run monitoring and rerun surface; it is
+not a visual-definition persistence API.
+
+The `clearpipeEnabled` web flag only controls guarded navigation visibility.
+It is not authorization. Existing server company/public checks and server-side
+secret rejection remain authoritative. Unsupported or legacy graph
+representations must be shown read-only until their CP-06/CP-29 migration
+contract is available.
+
 ## Packaging
 
 The standard, local, and air-gapped server Dockerfiles copy the complete
@@ -21,4 +38,3 @@ resolves them with its configured Python/package mirrors, so air-gapped Agents
 must make the declared `clearml` SDK and any optional node tool packages
 available in their existing mirror configuration. Credentials stay in Agent
 configuration/environment and must never be placed in a graph.
-
