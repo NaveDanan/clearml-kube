@@ -1,8 +1,7 @@
 from mongoengine import StringField, DateTimeField, ListField
 
 from apiserver.database import Database, strict
-from apiserver.database.model import DbModelMixin
-from apiserver.database.model.base import AttributedDocument
+from apiserver.database.model import DbModelMixin, AttributedDocument
 
 
 class NotificationChannel:
