@@ -2,7 +2,7 @@ import {signal} from '@angular/core';
 import {ComponentFixture, fakeAsync, flushMicrotasks, TestBed} from '@angular/core/testing';
 import {ActivatedRoute, convertToParamMap, Router} from '@angular/router';
 import {Store} from '@ngrx/store';
-import {BehaviorSubject, of, Subject} from 'rxjs';
+import {BehaviorSubject, Observable, of, Subject} from 'rxjs';
 import {ConfigurationService} from '@common/shared/services/configuration.service';
 import {SmApiRequestsService} from '~/business-logic/api-services/api-requests.service';
 import {ClearpipeApiService} from '../clearpipe-api.service';
@@ -156,6 +156,17 @@ describe('CP-30 accessibility and performance hardening', () => {
       formFor: () => undefined,
     } as unknown as ClearpipeExtensionRegistry;
     const transport = new ClearpipeTaskVerticalSliceTransport();
+    const post = <T>(url: string, body: unknown): Observable<T> => {
+      if (url.endsWith('/projects.get_all')) {
+        expect(body).toEqual({
+          page: 0,
+          page_size: 500,
+          only_fields: ['id', 'name'],
+        });
+        return of({projects: []} as T);
+      }
+      return transport.post<T>(url, body);
+    };
     const router = jasmine.createSpyObj<Router>('Router', ['navigate', 'createUrlTree', 'serializeUrl'], {events: new Subject()});
     router.navigate.and.resolveTo(true);
     router.createUrlTree.and.returnValue({} as never);
@@ -174,7 +185,7 @@ describe('CP-30 accessibility and performance hardening', () => {
         {provide: ClearpipeExtensionRegistry, useValue: extensions},
         ClearpipeApiService,
         ClearpipeAdapterService,
-        {provide: SmApiRequestsService, useValue: {post: transport.post.bind(transport)}},
+        {provide: SmApiRequestsService, useValue: {post}},
         {provide: Store, useValue: {select: () => of({id: 'cp30-accessibility-user'})}},
         {provide: ConfigurationService, useValue: {configuration: () => ({clearpipeEnabled: true})}},
         {provide: ClearpipeDocumentTransferService, useValue: {
