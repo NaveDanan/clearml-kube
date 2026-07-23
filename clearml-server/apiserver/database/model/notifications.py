@@ -1,7 +1,7 @@
 from mongoengine import StringField, DateTimeField, ListField
 
 from apiserver.database import Database, strict
-from apiserver.database.model import DbModelMixin, AttributedDocument
+from apiserver.database.model import AttributedDocument
 
 
 class NotificationChannel:
@@ -21,7 +21,7 @@ TERMINAL_TASK_STATUSES = frozenset(
 )
 
 
-class NotificationSubscription(DbModelMixin, AttributedDocument):
+class NotificationSubscription(AttributedDocument):
     """
     A user's request to be notified (currently by email) when a given entity
     reaches one of the subscribed events (e.g. a task/pipeline/dataset/report
