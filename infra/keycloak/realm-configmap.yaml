@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-clearml
+  namespace: clearml-tools
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/part-of: clearml-tools
+data:
+  # Imported by Keycloak on start-dev via --import-realm. Realm/client/user are
+  # pre-seeded for testing the ClearML OIDC SSO login through oauth2-proxy.
+  clearml-realm.json: |
+    {
+      "realm": "clearml",
+      "enabled": true,
+      "sslRequired": "none",
+      "loginTheme": "keycloak",
+      "clients": [
+        {
+          "clientId": "clearml",
+          "name": "ClearML",
+          "enabled": true,
+          "protocol": "openid-connect",
+          "publicClient": false,
+          "secret": "clearml-oidc-secret",
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "redirectUris": [
+            "http://clearml.clearml.local/oauth2/callback"
+          ],
+          "webOrigins": [
+            "http://clearml.clearml.local"
+          ]
+        }
+      ],
+      "users": [
+        {
+          "username": "tester",
+          "enabled": true,
+          "email": "tester@clearml.local",
+          "emailVerified": true,
+          "firstName": "Test",
+          "lastName": "User",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "tester",
+              "temporary": false
+            }
+          ]
+        }
+      ]
+    }

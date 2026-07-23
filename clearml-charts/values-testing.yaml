@@ -44,8 +44,65 @@ clearml:
   clientConfigurationApiUrl: "/api"
   clientConfigurationFilesUrl: "/files"
 
+# OIDC SSO login through the oauth2-proxy front door, backed by the Keycloak
+# instance deployed by the "keycloak" ArgoCD app (namespace clearml-tools).
+# Requires the minikube ingress addon and /etc/hosts entries pointing
+# clearml.clearml.local and keycloak.clearml.local at the ingress (127.0.0.1
+# when using `minikube tunnel`).
+auth:
+  mode: "oidc"
+  fixedUsers:
+    # apiserver.conf fixed users are plaintext test creds (see clearml-auth-secrets).
+    passHashed: false
+  oidc:
+    enabled: true
+    displayName: "Keycloak"
+    issuerUrl: "http://keycloak.clearml.local/realms/clearml"
+    clientId: "clearml"
+    scopes: "openid profile email"
+    redirectUrl: "http://clearml.clearml.local/oauth2/callback"
+    existingSecret: "clearml-oidc"
+    sessionBridge:
+      enabled: true
+      usernameClaim: "email"
+      passwordKey: "basic-auth-password"
+
+oauth2Proxy:
+  provider: "keycloak-oidc"
+  emailDomains: "*"
+  # Split-horizon OIDC: the browser hits Keycloak via the ingress hostname while
+  # oauth2-proxy redeems tokens / fetches JWKS over in-cluster service DNS. Skip
+  # discovery and pin the endpoints so the token issuer stays consistent.
+  extraArgs:
+    cookie-secure: "false"
+    skip-oidc-discovery: "true"
+    login-url: "http://keycloak.clearml.local/realms/clearml/protocol/openid-connect/auth"
+    redeem-url: "http://keycloak.clearml-tools.svc.cluster.local:8080/realms/clearml/protocol/openid-connect/token"
+    oidc-jwks-url: "http://keycloak.clearml-tools.svc.cluster.local:8080/realms/clearml/protocol/openid-connect/certs"
+    whitelist-domain: "keycloak.clearml.local"
+  ingress:
+    enabled: true
+    ingressClassName: "nginx"
+    hostName: "clearml.clearml.local"
+    path: "/"
+
+# Outgoing SMTP routed to the Mailpit test sink deployed by the "mailpit"
+# ArgoCD app (namespace clearml-tools). Captured mail is viewable at
+# http://mailpit.clearml.local.
+email:
+  enabled: true
+  smtpServer: "mailpit.clearml-tools.svc.cluster.local"
+  smtpPort: 1025
+  useTls: false
+  useSsl: false
+  sender: "clearml@clearml.local"
+  senderName: "ClearML"
+
 apiserver:
   enabled: true
+  # Fixed-users override (auth.fixed_users block) used by the OIDC session
+  # bridge. Provided by the clearml-auth-secrets ArgoCD app.
+  existingAdditionalConfigsSecret: clearml-fixed-users
   image:
     registry: ""
     repository: "clearml/clearml"
