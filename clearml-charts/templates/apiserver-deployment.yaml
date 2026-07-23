@@ -158,8 +158,12 @@ spec:
           # Outgoing SMTP for user notifications (task/pipeline/dataset/report done).
           - name: CLEARML__apiserver__email__enabled
             value: "true"
+          # Free-text values are wrapped in HOCON quotes (double `quote`) so the
+          # apiserver env-config parser accepts characters like '@' and spaces
+          # (e.g. an email sender address). Without this the apiserver crashes on
+          # startup with a pyhocon ParseException.
           - name: CLEARML__apiserver__email__smtp_server
-            value: {{ .Values.email.smtpServer | quote }}
+            value: {{ .Values.email.smtpServer | quote | quote }}
           - name: CLEARML__apiserver__email__smtp_port
             value: {{ .Values.email.smtpPort | quote }}
           - name: CLEARML__apiserver__email__use_tls
@@ -167,12 +171,12 @@ spec:
           - name: CLEARML__apiserver__email__use_ssl
             value: {{ .Values.email.useSsl | quote }}
           - name: CLEARML__apiserver__email__sender
-            value: {{ .Values.email.sender | quote }}
+            value: {{ .Values.email.sender | quote | quote }}
           - name: CLEARML__apiserver__email__sender_name
-            value: {{ .Values.email.senderName | quote }}
+            value: {{ .Values.email.senderName | quote | quote }}
           {{- if .Values.email.username }}
           - name: CLEARML__apiserver__email__username
-            value: {{ .Values.email.username | quote }}
+            value: {{ .Values.email.username | quote | quote }}
           {{- end }}
           {{- if .Values.email.existingSecret }}
           - name: CLEARML__apiserver__email__password
