@@ -1,7 +1,11 @@
 import {signal} from '@angular/core';
 import {ComponentFixture, fakeAsync, flushMicrotasks, TestBed} from '@angular/core/testing';
 import {ActivatedRoute, convertToParamMap, Router} from '@angular/router';
+import {Store} from '@ngrx/store';
 import {BehaviorSubject, of, Subject} from 'rxjs';
+import {ConfigurationService} from '@common/shared/services/configuration.service';
+import {SmApiRequestsService} from '~/business-logic/api-services/api-requests.service';
+import {ClearpipeApiService} from '../clearpipe-api.service';
 import {ClearpipeAdapterService} from '../platform/clearpipe-adapter.service';
 import {ClearpipeCanvasComponent} from '../editor/clearpipe-canvas.component';
 import {CanvasProfiler} from '../editor/clearpipe-canvas.adapter';
@@ -17,6 +21,7 @@ import {ClearpipeFunctionAuthoringService} from '../editor/function-authoring/fu
 import {createEmptyGraphV2, GraphStoreService} from '../domain/graph-store.service';
 import {GraphV2} from '../domain/graph-v2.types';
 import {functionGraph} from './clearpipe-fixtures';
+import {ClearpipeTaskVerticalSliceTransport} from './clearpipe-task-vertical-slice.fixture';
 
 const representativeGraph = (): GraphV2 => {
   const graph = createEmptyGraphV2({name: 'cp30-representative-graph'});
@@ -150,7 +155,7 @@ describe('CP-30 accessibility and performance hardening', () => {
       get: () => undefined,
       formFor: () => undefined,
     } as unknown as ClearpipeExtensionRegistry;
-    const adapter = jasmine.createSpyObj<ClearpipeAdapterService>('ClearpipeAdapterService', ['validate']);
+    const transport = new ClearpipeTaskVerticalSliceTransport();
     const router = jasmine.createSpyObj<Router>('Router', ['navigate', 'createUrlTree', 'serializeUrl'], {events: new Subject()});
     router.navigate.and.resolveTo(true);
     router.createUrlTree.and.returnValue({} as never);
@@ -167,7 +172,11 @@ describe('CP-30 accessibility and performance hardening', () => {
         {provide: ClearpipeLifecycleService, useValue: lifecycle},
         {provide: ClearpipeExecutionService, useValue: execution},
         {provide: ClearpipeExtensionRegistry, useValue: extensions},
-        {provide: ClearpipeAdapterService, useValue: adapter},
+        ClearpipeApiService,
+        ClearpipeAdapterService,
+        {provide: SmApiRequestsService, useValue: {post: transport.post.bind(transport)}},
+        {provide: Store, useValue: {select: () => of({id: 'cp30-accessibility-user'})}},
+        {provide: ConfigurationService, useValue: {configuration: () => ({clearpipeEnabled: true})}},
         {provide: ClearpipeDocumentTransferService, useValue: {
           downloadGraph: () => ({status: 'exported'}),
           importGraph: async () => ({status: 'imported'}),
