@@ -1,4 +1,4 @@
-<form class="clearpipe-function-form" [formGroup]="createForm" (ngSubmit)="create()">
+<form class="clearpipe-function-form" [formGroup]="createForm" (ngSubmit)="create()" [attr.aria-describedby]="error() ? 'clearpipe-function-create-error' : null">
   <p class="clearpipe-function-form__notice">Define an explicit constrained function. ClearPipe does not execute or infer from this source.</p>
   <mat-form-field appearance="outline"><mat-label>Function name</mat-label><input matInput formControlName="name" required></mat-form-field>
   <mat-form-field appearance="outline"><mat-label>Component name</mat-label><input matInput formControlName="label" required></mat-form-field>
@@ -20,6 +20,6 @@
       <fieldset [formGroupName]="index"><input aria-label="Output ID" formControlName="id"><input aria-label="Return name" formControlName="name"><select aria-label="Output type" formControlName="type"><option value="data">Data</option><option value="artifact">Artifact</option></select><button type="button" (click)="removeOutput(index)" [disabled]="createForm.controls.outputs.length === 1">Remove</button></fieldset>
     } <button type="button" (click)="addOutput()">Add output</button>
   </section>
-  @if (error(); as message) { <p class="clearpipe-function-form__error" role="alert">{{ message }}</p> }
+  @if (error(); as message) { <p id="clearpipe-function-create-error" class="clearpipe-function-form__error" role="alert">{{ message }}</p> }
   <button mat-flat-button type="submit">Create function component</button>
 </form>

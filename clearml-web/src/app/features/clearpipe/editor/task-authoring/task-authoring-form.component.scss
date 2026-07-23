@@ -20,4 +20,9 @@
   &__error {
     color: var(--color-error, #b00020);
   }
+
+  :is(button, input, textarea, select):focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
 }
