@@ -63,3 +63,19 @@ export const FUNCTION_AUTHORING_TASK_TYPES = [
   'qc',
   'custom',
 ] as const;
+
+/**
+ * Optional preset applied when a specific task-type catalog node opens the create flow.
+ * It only pre-fills authored values; nothing is inspected, evaluated, or synthesized.
+ */
+export interface ClearpipeFunctionAuthoringCreateData {
+  readonly taskType?: string;
+  readonly name?: string;
+  readonly label?: string;
+  readonly description?: string;
+  readonly signature?: string;
+  readonly source?: string;
+  readonly cache?: boolean;
+  readonly inputs?: readonly {readonly id: string; readonly name: string; readonly type: 'data' | 'artifact' | 'parameter'; readonly required?: boolean}[];
+  readonly outputs?: readonly {readonly id: string; readonly name: string; readonly type: 'data' | 'artifact'}[];
+}

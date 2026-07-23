@@ -66,16 +66,28 @@
             @if (nodeTemplate(); as renderer) {
               <ng-container [ngTemplateOutlet]="renderer" [ngTemplateOutletContext]="nodeContext(view)"></ng-container>
             } @else {
-              <div class="canvas-node-fallback">
-                <strong>{{ view.node.label }}</strong>
+              <div class="canvas-node-fallback" [attr.data-kind]="view.node.kind">
+                <span class="canvas-node-fallback__handle canvas-node-fallback__handle--in" aria-hidden="true"></span>
+                <span class="canvas-node-fallback__handle canvas-node-fallback__handle--out" aria-hidden="true"></span>
+                <header class="canvas-node-fallback__header">
+                  <span class="canvas-node-fallback__icon" aria-hidden="true">
+                    <mat-icon fontSet="al" [fontIcon]="view.node.kind === 'function' ? 'al-ico-code' : 'al-ico-experiments'"></mat-icon>
+                  </span>
+                  <span class="canvas-node-fallback__title">
+                    <small>{{ view.node.kind }}</small>
+                    <strong>{{ view.node.label }}</strong>
+                  </span>
+                </header>
                 <div class="canvas-node-ports" aria-label="Semantic ports">
                   @for (port of view.node.ports; track port.id) {
                     <button type="button"
                             class="canvas-node-port"
+                            [attr.data-direction]="port.direction"
                             [class.canvas-node-port--selected]="selectedSourcePort()?.node_id === view.node.id && selectedSourcePort()?.port_id === port.id"
                             [attr.aria-label]="portAriaLabel(view.node.id, port)"
                             (click)="activatePort($event, view.node.id, port.id)">
-                      {{ port.direction === 'output' ? 'Output' : 'Input' }}: {{ port.name }}
+                      <span class="canvas-node-port__dir">{{ port.direction === 'output' ? 'OUT' : 'IN' }}</span>
+                      <span class="canvas-node-port__name">{{ port.name }}</span>
                     </button>
                   }
                 </div>
@@ -106,37 +118,37 @@
         <mat-icon fontSet="al" fontIcon="al-ico-zoom-to-fit"></mat-icon>
       </button>
       <button mat-icon-button type="button" (click)="resetViewport($event)" [disabled]="!canEdit()" aria-label="Reset viewport">
-        <mat-icon>center_focus_strong</mat-icon>
+        <mat-icon fontSet="al" fontIcon="al-ico-fit"></mat-icon>
       </button>
       <button mat-icon-button type="button" (click)="toggleGrid($event)" [attr.aria-pressed]="gridVisible()" aria-label="Toggle canvas grid">
-        <mat-icon>grid_on</mat-icon>
+        <mat-icon fontSet="al" fontIcon="al-ico-grid-view"></mat-icon>
       </button>
       <button mat-icon-button type="button" (click)="toggleSnap($event)" [attr.aria-pressed]="snapEnabled()" aria-label="Toggle snap to grid">
-        <mat-icon>apps</mat-icon>
+        <mat-icon fontSet="al" fontIcon="al-ico-dots"></mat-icon>
       </button>
       <button mat-icon-button type="button" (click)="advanced.undo()" [disabled]="!canEdit() || !advanced.canUndo()" aria-label="Undo">
-        <mat-icon>undo</mat-icon>
+        <mat-icon fontSet="al" fontIcon="al-ico-undo"></mat-icon>
       </button>
       <button mat-icon-button type="button" (click)="advanced.redo()" [disabled]="!canEdit() || !advanced.canRedo()" aria-label="Redo">
-        <mat-icon>redo</mat-icon>
+        <mat-icon fontSet="al" fontIcon="al-ico-redo"></mat-icon>
       </button>
       <button mat-icon-button type="button" (click)="advanced.layout()" [disabled]="!canEdit() || !nodes().length" aria-label="Arrange graph">
-        <mat-icon>account_tree</mat-icon>
+        <mat-icon fontSet="al" fontIcon="al-ico-tree-view"></mat-icon>
       </button>
       @if (selectedNodeIds().length) {
         <button mat-icon-button type="button" (click)="advanced.duplicate()" [disabled]="!canEdit()" aria-label="Duplicate selected nodes">
-          <mat-icon>content_copy</mat-icon>
+          <mat-icon fontSet="al" fontIcon="al-ico-clone"></mat-icon>
         </button>
         <button mat-icon-button type="button" (click)="deleteSelectedNode($event)" [disabled]="!canEdit()" aria-label="Delete selected nodes">
-          <mat-icon>delete</mat-icon>
+          <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
         </button>
       }
       @if (selectedBinding()) {
         <button mat-icon-button type="button" (click)="beginReconnectSelectedBinding($event)" [disabled]="!canEdit()" aria-label="Reconnect selected binding">
-          <mat-icon>sync_alt</mat-icon>
+          <mat-icon fontSet="al" fontIcon="al-ico-connect"></mat-icon>
         </button>
         <button mat-icon-button type="button" (click)="removeSelectedBinding($event)" [disabled]="!canEdit()" aria-label="Delete selected binding">
-          <mat-icon>delete</mat-icon>
+          <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
         </button>
       }
     </div>

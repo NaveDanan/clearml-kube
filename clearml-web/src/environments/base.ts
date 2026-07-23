@@ -23,6 +23,21 @@ export interface InterfaceCustomizations {
   clonePrefix: string;
 }
 
+export interface SsoProvider {
+  /** Stable identifier for the provider (e.g. "keycloak"). */
+  name: string;
+  /** Button label shown to the user. Falls back to `name`. */
+  displayName?: string;
+  /**
+   * URL the browser is redirected to in order to start the SSO flow.
+   * For the reverse-proxy (oauth2-proxy) setup this is the proxy sign-in
+   * entrypoint, e.g. "/oauth2/start".
+   */
+  url: string;
+  /** Optional ClearML icon class rendered before the label (e.g. "al-ico-lock"). */
+  icon?: string;
+}
+
 export interface Environment {
   production: boolean;
   apiBaseUrl: string;
@@ -74,6 +89,18 @@ export interface Environment {
   interfaceCustomization?: InterfaceCustomizations| undefined;
   /** Enables the native ClearPipe definition library and editor. Defaults to true. */
   clearpipeEnabled?: boolean;
+  /**
+   * External OIDC/SSO providers surfaced as "Log in with ..." buttons on the
+   * login page. Delivered through configuration.json (see Helm auth.oidc).
+   * When empty or omitted, no SSO button is shown.
+   */
+  ssoProviders?: SsoProvider[];
+  /**
+   * When true, the UI surfaces email-notification controls (e.g. "Email me when
+   * this finishes"). Set from configuration.json; mirrors the apiserver SMTP
+   * (apiserver.email.enabled) capability. Defaults to false.
+   */
+  emailNotificationsEnabled?: boolean;
 }
 
 export const BASE_ENV = {

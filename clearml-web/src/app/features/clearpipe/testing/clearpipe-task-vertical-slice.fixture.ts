@@ -120,6 +120,12 @@ export class ClearpipeTaskVerticalSliceTransport {
   }
 
   post<T>(url: string, body: unknown): Observable<T> {
+    if (!url.includes('clearpipe.')) {
+      // Non-clearpipe resource lookups (e.g. queues.get_all used by the pipeline
+      // settings panel) are not exercised by this slice; return an empty list so
+      // editor-mounted panels can initialize without a transport error.
+      return of([] as T);
+    }
     const action = url.split('clearpipe.')[1] ?? '';
     this.calls.push({action, body: clone(body)});
     return of(this.response(action, body) as T);

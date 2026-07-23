@@ -10,9 +10,7 @@ export const clearpipeRoutes: Routes = [
   },
   {
     path: 'new',
-    loadComponent: () => import('./editor/clearpipe-editor.component').then(m => m.ClearpipeEditorComponent),
-    canDeactivate: [clearpipeUnsavedWorkGuard],
-    providers: [provideClearpipeFunctionAuthoring(), provideClearpipeTaskAuthoring()],
+    loadComponent: () => import('./editor/flow/clearpipe-flow-editor.component').then(m => m.ClearpipeFlowEditorComponent),
   },
   {
     path: ':taskId/edit',

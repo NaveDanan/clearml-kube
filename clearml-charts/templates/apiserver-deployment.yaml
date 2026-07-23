@@ -145,6 +145,46 @@ spec:
           - name: CLEARML__APISERVER__AUTH__COOKIES__DOMAIN
             value: ".{{ .Values.clearml.cookieDomain }}"
           {{- end }}
+          {{- if or (eq .Values.auth.mode "password") (eq .Values.auth.mode "oidc") }}
+          # Enable fixed-user (username/password) authentication. The actual user
+          # list is supplied via apiserver.existingAdditionalConfigsSecret
+          # (an apiserver.conf carrying the auth.fixed_users.users block).
+          - name: CLEARML__apiserver__auth__fixed_users__enabled
+            value: "true"
+          - name: CLEARML__apiserver__auth__fixed_users__pass_hashed
+            value: {{ .Values.auth.fixedUsers.passHashed | quote }}
+          {{- end }}
+          {{- if (.Values.email | default dict).enabled }}
+          # Outgoing SMTP for user notifications (task/pipeline/dataset/report done).
+          - name: CLEARML__apiserver__email__enabled
+            value: "true"
+          - name: CLEARML__apiserver__email__smtp_server
+            value: {{ .Values.email.smtpServer | quote }}
+          - name: CLEARML__apiserver__email__smtp_port
+            value: {{ .Values.email.smtpPort | quote }}
+          - name: CLEARML__apiserver__email__use_tls
+            value: {{ .Values.email.useTls | quote }}
+          - name: CLEARML__apiserver__email__use_ssl
+            value: {{ .Values.email.useSsl | quote }}
+          - name: CLEARML__apiserver__email__sender
+            value: {{ .Values.email.sender | quote }}
+          - name: CLEARML__apiserver__email__sender_name
+            value: {{ .Values.email.senderName | quote }}
+          {{- if .Values.email.username }}
+          - name: CLEARML__apiserver__email__username
+            value: {{ .Values.email.username | quote }}
+          {{- end }}
+          {{- if .Values.email.existingSecret }}
+          - name: CLEARML__apiserver__email__password
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.email.existingSecret }}
+                key: smtp-password
+          {{- else if .Values.email.password }}
+          - name: CLEARML__apiserver__email__password
+            value: {{ .Values.email.password | quote }}
+          {{- end }}
+          {{- end }}
           - name: CLEARML__secure__credentials__apiserver__user_key
             valueFrom:
               secretKeyRef:

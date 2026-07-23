@@ -154,6 +154,23 @@ RUNAI_COMMAND_CATALOG = {
             ],
         },
         {
+            "key": "template_list",
+            "label": "List workload templates",
+            "description": "List workload templates available to the selected project.",
+            "command": "runai template list --json -p {project}",
+            "placeholders": [{"name": "project", "description": "Run:ai project name"}],
+        },
+        {
+            "key": "template_describe",
+            "label": "Describe workload template",
+            "description": "Read a workload template and use its values to populate the new-workload form.",
+            "command": "runai template describe {name} -o json -p {project}",
+            "placeholders": [
+                {"name": "name", "description": "Run:ai template name"},
+                {"name": "project", "description": "Run:ai project name"},
+            ],
+        },
+        {
             "key": "nodepool_list",
             "label": "List node pools",
             "description": "List node pools available for a new workload.",
@@ -356,6 +373,8 @@ class AutoscalerBLL:
         "environment_describe",
         "datasource_list",
         "datasource_describe",
+        "template_list",
+        "template_describe",
         "submit_training",
         "submit_workspace",
         "submit_inference",
@@ -1569,6 +1588,37 @@ class AutoscalerBLL:
             "execution_id": execution_id,
         }
 
+    def get_template(self, company_id: str, name: str, project: str = None) -> dict:
+        """Return a selected template's workload defaults and queue a refresh."""
+        settings = AutoscalerSettings.objects(company=company_id).first()
+        name = (name or "").strip()
+        project = (project or "").strip() or getattr(settings, "runai_project", None) or ""
+        if not name:
+            return {"connected": False, "error": "Missing template name", "name": "", "project": project}
+        if not settings:
+            return {
+                "connected": False,
+                "error": "No settings configured",
+                "name": name,
+                "project": project,
+            }
+
+        payload = {"name": name, "project": project}
+        execution_id = self._enqueue_or_reuse_execution(
+            company_id=company_id,
+            operation="template",
+            payload=payload,
+            match_payload=payload,
+            user_id=getattr(settings, "user", None),
+            worker_id=getattr(settings, "worker", None),
+        )
+        cached = self._latest_operation_result(company_id, "template", match_payload=payload)
+        return {
+            **(cached or {"connected": False, "name": name, "project": project}),
+            "refreshing": True,
+            "execution_id": execution_id,
+        }
+
     def _collect_dashboard_data(self, conn, env: dict, company_id: str) -> dict:
         console_log = []
         self._set_runai_context(conn, env)
@@ -1634,6 +1684,13 @@ class AutoscalerBLL:
         data_sources = self._describe_assets(
             conn, env, console_log, data_sources, self._datasource_describe_commands, project
         )
+        template_commands = self._template_list_commands(conn, project)
+        self._append_console_attempt(
+            console_log,
+            template_commands,
+            f"Attempting to fetch Run:ai workload templates for project '{project}'",
+        )
+        templates = self._runai_records_with_fallback(template_commands, env, console_log)
         node_pools = self._runai_records_with_fallback(
             self._nodepool_list_commands(conn), env, console_log
         )
@@ -1644,7 +1701,28 @@ class AutoscalerBLL:
             "compute": [self._summarize_compute(item) for item in compute],
             "environments": [self._summarize_environment(item) for item in environments],
             "data_sources": [self._summarize_data_source(item) for item in data_sources],
+            "templates": [self._summarize_template(item) for item in templates],
             "node_pools": self._unique_names(self._asset_name(item) for item in node_pools),
+            "console_log": console_log[-20:],
+        }
+
+    def _collect_template(self, conn, env: dict, name: str, project: str) -> dict:
+        console_log = []
+        self._set_runai_context(conn, env, project)
+        detail = self._runai_object_with_fallback(
+            self._template_describe_commands(conn, name, project), env, console_log
+        )
+        if not detail:
+            error = next(
+                (entry.get("message") for entry in reversed(console_log) if entry.get("message")),
+                f"Could not describe Run:ai template '{name}'",
+            )
+            raise RuntimeError(error)
+        return {
+            "connected": True,
+            "name": name,
+            "project": project,
+            "workload": self._template_workload(name, project, detail),
             "console_log": console_log[-20:],
         }
 
@@ -1993,6 +2071,14 @@ class AutoscalerBLL:
             payload = self._load_json(execution.workload_params) or {}
             project = (payload.get("project") or "").strip()
             data = self._collect_project_resources(conn, env, project)
+            return SimpleNamespace(
+                returncode=0, stdout="", stderr="", result_data=json.dumps(data)
+            )
+        if operation == "template":
+            payload = self._load_json(execution.workload_params) or {}
+            name = (payload.get("name") or "").strip()
+            project = (payload.get("project") or "").strip()
+            data = self._collect_template(conn, env, name, project)
             return SimpleNamespace(
                 returncode=0, stdout="", stderr="", result_data=json.dumps(data)
             )
@@ -2558,6 +2644,19 @@ class AutoscalerBLL:
         )
 
     @classmethod
+    def _template_list_commands(cls, conn, project: Optional[str] = None) -> list:
+        return cls._cli_candidates(
+            conn,
+            cls._with_project([
+                ["runai", "template", "list", "--json"],
+                ["runai", "template", "list"],
+            ], project),
+            [],
+            key="template_list",
+            subs={"project": project or ""},
+        )
+
+    @classmethod
     def _compute_describe_commands(
         cls, conn, name: str, project: Optional[str] = None, item: Optional[dict] = None
     ) -> list:
@@ -2606,6 +2705,19 @@ class AutoscalerBLL:
             [],
             key="datasource_describe",
             subs={"name": name, "project": project or "", "type": source_type},
+        )
+
+    @classmethod
+    def _template_describe_commands(cls, conn, name: str, project: Optional[str] = None) -> list:
+        return cls._cli_candidates(
+            conn,
+            cls._with_project([
+                ["runai", "template", "describe", name, "-o", "json"],
+                ["runai", "template", "describe", name],
+            ], project),
+            [],
+            key="template_describe",
+            subs={"name": name, "project": project or ""},
         )
 
     @classmethod
@@ -3061,6 +3173,86 @@ class AutoscalerBLL:
         }
 
     @classmethod
+    def _summarize_template(cls, item: dict) -> dict:
+        return {
+            "name": cls._asset_name(item),
+            "workload_type": cls._asset_value(item, ("workloadType", "workload_type", "type")),
+            "scope": cls._asset_value(item, ("scope", "scopeType", "scope_type")),
+        }
+
+    @classmethod
+    def _template_workload(cls, name: str, project: str, detail: dict) -> dict:
+        template = cls._merge_asset_detail({}, cls._first_object(detail))
+        workload_type = cls._asset_value(template, ("workloadType", "workload_type", "type")).lower()
+        workload_type = {
+            "training": "training",
+            "workspace": "workspace",
+            "inference": "inference",
+        }.get(workload_type, "training")
+        data_sources = cls._pick(template, ("dataSources", "data_sources", "datasources"))
+        selected_data_sources = []
+        if isinstance(data_sources, (list, tuple)):
+            for data_source in data_sources:
+                if isinstance(data_source, str) and data_source.strip():
+                    selected_data_sources.append({"name": data_source.strip()})
+                elif isinstance(data_source, dict):
+                    source_name = cls._asset_name(data_source)
+                    if source_name:
+                        selected_data_sources.append({
+                            "name": source_name,
+                            "type": cls._asset_value(data_source, ("type", "kind", "dataSourceType")),
+                        })
+
+        def asset_name(keys: tuple) -> str:
+            value = cls._pick(template, keys)
+            return cls._asset_name(value) if isinstance(value, dict) else str(value or "")
+
+        command = cls._asset_text(template, ("command", "cmd"))
+        return {
+            "workload_type": workload_type,
+            "project": project,
+            "template": name,
+            "image": cls._asset_value(template, ("image", "imageName", "image_name", "containerImage")),
+            "command": command,
+            "command_override": bool(command),
+            "args": cls._asset_text(template, ("args", "arguments")),
+            "environment_variables": cls._asset_env_vars(template),
+            "compute": asset_name(("compute", "computeResource", "compute_resource")),
+            "environment": asset_name(("environment", "environmentResource", "environment_resource")),
+            "data_sources": json.dumps(selected_data_sources) if selected_data_sources else "",
+            "cpu_core_request": cls._asset_value(template, ("cpuCoreRequest", "cpu_core_request")),
+            "cpu_core_limit": cls._asset_value(template, ("cpuCoreLimit", "cpu_core_limit")),
+            "cpu_memory_request": cls._asset_value(template, ("cpuMemoryRequest", "cpu_memory_request")),
+            "cpu_memory_limit": cls._asset_value(template, ("cpuMemoryLimit", "cpu_memory_limit")),
+            "gpu_devices_request": cls._asset_value(template, ("gpuDevicesRequest", "gpu_devices_request", "gpu")),
+            "gpu_memory_request": cls._asset_value(template, ("gpuMemoryRequest", "gpu_memory_request")),
+            "gpu_portion_request": cls._asset_value(template, ("gpuPortionRequest", "gpu_portion_request")),
+            "gpu_request_type": cls._asset_value(template, ("gpuRequestType", "gpu_request_type")),
+            "node_pools": cls._asset_text(template, ("nodePools", "node_pools")),
+            "node_type": cls._asset_value(template, ("nodeType", "node_type")),
+            "priority": cls._asset_value(template, ("priority",)),
+            "preemptibility": cls._asset_value(template, ("preemptibility", "preemptible")),
+            "run_as_uid": cls._asset_value(template, ("runAsUid", "run_as_uid")),
+            "run_as_gid": cls._asset_value(template, ("runAsGid", "run_as_gid")),
+            "supplemental_groups": cls._asset_value(template, ("supplementalGroups", "supplemental_groups")),
+            "existing_pvc": cls._asset_value(template, ("existingPvc", "existing_pvc", "claimName", "claim_name")),
+            "working_dir": cls._asset_value(template, ("workingDir", "working_dir", "workingDirectory")),
+            "large_shm": bool(cls._pick(template, ("largeShm", "large_shm"))),
+            "parallelism": cls._asset_value(template, ("parallelism",)),
+            "runs": cls._asset_value(template, ("runs",)),
+            "restart_policy": cls._asset_value(template, ("restartPolicy", "restart_policy")),
+            "backoff_limit": cls._asset_value(template, ("backoffLimit", "backoff_limit")),
+            "external_url": cls._asset_value(template, ("externalUrl", "external_url")),
+            "serving_port": cls._asset_value(template, ("servingPort", "serving_port")),
+            "min_replicas": cls._asset_value(template, ("minReplicas", "min_replicas")),
+            "max_replicas": cls._asset_value(template, ("maxReplicas", "max_replicas")),
+            "initial_replicas": cls._asset_value(template, ("initialReplicas", "initial_replicas")),
+            "metric": cls._asset_value(template, ("metric", "autoscalingMetric", "autoscaling_metric")),
+            "metric_threshold": cls._asset_value(template, ("metricThreshold", "metric_threshold")),
+            "scale_to_zero_retention": cls._asset_value(template, ("scaleToZeroRetention", "scale_to_zero_retention")),
+        }
+
+    @classmethod
     def _asset_value(cls, item, keys: tuple) -> str:
         value = cls._pick(item, keys)
         if value in (None, ""):
@@ -3113,6 +3305,7 @@ class AutoscalerBLL:
             "compute": [],
             "environments": [],
             "data_sources": [],
+            "templates": [],
             "node_pools": [],
             "console_log": (console_log or [])[-20:],
         }

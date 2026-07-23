@@ -6,6 +6,8 @@ import {ClearpipeExtensionRegistry} from '../framework/clearpipe-extension-regis
 import {ClearpipeCatalogActionRegistration, ClearpipeCatalogActionRequest, defineClearpipeNodeExtension} from '../framework/clearpipe-ui.types';
 import {ClearpipeFunctionAuthoringFormComponent} from './function-authoring-form.component';
 import {ClearpipeFunctionAuthoringCreateComponent} from './function-authoring-create.component';
+import {ClearpipeFunctionAuthoringCreateData} from './function-authoring.models';
+import {CLEARPIPE_FUNCTION_TASK_TYPE_PRESETS} from './function-authoring.presets';
 
 export const clearpipeFunctionAuthoringCatalogAction = (
   openCreateFlow: (request: ClearpipeCatalogActionRequest) => void | Promise<void>,
@@ -22,10 +24,10 @@ export const clearpipeFunctionAuthoringExtension = defineClearpipeNodeExtension<
     label: 'Function component',
     description: 'Define a constrained function with explicit typed inputs and outputs.',
     nodeKind: 'function',
-    icon: 'functions',
+    icon: 'al-ico-code-square',
     keywords: ['function', 'component', 'typed', 'explicit'],
   },
-  icon: 'functions',
+  icon: 'al-ico-code-square',
   summarize: node => ({text: `${node.configuration.task_type} · ${node.ports.filter(port => port.direction === 'output').length} output(s)`}),
   form: {id: 'function-authoring', component: ClearpipeFunctionAuthoringFormComponent},
 });
@@ -42,15 +44,31 @@ export class FunctionAuthoringExtensionRegistration {
     this.registry.register(clearpipeFunctionAuthoringExtension);
     this.registry.registerCatalogAction(clearpipeFunctionAuthoringExtension,
       clearpipeFunctionAuthoringCatalogAction(request => this.openCreateFlow(request)));
+    for (const preset of CLEARPIPE_FUNCTION_TASK_TYPE_PRESETS) {
+      this.registry.registerCatalogEntry(
+        clearpipeFunctionAuthoringExtension,
+        {
+          id: preset.id,
+          category: 'Code-backed steps',
+          label: preset.label,
+          description: preset.description,
+          nodeKind: 'function',
+          icon: 'al-ico-code-square',
+          keywords: preset.keywords,
+        },
+        {execute: request => this.openCreateFlow(request, preset.create)},
+      );
+    }
     this.registered = true;
   }
 
-  private openCreateFlow(request: ClearpipeCatalogActionRequest): void {
+  private openCreateFlow(request: ClearpipeCatalogActionRequest, preset?: ClearpipeFunctionAuthoringCreateData): void {
     void request;
     const dialog = this.dialog.open(ClearpipeFunctionAuthoringCreateComponent, {
       width: 'min(720px, calc(100vw - 32px))',
       maxHeight: 'calc(100vh - 32px)',
       autoFocus: 'dialog',
+      ...(preset ? {data: preset} : {}),
     });
     dialog.componentInstance.created.subscribe(nodeId => {
       this.graphStore.selectNode(nodeId);

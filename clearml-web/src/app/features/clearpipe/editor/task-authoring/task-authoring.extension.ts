@@ -22,10 +22,10 @@ export const clearpipeTaskAuthoringExtension = defineClearpipeNodeExtension<Task
     label: 'Approved task',
     description: 'Search an authorized ClearML task and configure a safe task-backed pipeline step.',
     nodeKind: 'task',
-    icon: 'account_tree',
+    icon: 'al-ico-pipelines',
     keywords: ['task', 'clearml', 'base task', 'artifact', 'parameter'],
   },
-  icon: 'account_tree',
+  icon: 'al-ico-pipelines',
   summarize: node => ({
     text: `${node.base_task.kind === 'task-id' ? node.base_task.task_id : `${node.base_task.project}/${node.base_task.name}`} · ${node.ports.filter(port => port.direction === 'output').length} artifact output(s)`,
   }),

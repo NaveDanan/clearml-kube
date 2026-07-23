@@ -63,7 +63,7 @@ export const clearpipeFixtureTaskCatalogEntry = {
   label: 'Task step',
   description: 'Reference an authorized ClearML task as a pipeline step.',
   nodeKind: 'task',
-  icon: 'account_tree',
+  icon: 'al-ico-pipelines',
   keywords: ['task', 'base task', 'clearml'],
 } as const satisfies ClearpipeCatalogEntry;
 
@@ -73,7 +73,7 @@ export const clearpipeFixtureFunctionCatalogEntry = {
   label: 'Function step',
   description: 'Add a constrained code-backed function step.',
   nodeKind: 'function',
-  icon: 'functions',
+  icon: 'al-ico-code-square',
   keywords: ['function', 'code'],
 } as const satisfies ClearpipeCatalogEntry;
 
@@ -83,7 +83,7 @@ export const clearpipeFixtureUnavailableTaskCatalogEntry = {
   label: 'Restricted task step',
   description: 'A task capability without current permission.',
   nodeKind: 'task',
-  icon: 'lock',
+  icon: 'al-ico-lock',
   disabled: true,
   disabledReason: 'You do not have permission to use this task capability.',
 } as const satisfies ClearpipeCatalogEntry;
@@ -112,18 +112,18 @@ export const clearpipeFixturePorts: readonly ClearpipePortPresentation[] = [
 
 export const clearpipeFixtureRunningTaskCard: ClearpipeNodeCardPresentation = {
   node: clearpipeFixtureTaskNode,
-  icon: 'account_tree',
+  icon: 'al-ico-pipelines',
   typeLabel: 'Task',
   summary: 'Base task: base-training-task',
   selected: true,
   statuses: [{tone: 'running', label: 'Running', detail: 'State supplied by execution owner'}],
   ports: clearpipeFixturePorts,
-  actions: [{id: 'inspect', label: 'Inspect', icon: 'visibility'}],
+  actions: [{id: 'inspect', label: 'Inspect', icon: 'al-ico-eye-outline'}],
 };
 
 export const clearpipeFixtureFailedFunctionCard: ClearpipeNodeCardPresentation = {
   node: clearpipeFixtureFunctionNode,
-  icon: 'functions',
+  icon: 'al-ico-code-square',
   typeLabel: 'Function',
   summary: 'Code-backed function with declared outputs',
   statuses: [{tone: 'error', label: 'Failed', detail: 'Reported by the execution owner'}],
@@ -147,13 +147,13 @@ export const clearpipeFixtureInspector: ClearpipeInspectorPresentation = {
 export const clearpipeFixtureTaskExtension = defineClearpipeNodeExtension<TaskNode>({
   nodeKind: 'task',
   catalog: clearpipeFixtureTaskCatalogEntry,
-  icon: 'account_tree',
+  icon: 'al-ico-pipelines',
   summarize: (node) => ({text: `Base task: ${node.base_task.kind === 'task-id' ? node.base_task.task_id : node.base_task.name}`}),
 });
 
 export const clearpipeFixtureFunctionExtension = defineClearpipeNodeExtension<FunctionNode>({
   nodeKind: 'function',
   catalog: clearpipeFixtureFunctionCatalogEntry,
-  icon: 'functions',
+  icon: 'al-ico-code-square',
   summarize: (node) => ({text: node.signature}),
 });

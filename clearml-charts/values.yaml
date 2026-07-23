@@ -52,6 +52,142 @@ clearml:
   # must contain the keys: apiserver_key, apiserver_secret, secure_auth_token_secret, test_user_key, test_user_secret
   existingSecret: ""
 
+# -- Authentication / login configuration
+auth:
+  # -- Login mode surfaced to users. One of:
+  #   "name-only" : default ClearML flow, any typed full name is accepted (no password).
+  #   "password"  : fixed-user username/password login (enables apiserver fixed_users).
+  #   "oidc"      : password login PLUS an "Log in with <provider>" SSO button,
+  #                 with the OIDC flow handled by the oauth2-proxy front door.
+  mode: "name-only"
+  # -- Fixed users used by "password" and "oidc" modes.
+  fixedUsers:
+    # -- Whether the supplied passwords are base64(bcrypt) hashes. Strongly recommended.
+    passHashed: true
+    # -- Name of an existing Secret that contains an "apiserver.conf" key with the
+    #    full `auth { fixed_users { ... users: [...] } }` block. This is the
+    #    recommended way to provide credentials so they never live in values.
+    #    When set, also set apiserver.existingAdditionalConfigsSecret to the same Secret.
+    existingSecret: ""
+  # -- OIDC / SSO configuration (used when mode == "oidc").
+  oidc:
+    # -- Master switch for surfacing the SSO button and deploying oauth2-proxy.
+    enabled: false
+    # -- Human-readable provider name shown on the login button ("Log in with <displayName>").
+    displayName: "Keycloak"
+    # -- Optional ClearML icon class rendered on the SSO button.
+    icon: "al-ico-lock"
+    # -- Browser entrypoint that starts the OIDC flow. For the bundled oauth2-proxy
+    #    front door this is the proxy sign-in path.
+    startUrl: "/oauth2/start"
+    # -- Keycloak/OIDC issuer (e.g. https://keycloak.example.com/realms/clearml).
+    issuerUrl: ""
+    # -- OIDC client id registered in Keycloak for ClearML.
+    clientId: "clearml"
+    # -- Requested OIDC scopes.
+    scopes: "openid profile email"
+    # -- Public redirect/callback URL registered in Keycloak
+    #    (e.g. https://clearml.example.com/oauth2/callback).
+    redirectUrl: ""
+    # -- Name of an existing Secret holding the OIDC client secret and the
+    #    oauth2-proxy cookie secret. Expected keys:
+    #      client-secret : the Keycloak client secret
+    #      cookie-secret : a 32-byte base64/hex random string for oauth2-proxy
+    #      basic-auth-password : (only when sessionBridge.enabled) shared password
+    #                            that mapped ClearML fixed users must also use
+    existingSecret: ""
+    # -- Session bridge: how the verified SSO identity becomes a real ClearML
+    #    session. Open-source ClearML will not mint a session from an external
+    #    identity on its own, so oauth2-proxy injects an HTTP Basic Authorization
+    #    header (user + shared password) to the ClearML upstream. ClearML's
+    #    fixed-user auth then accepts the request and issues its own session.
+    #
+    #    Requirements:
+    #      * oauth2Proxy.ingress must be the front door (all app traffic flows
+    #        through the proxy) -- see oauth2Proxy.ingress below.
+    #      * A ClearML fixed user must exist for each SSO user, with
+    #        username == the value sent by oauth2-proxy (email or preferred
+    #        username) and password == the shared basic-auth-password.
+    #      * Non-browser clients (SDK/agents) cannot do OIDC; route them around
+    #        the proxy or authenticate them with ClearML credentials directly.
+    sessionBridge:
+      # -- Enable the Basic-auth bridge described above.
+      enabled: true
+      # -- Claim used as the Basic auth username sent upstream:
+      #    "email" (adds --prefer-email-to-user) or "user" (preferred_username).
+      usernameClaim: "email"
+      # -- Key in auth.oidc.existingSecret holding the shared Basic auth password.
+      passwordKey: "basic-auth-password"
+
+# -- OIDC reverse-proxy front door (oauth2-proxy). Only deployed when auth.oidc.enabled.
+oauth2Proxy:
+  image:
+    registry: "quay.io"
+    repository: "oauth2-proxy/oauth2-proxy"
+    tag: "v7.6.0"
+    pullPolicy: IfNotPresent
+  # -- oauth2-proxy provider. "keycloak-oidc" targets a Keycloak realm.
+  provider: "keycloak-oidc"
+  # -- Service port exposed by oauth2-proxy.
+  port: 4180
+  replicaCount: 1
+  # -- Upstream that oauth2-proxy proxies authenticated requests to.
+  #    Defaults to the in-cluster ClearML webserver service.
+  upstream: ""
+  # -- Comma-separated email domains permitted to sign in ("*" allows all).
+  emailDomains: "*"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+  # -- Extra raw args passed to oauth2-proxy for advanced/edge configuration.
+  extraArgs: {}
+  # -- Sample ingress that makes oauth2-proxy the front door for the whole app.
+  #    When enabled, DISABLE webserver.ingress for the same host: the proxy
+  #    upstreams to the ClearML webserver and serves "/oauth2/*" itself, so the
+  #    SSO button (startUrl "/oauth2/start") and the OIDC callback both resolve.
+  ingress:
+    # -- Enable the oauth2-proxy front-door ingress.
+    enabled: false
+    # -- Ingress class (e.g. "nginx").
+    ingressClassName: ""
+    # -- Public hostname users browse to (must match auth.oidc.redirectUrl host).
+    hostName: "clearml.example.com"
+    # -- Root path routed through the proxy.
+    path: "/"
+    # -- TLS secret for the host. Strongly recommended (SSO over plain HTTP is unsafe).
+    tlsSecretName: ""
+    # -- Extra ingress annotations.
+    annotations: {}
+
+# -- Outgoing email (SMTP) for user notifications (task/pipeline/dataset/report done).
+#    Wires the apiserver.email.* config. Disabled by default.
+email:
+  # -- Master switch. When true, the apiserver can send notification emails.
+  enabled: false
+  # -- SMTP relay host.
+  smtpServer: ""
+  # -- SMTP relay port (587 for STARTTLS, 465 for implicit SSL).
+  smtpPort: 587
+  # -- Use STARTTLS (typically with port 587).
+  useTls: true
+  # -- Use implicit SSL (typically with port 465).
+  useSsl: false
+  # -- From address on outgoing mail.
+  sender: "clearml@localhost"
+  # -- From display name on outgoing mail.
+  senderName: "ClearML"
+  # -- SMTP auth username (leave empty for unauthenticated relays).
+  username: ""
+  # -- Name of an existing Secret holding the SMTP password under key "smtp-password".
+  #    Preferred over inlining the password below.
+  existingSecret: ""
+  # -- Inline SMTP password (NOT recommended; use existingSecret for real deployments).
+  password: ""
+
 # -- Api Server configurations
 apiserver:
   # -- Enable/Disable component deployment

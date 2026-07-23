@@ -1,0 +1,130 @@
+{{- /*
+OIDC reverse-proxy front door (oauth2-proxy).
+
+Deployed only when SSO is enabled (auth.mode == "oidc" and auth.oidc.enabled).
+oauth2-proxy performs the full OIDC/OpenID Connect flow against the configured
+provider (Keycloak by default), then proxies authenticated traffic to the
+ClearML webserver.
+
+NOTE (open-source ClearML limitation): oauth2-proxy authenticates the browser
+session at the proxy layer. Open-source ClearML does not natively consume an
+external identity to mint its own API session. This chart bridges that gap with
+auth.oidc.sessionBridge (Basic-auth injection): oauth2-proxy adds an HTTP Basic
+Authorization header (SSO user + shared password) to the ClearML upstream so
+ClearML's fixed-user auth accepts the request and issues its own session. That
+requires oauth2-proxy to be the front door for all app traffic -- enable
+oauth2Proxy.ingress (and disable webserver.ingress for the same host) so that
+"/oauth2/*" and the OIDC callback resolve through the proxy.
+*/ -}}
+{{- if and .Values.webserver.enabled (eq (.Values.auth | default dict).mode "oidc") ((.Values.auth | default dict).oidc | default dict).enabled }}
+{{- $oidc := .Values.auth.oidc }}
+{{- $proxy := .Values.oauth2Proxy }}
+{{- if not $oidc.existingSecret }}
+{{- fail "auth.oidc.existingSecret is required when auth.mode is 'oidc' (must contain keys: client-secret, cookie-secret)" }}
+{{- end }}
+{{- if not $oidc.issuerUrl }}
+{{- fail "auth.oidc.issuerUrl is required when auth.mode is 'oidc'" }}
+{{- end }}
+{{- $upstream := $proxy.upstream | default (printf "http://%s:%v" (include "webserver.referenceName" .) .Values.webserver.service.port) }}
+{{- $bridge := $oidc.sessionBridge | default dict }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oauth2proxy.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $proxy.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "oauth2proxy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "oauth2proxy.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.imageCredentials.enabled }}
+      imagePullSecrets:
+      {{- if .Values.imageCredentials.existingSecret }}
+      - name: {{ .Values.imageCredentials.existingSecret }}
+      {{- else }}
+      - name: clearml-registry-key
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: oauth2-proxy
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" $proxy.image.registry) }}{{ $proxy.image.repository }}:{{ $proxy.image.tag }}"
+          imagePullPolicy: {{ $proxy.image.pullPolicy }}
+          args:
+            - --provider={{ $proxy.provider }}
+            - --oidc-issuer-url={{ $oidc.issuerUrl }}
+            - --client-id={{ $oidc.clientId }}
+            - --redirect-url={{ $oidc.redirectUrl }}
+            - --scope={{ $oidc.scopes }}
+            - --email-domain={{ $proxy.emailDomains }}
+            - --upstream={{ $upstream }}
+            - --http-address=0.0.0.0:{{ $proxy.port }}
+            - --reverse-proxy=true
+            - --skip-provider-button=true
+            {{- if $bridge.enabled }}
+            # Session bridge: inject Basic auth to the ClearML upstream so
+            # ClearML fixed-user auth accepts the SSO-authenticated request.
+            - --set-basic-auth=true
+            {{- if eq ($bridge.usernameClaim | default "email") "email" }}
+            - --prefer-email-to-user=true
+            {{- end }}
+            {{- end }}
+            {{- range $key, $val := $proxy.extraArgs }}
+            - --{{ $key }}={{ $val }}
+            {{- end }}
+          env:
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidc.existingSecret }}
+                  key: client-secret
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidc.existingSecret }}
+                  key: cookie-secret
+            {{- if $bridge.enabled }}
+            - name: OAUTH2_PROXY_BASIC_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidc.existingSecret }}
+                  key: {{ $bridge.passwordKey | default "basic-auth-password" }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $proxy.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: {{ $proxy.port }}
+            initialDelaySeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: {{ $proxy.port }}
+            initialDelaySeconds: 10
+          resources:
+            {{- toYaml $proxy.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "oauth2proxy.referenceName" . }}
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ $proxy.port }}
+      targetPort: {{ $proxy.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "oauth2proxy.selectorLabels" . | nindent 4 }}
+{{- end }}

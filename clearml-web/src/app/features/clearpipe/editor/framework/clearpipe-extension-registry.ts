@@ -28,6 +28,7 @@ interface RegisteredCatalogAction {
 @Injectable({providedIn: 'root'})
 export class ClearpipeExtensionRegistry {
   private readonly extensions = new Map<GraphNode['kind'], RegisteredExtension>();
+  private readonly extraCatalog = new Map<string, {readonly catalog: ClearpipeCatalogEntry; readonly extension: ClearpipeNodeExtension}>();
   private readonly catalogActions = new Map<string, RegisteredCatalogAction>();
   private readonly revisionState = signal(0);
   private catalogRegistrationSequence = 0;
@@ -53,6 +54,12 @@ export class ClearpipeExtensionRegistry {
       if (this.extensions.get(nodeKind)?.extension !== extension) return;
       this.extensions.delete(nodeKind);
       if (catalog) this.catalogActions.delete(catalog.id);
+      for (const [id, value] of [...this.extraCatalog]) {
+        if (value.extension === registeredExtension) {
+          this.extraCatalog.delete(id);
+          this.catalogActions.delete(id);
+        }
+      }
       this.revisionState.update((revision) => revision + 1);
     };
   }
@@ -66,9 +73,42 @@ export class ClearpipeExtensionRegistry {
 
   catalogEntries(): readonly ClearpipeCatalogEntry[] {
     this.revisionState();
-    return [...this.extensions.values()]
-      .flatMap(({catalog}) => catalog ? [catalog] : [])
-      .sort((left, right) => left.category.localeCompare(right.category) || left.label.localeCompare(right.label));
+    return [
+      ...[...this.extensions.values()].flatMap(({catalog}) => catalog ? [catalog] : []),
+      ...[...this.extraCatalog.values()].map(({catalog}) => catalog),
+    ].sort((left, right) => left.category.localeCompare(right.category) || left.label.localeCompare(right.label));
+  }
+
+  /**
+   * Registers an additional catalog entry (with its own creation action) for an already
+   * registered node extension. This lets one node kind expose several catalog capabilities
+   * (for example, one preset per task type) while a single extension continues to own the
+   * inspector form, summary, and node identity.
+   */
+  registerCatalogEntry<TNode extends GraphNode>(
+    extension: ClearpipeTypedNodeExtension<TNode>,
+    entry: Omit<ClearpipeCatalogEntry, 'nodeKind' | 'registrationId'> & {readonly nodeKind: TNode['kind']},
+    action: Omit<ClearpipeCatalogActionRegistration, 'catalogEntryId'>,
+  ): () => void {
+    const owner = this.extensions.get(extension.nodeKind);
+    if (owner?.extension !== extension) {
+      throw new Error(`A ClearPipe catalog entry must belong to a registered extension: ${entry.id}`);
+    }
+    if (this.catalogEntry(entry.id)) {
+      throw new Error(`A ClearPipe catalog entry is already registered for ${entry.id}`);
+    }
+    const catalog: ClearpipeCatalogEntry = {...entry, registrationId: ++this.catalogRegistrationSequence};
+    this.extraCatalog.set(entry.id, {catalog, extension: owner.extension});
+    const registeredAction: RegisteredCatalogAction = {extension: owner.extension, action: {...action, catalogEntryId: entry.id}};
+    this.catalogActions.set(entry.id, registeredAction);
+    this.revisionState.update((revision) => revision + 1);
+
+    return () => {
+      if (this.extraCatalog.get(entry.id)?.catalog !== catalog) return;
+      this.extraCatalog.delete(entry.id);
+      if (this.catalogActions.get(entry.id) === registeredAction) this.catalogActions.delete(entry.id);
+      this.revisionState.update((revision) => revision + 1);
+    };
   }
 
   registerCatalogAction<TNode extends GraphNode>(
@@ -154,6 +194,7 @@ export class ClearpipeExtensionRegistry {
 
   catalogEntry(id: string): ClearpipeCatalogEntry | undefined {
     this.revisionState();
-    return [...this.extensions.values()].find(({catalog}) => catalog?.id === id)?.catalog;
+    return [...this.extensions.values()].find(({catalog}) => catalog?.id === id)?.catalog
+      ?? this.extraCatalog.get(id)?.catalog;
   }
 }

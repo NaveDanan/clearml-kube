@@ -1,4 +1,4 @@
 <span class="clearpipe-status" [class]="'clearpipe-status clearpipe-status--' + status().tone" [attr.aria-label]="status().label + (status().detail ? ': ' + status().detail : '')">
-  <mat-icon aria-hidden="true">{{ icon() }}</mat-icon>
+  <mat-icon aria-hidden="true" fontSet="al" [fontIcon]="icon()"></mat-icon>
   <span><strong>{{ status().label }}</strong>@if (status().detail) { <small>{{ status().detail }}</small> }</span>
 </span>

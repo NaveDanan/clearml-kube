@@ -29,6 +29,7 @@ import {
   ClearpipeValidationPresentation,
 } from './framework/clearpipe-ui.types';
 import {ClearpipeConfigPanelComponent} from './clearpipe-config-panel.component';
+import {ClearpipePipelineSettingsComponent} from './clearpipe-pipeline-settings.component';
 import {ClearpipeExecutionService} from './execution/clearpipe-execution.service';
 import {ClearpipeExecutionResultsComponent} from './execution/clearpipe-execution-results.component';
 
@@ -44,6 +45,7 @@ import {ClearpipeExecutionResultsComponent} from './execution/clearpipe-executio
     ClearpipeCodePreviewComponent,
     ClearpipeCatalogComponent,
     ClearpipeConfigPanelComponent,
+    ClearpipePipelineSettingsComponent,
     ClearpipeToolbarComponent,
     ClearpipeExecutionResultsComponent,
     ClearpipeWorkspaceSlotDirective,
@@ -332,14 +334,31 @@ export class ClearpipeEditorComponent {
 
   protected async saveAndRefresh(): Promise<void> {
     await this.lifecycle.save();
-    this.announce(this.lifecycle.status() === 'saved'
+    const saved = this.lifecycle.status() === 'saved';
+    this.announce(saved
       ? 'ClearPipe definition saved'
       : this.lifecycle.problem()?.message ?? 'ClearPipe definition was not saved');
+    if (saved && this.navigateToSavedIdentity()) return;
     if (this.execution.routeReady()) await this.execution.refresh();
   }
 
   protected handleToolbarSave(): void {
+    if (this.navigateToSavedIdentity()) return;
     void this.execution.refresh();
+  }
+
+  /**
+   * After a brand-new pipeline is first saved, move from the `/clearpipe/new`
+   * authoring route to its persisted `/clearpipe/:taskId` URL so a refresh or
+   * shared link reopens the saved definition. Returns true when it navigates.
+   */
+  private navigateToSavedIdentity(): boolean {
+    const taskId = this.lifecycle.identity()?.taskId;
+    if (taskId && /\/clearpipe\/new(?:[/?#]|$)/.test(this.router.url)) {
+      void this.router.navigate(['/clearpipe', taskId], {replaceUrl: true});
+      return true;
+    }
+    return false;
   }
 
   protected openExecutionTask(taskId: string): void {

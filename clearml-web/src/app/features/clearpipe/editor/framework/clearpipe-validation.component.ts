@@ -3,9 +3,9 @@ import {MatIconModule} from '@angular/material/icon';
 import {ClearpipeValidationPresentation} from './clearpipe-ui.types';
 
 const validationIcons: Record<ClearpipeValidationPresentation['severity'], string> = {
-  error: 'error',
-  warning: 'warning',
-  info: 'info',
+  error: 'al-ico-error-circle',
+  warning: 'al-ico-alert',
+  info: 'al-ico-info-circle-outline',
 };
 
 @Component({

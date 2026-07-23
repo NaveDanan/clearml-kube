@@ -10,7 +10,7 @@
           [attr.aria-label]="accessibleLabel()"
           [attr.aria-describedby]="presentation().disabledReason ? 'clearpipe-port-reason-' + presentation().nodeId + '-' + presentation().port.id : null"
           (click)="activate()">
-    <mat-icon aria-hidden="true">{{ presentation().port.direction === 'input' ? 'input' : 'output' }}</mat-icon>
+    <mat-icon aria-hidden="true" fontSet="al" [fontIcon]="presentation().port.direction === 'input' ? 'al-ico-arrow-from-left' : 'al-ico-arrow-from-right'"></mat-icon>
     <span class="clearpipe-port__copy">
       <strong>{{ presentation().port.name }}</strong>
       <small>{{ presentation().port.direction }} · {{ presentation().port.role }} · {{ presentation().port.multiplicity === 'single' ? 'one' : 'many' }}</small>
@@ -23,7 +23,7 @@
   </button>
   @if (presentation().disabledReason) {
     <p class="clearpipe-port__reason" [id]="'clearpipe-port-reason-' + presentation().nodeId + '-' + presentation().port.id">
-      <mat-icon aria-hidden="true">info</mat-icon>{{ presentation().disabledReason }}
+      <mat-icon aria-hidden="true" fontSet="al" fontIcon="al-ico-info-circle-outline"></mat-icon>{{ presentation().disabledReason }}
     </p>
   }
   @for (validation of presentation().validation ?? []; track validation.code + validation.message) {

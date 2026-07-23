@@ -8,7 +8,7 @@
   <header class="workspace-identity" aria-label="ClearPipe definition identity">
     <div class="identity">
       <a mat-icon-button routerLink="/clearpipe" aria-label="Back to ClearPipe library">
-        <mat-icon>arrow_back</mat-icon>
+        <mat-icon fontSet="al" fontIcon="al-ico-back"></mat-icon>
       </a>
       <div>
         <strong [attr.aria-label]="graph()?.document?.name">{{ graph()?.document?.name ?? 'Untitled ClearPipe' }}</strong>
@@ -71,24 +71,22 @@
 
     <aside id="clearpipe-palette"
            #paletteDrawer
-           class="workspace-panel workspace-panel--palette"
            tabindex="-1"
+           aria-label="Authoring catalog"
+           class="workspace-panel workspace-panel--palette"
            [class.workspace-panel--hidden]="(isNarrow() && activeDrawer() !== 'palette') || (!isNarrow() && !paletteOpen())"
            [class.workspace-panel--drawer]="isNarrow() && activeDrawer() === 'palette'"
            [attr.aria-hidden]="(isNarrow() && activeDrawer() !== 'palette') || (!isNarrow() && !paletteOpen())"
+           [attr.aria-labelledby]="isNarrow() && activeDrawer() === 'palette' ? 'clearpipe-palette-title' : null"
            [attr.role]="isNarrow() && activeDrawer() === 'palette' ? 'dialog' : null"
            [attr.aria-modal]="isNarrow() && activeDrawer() === 'palette' ? 'true' : null"
-           [attr.aria-labelledby]="isNarrow() && activeDrawer() === 'palette' ? 'clearpipe-palette-title' : null"
            (keydown)="trapDrawerFocus($event)">
-      <header>
-        <div>
-          <h2 #paletteHeading id="clearpipe-palette-title" tabindex="-1">Authoring catalog</h2>
-          <span>Registered starts</span>
-        </div>
+      <header class="workspace-panel__chrome">
+        <h2 #paletteHeading id="clearpipe-palette-title" tabindex="-1" class="visually-hidden">Authoring catalog</h2>
         <button mat-icon-button type="button"
                 (click)="isNarrow() ? closeDrawer() : togglePanel('palette', $any($event.currentTarget))"
                 [attr.aria-label]="isNarrow() ? 'Close authoring catalog' : 'Collapse authoring catalog'">
-          <mat-icon>{{ isNarrow() ? 'close' : 'chevron_left' }}</mat-icon>
+          <mat-icon fontSet="al" [fontIcon]="isNarrow() ? 'al-ico-close-circle' : 'al-ico-arrow-left'"></mat-icon>
         </button>
       </header>
       <div class="workspace-panel__body" smClearpipeWorkspaceSlot="workspace.palette">
@@ -166,7 +164,7 @@
         </div>
 
         @if (firstUse()) {
-          <section class="first-use" smClearpipeWorkspaceSlot="workspace.first-use" aria-labelledby="clearpipe-first-use-title">
+          <!-- <section class="first-use" smClearpipeWorkspaceSlot="workspace.first-use" aria-labelledby="clearpipe-first-use-title">
             <span class="first-use__eyebrow">Start authoring</span>
             <h2 id="clearpipe-first-use-title">Choose an approved ClearPipe start</h2>
             <p>Build with registered task or function capabilities. ClearPipe does not create a sample graph, runtime ID, or runnable placeholder.</p>
@@ -177,7 +175,7 @@
               <li><strong>Approved templates</strong><span>Appear only when a template is validated for this workspace.</span></li>
               <li><strong>Existing pipelines</strong><span>Require a lossless representability review; unsupported sources remain read-only.</span></li>
             </ul>
-          </section>
+          </section> -->
         }
 
         @if (readOnly()) {
@@ -202,27 +200,18 @@
 
     <aside id="clearpipe-inspector"
            #inspectorDrawer
-           class="workspace-panel workspace-panel--inspector"
+           #inspectorHeading
            tabindex="-1"
+           aria-label="Inspector"
+           class="workspace-panel workspace-panel--inspector"
            [class.workspace-panel--hidden]="(isNarrow() && activeDrawer() !== 'inspector') || (!isNarrow() && !inspectorOpen())"
            [class.workspace-panel--drawer]="isNarrow() && activeDrawer() === 'inspector'"
            [attr.aria-hidden]="(isNarrow() && activeDrawer() !== 'inspector') || (!isNarrow() && !inspectorOpen())"
            [attr.role]="isNarrow() && activeDrawer() === 'inspector' ? 'dialog' : null"
            [attr.aria-modal]="isNarrow() && activeDrawer() === 'inspector' ? 'true' : null"
-           [attr.aria-labelledby]="isNarrow() && activeDrawer() === 'inspector' ? 'clearpipe-inspector-title' : null"
            (keydown)="trapDrawerFocus($event)">
-      <header>
-        <div>
-          <h2 #inspectorHeading id="clearpipe-inspector-title" tabindex="-1">Inspector</h2>
-          <span>@if (state.selectedNodeId()) { Selected graph item } @else { No item selected }</span>
-        </div>
-        <button mat-icon-button type="button"
-                (click)="isNarrow() ? closeDrawer() : togglePanel('inspector', $any($event.currentTarget))"
-                [attr.aria-label]="isNarrow() ? 'Close inspector' : 'Collapse inspector'">
-          <mat-icon>{{ isNarrow() ? 'close' : 'chevron_right' }}</mat-icon>
-        </button>
-      </header>
       <div class="workspace-panel__body" smClearpipeWorkspaceSlot="workspace.inspector">
+        <sm-clearpipe-pipeline-settings></sm-clearpipe-pipeline-settings>
         <sm-clearpipe-config-panel
           [presentation]="inspectorPresentation()"
           [extensionRegistry]="extensionRegistry"
@@ -244,22 +233,22 @@
             <span>{{ result.valid ? 'Graph is valid' : result.errors.length + ' error(s)' }}</span>
           </div>
           <button mat-icon-button type="button" (click)="validationOpen.set(false)" aria-label="Close validation">
-            <mat-icon>close</mat-icon>
+            <mat-icon fontSet="al" fontIcon="al-ico-close-circle"></mat-icon>
           </button>
         </header>
         <div class="issues">
           @if (!result.errors.length && !result.warnings.length) {
-            <p class="valid"><mat-icon>check_circle</mat-icon>No issues found.</p>
+            <p class="valid"><mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>No issues found.</p>
           }
           @for (issue of result.errors; track $index) {
             <button type="button" (click)="issue.node_id && state.selectedNodeId.set(issue.node_id)" class="issue error">
-              <mat-icon>error</mat-icon>
+              <mat-icon fontSet="al" fontIcon="al-ico-error-circle"></mat-icon>
               <span>{{ issue.message }} @if (issue.node_id) {<small>Node: {{ issue.node_id }}</small>}</span>
             </button>
           }
           @for (issue of result.warnings; track $index) {
             <button type="button" (click)="issue.node_id && state.selectedNodeId.set(issue.node_id)" class="issue warning">
-              <mat-icon>warning</mat-icon>
+              <mat-icon fontSet="al" fontIcon="al-ico-alert"></mat-icon>
               <span>{{ issue.message }} @if (issue.node_id) {<small>Node: {{ issue.node_id }}</small>}</span>
             </button>
           }

@@ -1,0 +1,618 @@
+@if (boundary(); as b) {
+  <div class="config-panel" [style.--accent]="'#14b8a6'">
+    <header class="panel-header">
+      <span class="icon-chip">
+        <mat-icon fontSet="al" fontIcon="al-ico-frame-rule"></mat-icon>
+      </span>
+      <div class="header-main">
+        <input
+          class="title-input"
+          type="text"
+          [ngModel]="b.label"
+          (ngModelChange)="setBoundaryLabel($event)"
+          placeholder="Boundary name"
+        />
+        <span class="badge">Region</span>
+      </div>
+      <button mat-icon-button (click)="store.selectBoundary(null)" aria-label="Close">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    </header>
+
+    <div class="panel-body">
+      <section class="section">
+        <h3 class="section-heading">Contents <span class="count-pill">{{ boundaryNodes().length }}</span></h3>
+        @if (boundaryNodes().length) {
+          <div class="mini-list">
+            @for (item of boundaryNodes(); track item.id) {
+              <button type="button" class="mini-node" [style.--accent]="item.meta.accent" (click)="focusNode(item.id)">
+                <span class="mini-node__icon">
+                  <mat-icon fontSet="al" [fontIcon]="item.meta.icon"></mat-icon>
+                </span>
+                <span class="mini-node__text">
+                  <span class="mini-node__label">{{ item.label }}</span>
+                  <span class="mini-node__cat">{{ item.meta.categoryLabel }}</span>
+                </span>
+                <span class="mini-node__status" [style.background]="statusColors[item.status]" [title]="item.status"></span>
+              </button>
+            }
+          </div>
+        } @else {
+          <p class="note">No nodes inside this boundary yet. Drag nodes into the region to add them.</p>
+        }
+      </section>
+
+      <section class="section">
+        <h3 class="section-heading">When the pipeline reaches this boundary</h3>
+        <div class="field">
+          <select [ngModel]="b.onReach || 'stop'" (ngModelChange)="setBoundaryOnReach($event)">
+            <option value="stop">Stop the pipeline here</option>
+            <option value="pause">Pause &amp; wait (coming soon)</option>
+            <option value="handoff">Hand off to another pipeline (coming soon)</option>
+          </select>
+        </div>
+        <p class="note">
+          <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
+          Only nodes inside this boundary and connected run as part of the sequence. Additional
+          boundary behaviors will be added later.
+        </p>
+      </section>
+
+      <button mat-stroked-button class="action-btn action-btn--danger" (click)="removeSelectedBoundary()">
+        <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+        Delete boundary
+      </button>
+    </div>
+  </div>
+} @else if (node(); as n) {
+  <div class="config-panel" [style.--accent]="meta()?.accent">
+    <header class="panel-header">
+      <span class="icon-chip">
+        <mat-icon fontSet="al" [fontIcon]="meta()!.icon"></mat-icon>
+      </span>
+      <div class="header-main">
+        <input
+          class="title-input"
+          type="text"
+          [ngModel]="label()"
+          (ngModelChange)="setLabel($event)"
+          placeholder="Node name"
+        />
+        <span class="badge">{{ headerBadge() }}</span>
+      </div>
+      <button mat-icon-button (click)="store.selectNode(null)" aria-label="Close">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    </header>
+
+    <div class="panel-body">
+      <section class="section">
+        <h3 class="section-heading">General</h3>
+        <div class="field">
+          <label class="field-label">Name</label>
+          <input type="text" [ngModel]="label()" (ngModelChange)="setLabel($event)" />
+        </div>
+        <div class="field">
+          <label class="field-label">Description</label>
+          <textarea [ngModel]="desc()" (ngModelChange)="setDesc($event)"></textarea>
+        </div>
+      </section>
+
+      @switch (n.type) {
+        @case ('scheduled') {
+          <section class="section">
+            <h3 class="section-heading">Schedule</h3>
+
+            <label class="switch-row">
+              <input type="checkbox" [checked]="flag('enabled')" (change)="setFlag('enabled', $any($event.target).checked)" />
+              <span class="switch-text">
+                <span class="switch-title">Schedule enabled</span>
+                <span class="switch-sub">Fire the pipeline automatically on the schedule below.</span>
+              </span>
+            </label>
+
+            <div class="field">
+              <label class="field-label">Trigger type</label>
+              <select [ngModel]="cfg('scheduleMode')" (ngModelChange)="setCfg('scheduleMode', $event)">
+                <option value="interval">Every interval</option>
+                <option value="cron">Cron expression</option>
+              </select>
+            </div>
+
+            @if (cfg('scheduleMode') === 'cron') {
+              <div class="field">
+                <label class="field-label">Cron expression</label>
+                <input type="text" class="mono" [ngModel]="cfg('cron')" (ngModelChange)="setCfg('cron', $event)" placeholder="0 * * * *" />
+                <p class="note">Standard 5-field cron: minute hour day-of-month month day-of-week.</p>
+              </div>
+            } @else {
+              <div class="field-row">
+                <div class="field">
+                  <label class="field-label">Every</label>
+                  <input type="number" min="1" [ngModel]="cfg('intervalValue')" (ngModelChange)="setCfg('intervalValue', +$event)" placeholder="1" />
+                </div>
+                <div class="field">
+                  <label class="field-label">Unit</label>
+                  <select [ngModel]="cfg('intervalUnit')" (ngModelChange)="setCfg('intervalUnit', $event)">
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                    <option value="weeks">Weeks</option>
+                  </select>
+                </div>
+              </div>
+            }
+
+            <div class="field">
+              <label class="field-label">Timezone</label>
+              <input type="text" [ngModel]="cfg('timezone')" (ngModelChange)="setCfg('timezone', $event)" placeholder="UTC (optional)" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">Start</label>
+                <input type="datetime-local" [ngModel]="cfg('startTime')" (ngModelChange)="setCfg('startTime', $event)" />
+              </div>
+              <div class="field">
+                <label class="field-label">End</label>
+                <input type="datetime-local" [ngModel]="cfg('endTime')" (ngModelChange)="setCfg('endTime', $event)" />
+              </div>
+            </div>
+
+            <label class="switch-row">
+              <input type="checkbox" [checked]="flag('fireWhenStart')" (change)="setFlag('fireWhenStart', $any($event.target).checked)" />
+              <span class="switch-text">
+                <span class="switch-title">Fire when started</span>
+                <span class="switch-sub">Also start a new sequence immediately when the Run (&#9654;) button is pressed.</span>
+              </span>
+            </label>
+
+            <p class="note">
+              <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
+              {{ scheduleSummary() }}. Connect this node to the first step to trigger the pipeline.
+            </p>
+          </section>
+        }
+        @case ('autoscaler') {
+          <section class="section">
+            <h3 class="section-heading">
+              AutoScaler
+              <span class="status-pill" [class.status-pill--on]="autoscalerConnected()" [class.status-pill--off]="!autoscalerConnected()">
+                <span class="status-dot"></span>{{ autoscalerConnected() ? 'Connected' : 'Not connected' }}
+              </span>
+            </h3>
+            <div class="mode-toggle" role="tablist">
+              @for (mode of autoscalerModes; track mode) {
+                <button type="button" role="tab" class="mode-toggle__btn"
+                        [class.mode-toggle__btn--on]="(cfg('mode') || 'spinup') === mode"
+                        (click)="setAutoscalerMode(mode)">{{ AUTOSCALER_MODE_LABELS[mode] }}</button>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label">
+                Configured autoscaler
+                <button class="link-btn" type="button" (click)="loadAutoscalers()" [disabled]="autoscalersLoading()">
+                  @if (autoscalersLoading()) { <mat-spinner diameter="12"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-refresh"></mat-icon> }
+                  Refresh
+                </button>
+              </label>
+              <select [ngModel]="cfg('autoscaler')" (ngModelChange)="setAutoscaler($event)">
+                <option value="">Select an autoscaler…</option>
+                @for (item of autoscalers(); track item.name) {
+                  <option [value]="item.name">{{ item.name }}</option>
+                }
+              </select>
+              @if (autoscalerMessage()) {
+                <p class="note" [class.note--warn]="!autoscalerConnected()">
+                  <mat-icon fontSet="al" [fontIcon]="autoscalerConnected() ? 'al-ico-info' : 'al-ico-alert'"></mat-icon>
+                  {{ autoscalerMessage() }}
+                </p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label">
+                Project / namespace
+                <button class="link-btn" type="button" (click)="loadProjectResources(cfg('project'), true)" [disabled]="assetsLoading()">
+                  @if (assetsLoading()) { <mat-spinner diameter="12"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-refresh"></mat-icon> }
+                  Load assets
+                </button>
+              </label>
+              <input type="text" list="cp-runai-projects" [ngModel]="cfg('project')" (ngModelChange)="setAutoscalerProject($event)" placeholder="runai project or namespace" />
+              <datalist id="cp-runai-projects">
+                @for (project of runaiProjects(); track project) { <option [value]="project"></option> }
+              </datalist>
+            </div>
+
+            @if ((cfg('mode') || 'spinup') === 'spindown') {
+              <div class="field">
+                <label class="field-label">Action</label>
+                <div class="mode-toggle mode-toggle--sm">
+                  <button type="button" class="mode-toggle__btn" [class.mode-toggle__btn--on]="(cfg('spinDownAction') || 'stop') === 'stop'" (click)="setCfg('spinDownAction', 'stop')">Stop</button>
+                  <button type="button" class="mode-toggle__btn" [class.mode-toggle__btn--on]="cfg('spinDownAction') === 'delete'" (click)="setCfg('spinDownAction', 'delete')">Delete</button>
+                </div>
+                <p class="note">Stop suspends the workload; Delete removes it entirely.</p>
+              </div>
+
+              @if (upstreamAutoscaler(); as up) {
+                <p class="note">
+                  <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
+                  Target from upstream Spin-up node <strong>{{ up.label }}</strong>: workload <strong>{{ upstreamWorkloadName() }}</strong>.
+                </p>
+              } @else {
+                <p class="note note--warn">
+                  <mat-icon fontSet="al" fontIcon="al-ico-alert"></mat-icon>
+                  No upstream Spin-up AutoScaler is connected to this node. Connect one, or enter the workload name manually below.
+                </p>
+              }
+
+              <div class="field">
+                <label class="field-label">Workload name</label>
+                <input type="text" [ngModel]="cfg('spinDownWorkloadName')" (ngModelChange)="setCfg('spinDownWorkloadName', $event)" [placeholder]="upstreamWorkloadName() || 'workload to tear down'" />
+                <p class="note">Leave blank to use the workload started by the connected Spin-up node.</p>
+              </div>
+
+              <button mat-flat-button class="action-btn action-btn--danger" [disabled]="actionBusy()" (click)="spinDownWorkload()">
+                @if (actionBusy()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon fontSet="al" [fontIcon]="cfg('spinDownAction') === 'delete' ? 'al-ico-trash' : 'al-ico-abort'"></mat-icon> }
+                {{ cfg('spinDownAction') === 'delete' ? 'Delete workload' : 'Stop workload' }}
+              </button>
+              <p class="note">Runs a <span class="mono">runai workspace {{ cfg('spinDownAction') === 'delete' ? 'delete' : 'suspend' }}</span> command inside the target AutoScaler.</p>
+            } @else {
+            <div class="field">
+              <label class="field-label">Queue</label>
+              <select [ngModel]="cfg('queue')" (ngModelChange)="setCfg('queue', $event)">
+                <option value="">Default queue</option>
+                @for (queue of queues(); track queue.id) {
+                  <option [value]="queue.id">{{ queue.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">Workload name</label>
+              <input type="text" [ngModel]="cfg('workloadName')" (ngModelChange)="setCfg('workloadName', $event)" placeholder="my-workload" />
+            </div>
+
+            <!-- Run:ai Submit Workload asset cards -->
+            @if (assetsMessage()) {
+              <p class="note" [class.note--warn]="!autoscalerConnected()">
+                <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>{{ assetsMessage() }}
+              </p>
+            }
+
+            <div class="field">
+              <label class="field-label">Environments @if (assetsLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+              <div class="asset-grid">
+                @for (env of environmentResources(); track env.name) {
+                  <button type="button" class="asset-card" [class.asset-card--on]="isEnvironmentSelected(env)" (click)="selectEnvironment(env)">
+                    <mat-icon fontSet="al" fontIcon="al-ico-image"></mat-icon>
+                    <span class="asset-name">{{ env.name }}</span>
+                    @if (env.image) { <span class="asset-sub">{{ env.image }}</span> }
+                  </button>
+                } @empty { <span class="asset-empty">No environments</span> }
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label">Compute resources</label>
+              <div class="asset-grid">
+                @for (compute of computeResources(); track compute.name) {
+                  <button type="button" class="asset-card" [class.asset-card--on]="isComputeSelected(compute)" (click)="selectCompute(compute)">
+                    <mat-icon fontSet="al" fontIcon="al-ico-queues"></mat-icon>
+                    <span class="asset-name">{{ compute.name }}</span>
+                    <span class="asset-sub">{{ compute.gpu_devices_request || compute.gpu_portion_request || '0' }} GPU · {{ compute.cpu_core_request || '—' }} CPU</span>
+                  </button>
+                } @empty { <span class="asset-empty">No compute resources</span> }
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label">Data sources</label>
+              <div class="asset-grid">
+                @for (ds of dataSourceResources(); track ds.name) {
+                  <button type="button" class="asset-card" [class.asset-card--on]="isDataSourceSelected(ds)" (click)="toggleDataSource(ds)">
+                    <mat-icon fontSet="al" fontIcon="al-ico-data"></mat-icon>
+                    <span class="asset-name">{{ ds.name }}</span>
+                    @if (ds.type) { <span class="asset-sub">{{ ds.type }}</span> }
+                  </button>
+                } @empty { <span class="asset-empty">No data sources</span> }
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="field-label">Template</label>
+              <input type="text" [ngModel]="cfg('template')" (ngModelChange)="setCfg('template', $event)" placeholder="Run:ai workload template (optional)" />
+            </div>
+
+            <div class="field">
+              <label class="field-label">Node pool</label>
+              <select [ngModel]="cfg('node_pools')" (ngModelChange)="setCfg('node_pools', $event)">
+                <option value="">Default</option>
+                @for (pool of nodePools(); track pool) { <option [value]="pool">{{ pool }}</option> }
+              </select>
+            </div>
+
+            <div class="field">
+              <label class="field-label">Image</label>
+              <input type="text" [ngModel]="cfg('image')" (ngModelChange)="setCfg('image', $event)" placeholder="nvcr.io/…" />
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">GPU devices</label>
+                <input type="text" [ngModel]="cfg('gpu_devices_request')" (ngModelChange)="setCfg('gpu_devices_request', $event)" placeholder="1" />
+              </div>
+              <div class="field">
+                <label class="field-label">CPU cores</label>
+                <input type="text" [ngModel]="cfg('cpu_core_request')" (ngModelChange)="setCfg('cpu_core_request', $event)" placeholder="4" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Command</label>
+              <textarea class="mono" [ngModel]="cfg('command')" (ngModelChange)="setCfg('command', $event)" placeholder="python train.py"></textarea>
+            </div>
+            <button mat-flat-button class="action-btn" [disabled]="actionBusy()" (click)="createWorkload()">
+              @if (actionBusy()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon> }
+              Create workload
+            </button>
+            <p class="note">Fetches the Run:ai project's environments, compute, data sources &amp; templates, then submits a real workload.</p>
+            }
+          </section>
+        }
+        @case ('dataset') {
+          <section class="section">
+            <h3 class="section-heading">Dataset</h3>
+            <div class="mode-toggle" role="tablist">
+              @for (mode of datasetModes; track mode) {
+                <button type="button" role="tab" class="mode-toggle__btn"
+                        [class.mode-toggle__btn--on]="(cfg('mode') || 'use') === mode"
+                        (click)="setDatasetMode(mode)">{{ DATASET_MODE_LABELS[mode] }}</button>
+              }
+            </div>
+
+            @switch (cfg('mode') || 'use') {
+              @case ('use') {
+                <div class="field">
+                  <label class="field-label">Dataset @if (listLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+                  <select [ngModel]="cfg('useDatasetId')" (ngModelChange)="setUseDataset($event)">
+                    <option value="">Select a dataset…</option>
+                    @for (dataset of datasets(); track dataset.id) {
+                      <option [value]="dataset.id">{{ dataset.name }}</option>
+                    }
+                  </select>
+                  @if (!datasets().length && !listLoading()) { <p class="note">No datasets found.</p> }
+                </div>
+                @if (cfg('useDatasetId')) {
+                  <div class="field">
+                    <label class="field-label">Version @if (versionsLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+                    <select [ngModel]="cfg('useVersion') || 'latest'" (ngModelChange)="setCfg('useVersion', $event)">
+                      <option value="latest">Latest</option>
+                      @for (version of datasetVersions(); track version.id) {
+                        <option [value]="version.id">v{{ version.version || 'untagged' }}</option>
+                      }
+                    </select>
+                  </div>
+                }
+                <p class="note">Connects to an existing ClearML dataset and the chosen version.</p>
+              }
+              @case ('create') {
+                <div class="field">
+                  <label class="field-label">Queue</label>
+                  <select [ngModel]="cfg('createQueue')" (ngModelChange)="setCfg('createQueue', $event)">
+                    <option value="">Select a queue…</option>
+                    @for (queue of queues(); track queue.id) {
+                      <option [value]="queue.id">{{ queue.name }}</option>
+                    }
+                  </select>
+                  <p class="note">The clearml-agent listening on this queue creates the dataset.</p>
+                </div>
+                <div class="field">
+                  <label class="field-label">Project</label>
+                  <input type="text" list="cp-dataset-projects" [ngModel]="cfg('createProject')" (ngModelChange)="setCfg('createProject', $event)" placeholder="Existing project or new project name" />
+                  <datalist id="cp-dataset-projects">
+                    @for (project of projects(); track project.id) { <option [value]="project.name"></option> }
+                  </datalist>
+                </div>
+                <div class="field">
+                  <label class="field-label">Dataset name</label>
+                  <input type="text" [ngModel]="cfg('createDatasetName')" (ngModelChange)="setCfg('createDatasetName', $event)" placeholder="my-dataset" />
+                </div>
+                <div class="field">
+                  <label class="field-label">Alias</label>
+                  <input type="text" [ngModel]="cfg('createAlias')" (ngModelChange)="setCfg('createAlias', $event)" placeholder="Optional alias" />
+                </div>
+                <div class="field">
+                  <label class="field-label">Source</label>
+                  <div class="mode-toggle mode-toggle--sm">
+                    @for (source of sourceTypes; track source) {
+                      <button type="button" class="mode-toggle__btn"
+                              [class.mode-toggle__btn--on]="(cfg('createSourceType') || 'local') === source"
+                              (click)="setCfg('createSourceType', source)">{{ SOURCE_TYPE_LABELS[source] }}</button>
+                    }
+                  </div>
+                  <input type="text" [ngModel]="cfg('createSourcePath')" (ngModelChange)="setCfg('createSourcePath', $event)" [placeholder]="sourcePathPlaceholder()" />
+                </div>
+                <button mat-flat-button class="action-btn" [disabled]="actionBusy() || !cfg('createDatasetName').trim()" (click)="createFromForm()">
+                  @if (actionBusy()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon> }
+                  Create dataset
+                </button>
+                <p class="note">Submits a new dataset-creation task to the selected queue.</p>
+              }
+              @case ('sync') {
+                <div class="field">
+                  <label class="field-label">Dataset @if (listLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+                  <select [ngModel]="cfg('syncDatasetId')" (ngModelChange)="setSyncDataset($event)">
+                    <option value="">Select an uploaded dataset…</option>
+                    @for (dataset of datasets(); track dataset.id) {
+                      <option [value]="dataset.id">{{ dataset.name }}</option>
+                    }
+                  </select>
+                </div>
+                @if (cfg('syncDatasetId')) {
+                  <div class="field">
+                    <label class="field-label">Connected from @if (syncInfoLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+                    <p class="note mono-note">{{ syncDatasetInfo()?.sourcePath || 'Unknown (no source path recorded)' }}</p>
+                  </div>
+                  <div class="field">
+                    <label class="field-label">Path</label>
+                    <div class="mode-toggle mode-toggle--sm">
+                      <button type="button" class="mode-toggle__btn" [class.mode-toggle__btn--on]="(cfg('syncPathMode') || 'same') === 'same'" (click)="setSyncPathMode('same')">Same path</button>
+                      <button type="button" class="mode-toggle__btn" [class.mode-toggle__btn--on]="cfg('syncPathMode') === 'new'" (click)="setSyncPathMode('new')">New path</button>
+                    </div>
+                    <input type="text" [ngModel]="cfg('syncPath')" (ngModelChange)="setCfg('syncPath', $event)" [disabled]="cfg('syncPathMode') !== 'new'" placeholder="local path / NFS / S3 bucket" />
+                  </div>
+                  <div class="field">
+                    <label class="field-label">Version</label>
+                    <div class="mode-toggle mode-toggle--sm">
+                      <button type="button" class="mode-toggle__btn" [class.mode-toggle__btn--on]="(cfg('syncVersionMode') || 'increment') === 'increment'" (click)="setCfg('syncVersionMode', 'increment')">Increment</button>
+                      <button type="button" class="mode-toggle__btn" [class.mode-toggle__btn--on]="cfg('syncVersionMode') === 'tag'" (click)="setCfg('syncVersionMode', 'tag')">Custom tag</button>
+                    </div>
+                    @if (cfg('syncVersionMode') === 'tag') {
+                      <input type="text" [ngModel]="cfg('syncVersionTag')" (ngModelChange)="setCfg('syncVersionTag', $event)" placeholder="e.g. 2.1.0" />
+                    } @else {
+                      <p class="note">Current: v{{ syncDatasetInfo()?.version || '1.0.0' }} → Next: v{{ nextSyncVersion() }}</p>
+                    }
+                  </div>
+                  <button mat-flat-button class="action-btn" [disabled]="actionBusy()" (click)="syncDataset()">
+                    @if (actionBusy()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-refresh"></mat-icon> }
+                    Sync dataset
+                  </button>
+                }
+                <p class="note">Creates a new version linked to the selected dataset's lineage.</p>
+              }
+            }
+          </section>
+        }
+
+        @case ('task') {
+          <section class="section">
+            <h3 class="section-heading">Task</h3>
+            <div class="field">
+              <label class="field-label">Project</label>
+              <select [ngModel]="cfg('project')" (ngModelChange)="setCfg('project', $event)">
+                <option value="">All projects</option>
+                @for (project of projects(); track project.id) {
+                  <option [value]="project.id">{{ project.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">Tasks @if (listLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+              <div class="option-list">
+                @for (task of trainingTasks(); track task.id) {
+                  <label class="option-row">
+                    <input type="checkbox" [checked]="isSelected('taskIds', task.id)" (change)="toggle('taskIds', task.id)" />
+                    <span class="option-name">{{ task.name }}</span>
+                    @if (task.status) { <span class="option-status">{{ task.status }}</span> }
+                  </label>
+                } @empty {
+                  <p class="note">No tasks found.</p>
+                }
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label">Queue</label>
+              <select [ngModel]="cfg('queue')" (ngModelChange)="setCfg('queue', $event)">
+                <option value="">Default queue</option>
+                @for (queue of queues(); track queue.id) {
+                  <option [value]="queue.id">{{ queue.name }}</option>
+                }
+              </select>
+            </div>
+            <p class="note">Connects to real ClearML training tasks.</p>
+          </section>
+        }
+        @case ('execute') {
+          <section class="section">
+            <h3 class="section-heading">
+              Execute
+              <span class="status-pill" [class.status-pill--on]="autoscalerConnected()" [class.status-pill--off]="!autoscalerConnected()">
+                <span class="status-dot"></span>{{ autoscalerConnected() ? 'Connected' : 'Not connected' }}
+              </span>
+            </h3>
+            <div class="field">
+              <label class="field-label">
+                Target AutoScaler
+                <button class="link-btn" type="button" (click)="loadAutoscalers()" [disabled]="autoscalersLoading()">
+                  @if (autoscalersLoading()) { <mat-spinner diameter="12"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-refresh"></mat-icon> }
+                  Refresh
+                </button>
+              </label>
+              <select [ngModel]="cfg('target')" (ngModelChange)="setCfg('target', $event)">
+                <option value="">Select an autoscaler…</option>
+                @for (item of autoscalers(); track item.name) {
+                  <option [value]="item.project || item.name">{{ item.name }}</option>
+                }
+              </select>
+              @if (autoscalerMessage()) {
+                <p class="note" [class.note--warn]="!autoscalerConnected()">
+                  <mat-icon fontSet="al" [fontIcon]="autoscalerConnected() ? 'al-ico-info' : 'al-ico-alert'"></mat-icon>
+                  {{ autoscalerMessage() }}
+                </p>
+              }
+            </div>
+            <div class="field">
+              <label class="field-label">Project / namespace (manual)</label>
+              <input type="text" [ngModel]="cfg('target')" (ngModelChange)="setCfg('target', $event)" placeholder="runai project or namespace" />
+            </div>
+            <div class="field">
+              <label class="field-label">Command</label>
+              <textarea class="mono" [ngModel]="cfg('command')" (ngModelChange)="setCfg('command', $event)" placeholder="kubectl get pods"></textarea>
+            </div>
+            <button mat-flat-button class="action-btn" [disabled]="actionBusy()" (click)="runCommand()">
+              @if (actionBusy()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-console"></mat-icon> }
+              Run command
+            </button>
+            <p class="note">Bashes into the target AutoScaler and runs the command.</p>
+          </section>
+        }
+        @case ('report') {
+          <section class="section">
+            <h3 class="section-heading">Report</h3>
+            <div class="field">
+              <label class="field-label">Template report</label>
+              <select [ngModel]="cfg('templateReportId')" (ngModelChange)="setCfg('templateReportId', $event)">
+                <option value="">Select a report…</option>
+                @for (report of reports(); track report.id) {
+                  <option [value]="report.id">{{ report.name }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">Source tasks (artifacts) @if (listLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+              <div class="option-list">
+                @for (task of trainingTasks(); track task.id) {
+                  <label class="option-row">
+                    <input type="checkbox" [checked]="isSelected('artifactSources', task.id)" (change)="toggle('artifactSources', task.id)" />
+                    <span class="option-name">{{ task.name }}</span>
+                  </label>
+                } @empty {
+                  <p class="note">No tasks found.</p>
+                }
+              </div>
+            </div>
+            @if (artifacts().length) {
+              <div class="field">
+                <label class="field-label">Artifacts</label>
+                <ul class="artifact-list">
+                  @for (artifact of artifacts(); track artifact.taskId + artifact.key) {
+                    <li><strong>{{ artifact.key }}</strong> <span class="option-status">{{ artifact.taskName }}</span></li>
+                  }
+                </ul>
+              </div>
+            }
+            <p class="note">Builds a report from a template + real task artifacts.</p>
+          </section>
+        }
+      }
+
+      @if (actionOutput()) {
+        <section class="section">
+          <h3 class="section-heading">Output</h3>
+          <pre class="action-output">{{ actionOutput() }}</pre>
+        </section>
+      }
+    </div>
+  </div>
+} @else {
+  <div class="empty-state">
+    <mat-icon fontSet="al" fontIcon="al-ico-settings"></mat-icon>
+    <p>Select a node to configure it</p>
+  </div>
+}

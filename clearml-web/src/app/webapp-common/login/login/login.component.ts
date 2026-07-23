@@ -41,6 +41,7 @@ import {MatButton} from '@angular/material/button';
 import {minLengthTrimmed} from '@common/shared/validators/minLengthTrimmed';
 import {User} from '~/business-logic/model/users/user';
 import {Title} from '@angular/platform-browser';
+import {SsoProvider} from '../../../../environments/base';
 
 
 @Component({
@@ -86,6 +87,12 @@ export class LoginComponent {
   protected loginMode = this.loginService.loginMode;
 
   protected showLogin = computed(() => this.showSimpleLogin() || [loginModes.password, loginModes.simple].includes(this.loginMode()));
+
+  protected ssoProviders = computed<SsoProvider[]>(() => this.environment().ssoProviders ?? []);
+  protected showSso = computed(() =>
+    this.ssoProviders().length > 0 &&
+    [loginModes.password, loginModes.simple, loginModes.ssoOnly].includes(this.loginMode())
+  );
 
   protected isInvite = this.router.url.includes('invite');
   protected loginForm = new FormGroup({
@@ -245,6 +252,19 @@ export class LoginComponent {
           switchMap(() => this.afterLogin())
         )
     }
+  }
+
+  loginWithSso(provider: SsoProvider) {
+    if (!provider?.url) {
+      return;
+    }
+    this.showSpinner.set(true);
+    // Return the user to the originally requested in-app path after the
+    // provider/proxy completes the OIDC flow. oauth2-proxy reads `rd`.
+    const returnPath = this.getNavigateUrl() || '/';
+    const separator = provider.url.includes('?') ? '&' : '?';
+    const target = `${provider.url}${separator}rd=${encodeURIComponent(returnPath)}`;
+    this.document.location.href = target;
   }
 
   private afterLogin() {

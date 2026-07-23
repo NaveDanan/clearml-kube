@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy, Component, input, output} from '@angular/core';
+import {ChangeDetectionStrategy, Component, computed, input, output} from '@angular/core';
 import {MatIconModule} from '@angular/material/icon';
 import {ClearpipeNodeActionComponent} from './clearpipe-node-action.component';
 import {ClearpipePortComponent} from './clearpipe-port.component';
@@ -7,6 +7,7 @@ import {ClearpipeValidationComponent} from './clearpipe-validation.component';
 import {
   ClearpipeNodeActionPresentation,
   ClearpipeNodeCardPresentation,
+  ClearpipeNodeStatusTone,
   ClearpipePortPresentation,
   ClearpipeValidationPresentation,
 } from './clearpipe-ui.types';
@@ -30,6 +31,11 @@ export class ClearpipeNodeCardComponent {
   readonly actionRequested = output<ClearpipeNodeActionPresentation>();
   readonly portActivated = output<ClearpipePortPresentation>();
   readonly validationFocused = output<ClearpipeValidationPresentation>();
+
+  /** Tone of the first reported status, used to color the header status indicator dot. */
+  protected readonly headerStatusTone = computed<ClearpipeNodeStatusTone | null>(
+    () => this.presentation().statuses?.[0]?.tone ?? null,
+  );
 
   protected select(): void {
     this.selected.emit(this.presentation().node.id);

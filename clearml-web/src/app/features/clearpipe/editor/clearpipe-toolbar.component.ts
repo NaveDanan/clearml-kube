@@ -1,7 +1,6 @@
 import {ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, output, signal, viewChild} from '@angular/core';
 import {MatButtonModule} from '@angular/material/button';
 import {MatIconModule} from '@angular/material/icon';
-import {MatMenuModule} from '@angular/material/menu';
 import {ClearpipeLifecycleService} from './clearpipe-lifecycle.service';
 import {ClearpipeDocumentTransferService} from './clearpipe-document-transfer.service';
 import {clearpipeToolbarActions, ClearpipeToolbarAction, ClearpipeToolbarActionId} from './clearpipe-toolbar.model';
@@ -12,7 +11,7 @@ import {ClearpipeExecutionAction} from './execution/clearpipe-execution.models';
   templateUrl: './clearpipe-toolbar.component.html',
   styleUrl: './clearpipe-toolbar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule],
+  imports: [MatButtonModule, MatIconModule],
 })
 export class ClearpipeToolbarComponent {
   protected readonly lifecycle = inject(ClearpipeLifecycleService);
@@ -35,6 +34,22 @@ export class ClearpipeToolbarComponent {
 
   protected action(id: ClearpipeToolbarActionId): ClearpipeToolbarAction {
     return this.actions().find(action => action.id === id)!;
+  }
+
+  private static readonly icons: Record<ClearpipeToolbarActionId, string> = {
+    new: 'al-ico-plus',
+    save: 'al-ico-save',
+    open: 'al-ico-folder',
+    validate: 'al-ico-success',
+    preview: 'al-ico-code',
+    import: 'al-ico-upload',
+    export: 'al-ico-download',
+    run: 'al-ico-run',
+    settings: 'al-ico-settings',
+  };
+
+  protected iconFor(id: ClearpipeToolbarActionId): string {
+    return ClearpipeToolbarComponent.icons[id] ?? 'al-ico-dots-h-menu';
   }
 
   protected async invoke(id: ClearpipeToolbarActionId): Promise<void> {

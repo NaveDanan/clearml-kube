@@ -16,6 +16,11 @@
     (maximizedClicked)="maximize()"
   ></sm-experiment-info-header>
   <sm-experiment-info-navbar [minimized]="minimized" [splitSize]="selectSplitSize$ | ngrxPush">
+    <sm-notification-subscribe
+      refresh
+      entityType="task"
+      [entityId]="selectedExperiment()?.id"
+    ></sm-notification-subscribe>
     @if ((routerConfig.includes('scalars') && minimized) || !minimized) {
       <div class="scalar-buttons" leftButtons></div>
     }

@@ -12,6 +12,7 @@ import {MatIcon} from '@angular/material/icon';
 import {PushPipe} from '@ngrx/component';
 import {TooltipDirective} from '@common/shared/ui-components/indicators/tooltip/tooltip.directive';
 import {MatIconButton} from '@angular/material/button';
+import {NotificationSubscribeComponent} from '@common/shared/components/notification-subscribe/notification-subscribe.component';
 
 @Component({
   selector: 'sm-experiment-output',
@@ -32,7 +33,8 @@ import {MatIconButton} from '@angular/material/button';
     MatMenuTrigger,
     TooltipDirective,
     MatIconButton,
-    MatIconButton
+    MatIconButton,
+    NotificationSubscribeComponent
   ]
 })
 export class ExperimentOutputComponent extends BaseExperimentOutputComponent {

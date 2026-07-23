@@ -1,0 +1,49 @@
+<section class="pipeline-settings" aria-label="Pipeline settings">
+  @if (hasGraph()) {
+    <header class="pipeline-settings__header">
+      <h3 class="pipeline-settings__title">Pipeline settings</h3>
+    </header>
+
+    <mat-form-field appearance="outline" class="pipeline-settings__field"
+                    [class.pipeline-settings__field--invalid]="nameInvalid()">
+      <mat-label>Pipeline name</mat-label>
+      <input
+        matInput
+        type="text"
+        [value]="nameValue()"
+        [disabled]="readOnly()"
+        (input)="onNameInput($any($event.target).value)"
+        (change)="renamePipeline($any($event.target).value)"
+        placeholder="Untitled_ClearPipe"
+        aria-label="Pipeline name"
+      />
+      <mat-hint [class.pipeline-settings__hint--error]="nameInvalid()">
+        @if (nameInvalid()) {
+          Use letters, numbers and underscores; start with a letter.
+        } @else {
+          Letters, numbers, underscores. Must be unique in this workspace.
+        }
+      </mat-hint>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="pipeline-settings__field">
+      <mat-label>Default execution queue</mat-label>
+      <mat-select
+        [value]="selectedQueueId()"
+        [disabled]="readOnly()"
+        (selectionChange)="selectQueue($event.value)"
+        panelClass="clearpipe-queue-select-panel"
+      >
+        <mat-option [value]="''">None</mat-option>
+        @for (queue of queues(); track queue.id) {
+          <mat-option [value]="queue.id">{{ queue.name }}</mat-option>
+        }
+      </mat-select>
+      @if (queuesLoaded() && queues().length === 0) {
+        <mat-hint>No queues available in this workspace.</mat-hint>
+      } @else {
+        <mat-hint>Required to save and run. Applies to every step without its own queue.</mat-hint>
+      }
+    </mat-form-field>
+  }
+</section>

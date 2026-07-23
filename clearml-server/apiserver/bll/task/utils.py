@@ -16,6 +16,8 @@ from apiserver.database.utils import get_options
 from apiserver.service_repo.auth import Identity
 from apiserver.utilities.attrs import typed_attrs
 
+log = config.logger(__file__)
+
 valid_statuses = get_options(TaskStatus)
 deleted_prefix = "__DELETED__"
 task_running_statuses = [TaskStatus.queued, TaskStatus.in_progress]
@@ -79,6 +81,15 @@ class ChangeStatusRequest(object):
             )
 
         update_project_time(project_id)
+
+        # Best-effort user notifications (e.g. email when a task finishes).
+        # Never allowed to affect the status change itself.
+        try:
+            from apiserver.bll.notifications import NotificationBLL
+
+            NotificationBLL.notify_task_status_changed(self.task, self.new_status)
+        except Exception as ex:
+            log.error(f"Failed dispatching task notification: {ex}")
 
         def is_mongo_operator(field: str) -> bool:
             head, _, tail = field.partition("__")

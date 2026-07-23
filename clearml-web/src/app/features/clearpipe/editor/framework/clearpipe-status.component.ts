@@ -3,13 +3,13 @@ import {MatIconModule} from '@angular/material/icon';
 import {ClearpipeStatusPresentation} from './clearpipe-ui.types';
 
 const defaultIcons: Record<ClearpipeStatusPresentation['tone'], string> = {
-  neutral: 'info',
-  info: 'info',
-  success: 'check_circle',
-  warning: 'warning',
-  error: 'error',
-  running: 'progress_activity',
-  unavailable: 'block',
+  neutral: 'al-ico-info-circle-outline',
+  info: 'al-ico-info-circle-outline',
+  success: 'al-ico-success',
+  warning: 'al-ico-alert',
+  error: 'al-ico-error-circle',
+  running: 'al-ico-refresh',
+  unavailable: 'al-ico-alert',
 };
 
 @Component({

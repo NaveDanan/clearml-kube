@@ -2,10 +2,11 @@ import {ChangeDetectionStrategy, Component, inject, output, signal} from '@angul
 import {FormArray, FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {MatButtonModule} from '@angular/material/button';
 import {MatCheckboxModule} from '@angular/material/checkbox';
+import {MAT_DIALOG_DATA} from '@angular/material/dialog';
 import {MatFormFieldModule} from '@angular/material/form-field';
 import {MatInputModule} from '@angular/material/input';
 import {MatSelectModule} from '@angular/material/select';
-import {FUNCTION_AUTHORING_TASK_TYPES, FunctionAuthoringDefinition, FunctionAuthoringOutput, FunctionAuthoringPort} from './function-authoring.models';
+import {FUNCTION_AUTHORING_TASK_TYPES, ClearpipeFunctionAuthoringCreateData, FunctionAuthoringDefinition, FunctionAuthoringOutput, FunctionAuthoringPort} from './function-authoring.models';
 import {ClearpipeFunctionAuthoringService} from './function-authoring.service';
 
 type CreateInputForm = FormGroup<{
@@ -34,6 +35,7 @@ type CreateOutputForm = FormGroup<{
 })
 export class ClearpipeFunctionAuthoringCreateComponent {
   private readonly authoring = inject(ClearpipeFunctionAuthoringService);
+  private readonly preset = inject<ClearpipeFunctionAuthoringCreateData | null>(MAT_DIALOG_DATA, {optional: true});
   readonly created = output<string>();
   readonly createForm = new FormGroup({
     name: new FormControl('', {nonNullable: true}),
@@ -57,6 +59,40 @@ export class ClearpipeFunctionAuthoringCreateComponent {
   });
   readonly error = signal<string | null>(null);
   protected readonly taskTypes = FUNCTION_AUTHORING_TASK_TYPES;
+
+  constructor() {
+    if (this.preset) this.applyPreset(this.preset);
+  }
+
+  private applyPreset(preset: ClearpipeFunctionAuthoringCreateData): void {
+    this.createForm.patchValue({
+      ...(preset.name !== undefined ? {name: preset.name} : {}),
+      ...(preset.label !== undefined ? {label: preset.label} : {}),
+      ...(preset.description !== undefined ? {description: preset.description} : {}),
+      ...(preset.signature !== undefined ? {signature: preset.signature} : {}),
+      ...(preset.source !== undefined ? {source: preset.source} : {}),
+      ...(preset.taskType !== undefined ? {taskType: preset.taskType} : {}),
+      ...(preset.cache !== undefined ? {cache: preset.cache} : {}),
+    });
+    if (preset.inputs?.length) {
+      this.createForm.controls.inputs.clear();
+      preset.inputs.forEach(input => this.createForm.controls.inputs.push(new FormGroup({
+        id: new FormControl(input.id, {nonNullable: true}),
+        name: new FormControl(input.name, {nonNullable: true}),
+        type: new FormControl<'data' | 'artifact' | 'parameter'>(input.type, {nonNullable: true}),
+        required: new FormControl(input.required ?? false, {nonNullable: true}),
+        defaultJson: new FormControl('', {nonNullable: true}),
+      })));
+    }
+    if (preset.outputs?.length) {
+      this.createForm.controls.outputs.clear();
+      preset.outputs.forEach(output => this.createForm.controls.outputs.push(new FormGroup({
+        id: new FormControl(output.id, {nonNullable: true}),
+        name: new FormControl(output.name, {nonNullable: true}),
+        type: new FormControl<'data' | 'artifact'>(output.type, {nonNullable: true}),
+      })));
+    }
+  }
 
   addInput(): void {
     const index = this.createForm.controls.inputs.length + 1;

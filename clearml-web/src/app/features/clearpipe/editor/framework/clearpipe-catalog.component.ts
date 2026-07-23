@@ -13,6 +13,10 @@ interface CatalogCategory {
   readonly entries: readonly ClearpipeCatalogEntry[];
 }
 
+type CatalogTone = 'data' | 'scripts' | 'training' | 'tracking' | 'output';
+
+const CATALOG_TONES: readonly CatalogTone[] = ['data', 'scripts', 'training', 'tracking', 'output'];
+
 @Component({
   selector: 'sm-clearpipe-catalog',
   templateUrl: './clearpipe-catalog.component.html',
@@ -98,5 +102,16 @@ export class ClearpipeCatalogComponent {
     if (entry.disabled) return entry.disabledReason ?? 'This capability is currently unavailable.';
     if (this.readOnly()) return 'This definition is read-only.';
     return undefined;
+  }
+
+  protected categoryTone(category: string): CatalogTone {
+    const value = category.toLocaleLowerCase();
+    if (value.includes('data') || value.includes('task')) return 'data';
+    if (value.includes('function') || value.includes('code') || value.includes('script')) return 'scripts';
+    if (value.includes('train')) return 'training';
+    if (value.includes('track') || value.includes('experiment') || value.includes('metric')) return 'tracking';
+    if (value.includes('report') || value.includes('output') || value.includes('inference') || value.includes('serve')) return 'output';
+    const index = this.categories().findIndex((entry) => entry.label === category);
+    return CATALOG_TONES[(index < 0 ? 0 : index) % CATALOG_TONES.length];
   }
 }

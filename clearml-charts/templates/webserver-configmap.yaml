@@ -1,4 +1,7 @@
 {{- if .Values.webserver.enabled }}
+{{- $additional := .Values.webserver.additionalConfigs | default dict }}
+{{- $oidc := (.Values.auth | default dict).oidc | default dict }}
+{{- $ssoEnabled := and $oidc.enabled (eq (.Values.auth | default dict).mode "oidc") }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,8 +9,32 @@ metadata:
   labels:
     {{- include "clearml.labels" . | nindent 4 }}
 data:
-  {{- range $key, $val := .Values.webserver.additionalConfigs }}
+  {{- if $ssoEnabled }}
+  {{- /* Merge the SSO provider into configuration.json so the web login shows the "Log in with ..." button. */ -}}
+  {{- $config := dict }}
+  {{- if hasKey $additional "configuration.json" }}
+  {{- $config = get $additional "configuration.json" | fromJson }}
+  {{- end }}
+  {{- $provider := dict
+        "name" ($oidc.displayName | default "sso" | lower)
+        "displayName" ($oidc.displayName | default "SSO")
+        "url" ($oidc.startUrl | default "/oauth2/start") }}
+  {{- if $oidc.icon }}
+  {{- $_ := set $provider "icon" $oidc.icon }}
+  {{- end }}
+  {{- $_ := set $config "ssoProviders" (list $provider) }}
+  configuration.json: |
+    {{- $config | toPrettyJson | nindent 4 }}
+  {{- range $key, $val := $additional }}
+  {{- if ne $key "configuration.json" }}
   {{ $key }}: |
     {{- $val | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  {{- else }}
+  {{- range $key, $val := $additional }}
+  {{ $key }}: |
+    {{- $val | nindent 4 }}
+  {{- end }}
   {{- end }}
 {{- end -}}

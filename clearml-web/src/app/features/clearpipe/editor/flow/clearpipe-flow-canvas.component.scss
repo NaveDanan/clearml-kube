@@ -1,0 +1,408 @@
+:host {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+
+  --cp-surface: #ffffff;
+  --cp-surface-muted: #f5f6f8;
+  --cp-border: #e0e3e7;
+  --cp-text: #1a1c1e;
+  --cp-text-muted: #5f6368;
+  --cp-radius: 12px;
+  --cp-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --cp-dot: #c8ccd1;
+  --cp-accent-edge: #7c8598;
+}
+
+// Dark theme: this component redefines the shared tokens on its own host, so it
+// needs its own override to follow `.dark-mode` on the document root.
+:host-context(.dark-mode) {
+  --cp-surface: var(--color-surface-container-high);
+  --cp-surface-muted: var(--color-surface-container-lowest);
+  --cp-border: var(--color-outline-variant);
+  --cp-text: var(--color-on-surface);
+  --cp-text-muted: var(--color-on-surface-variant);
+  --cp-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --cp-dot: var(--color-outline-variant);
+  --cp-accent-edge: var(--color-on-surface-variant);
+}
+
+.cp-flow-canvas {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  touch-action: none;
+
+  &--panning {
+    cursor: grabbing;
+  }
+}
+
+.cp-flow-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  width: 0;
+  height: 0;
+}
+
+.cp-flow-edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.cp-flow-edge {
+  pointer-events: auto;
+
+  &__hit {
+    fill: none;
+    stroke: transparent;
+    stroke-width: 16;
+    cursor: pointer;
+  }
+
+  &__line {
+    fill: none;
+    stroke: var(--cp-accent-edge, #7c8598);
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    animation: cp-flow-dash 0.8s linear infinite;
+    pointer-events: none;
+  }
+
+  &:hover .cp-flow-edge__line {
+    stroke: #ef4444;
+  }
+
+  &__pending {
+    fill: none;
+    stroke: var(--cp-accent-edge, #7c8598);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+    opacity: 0.7;
+    pointer-events: none;
+  }
+}
+
+@keyframes cp-flow-dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.cp-flow-boundary {
+  position: absolute;
+  border-radius: 12px;
+  background: color-mix(in srgb, #64748b 7%, transparent);
+  box-sizing: border-box;
+  pointer-events: auto;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &--selected {
+    background: color-mix(in srgb, #14b8a6 9%, transparent);
+  }
+
+  // Animated "marching-ants" outline (mirrors the connecting-edge animation),
+  // following the rounded corners via an SVG rect stroke.
+  &__outline {
+    position: absolute;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+
+    rect {
+      fill: none;
+      stroke: color-mix(in srgb, #64748b 70%, transparent);
+      stroke-width: 2;
+      stroke-dasharray: 6 4;
+      animation: cp-flow-dash 0.8s linear infinite;
+    }
+  }
+
+  &--selected &__outline rect {
+    stroke: #14b8a6;
+  }
+
+  &__bar {
+    position: absolute;
+    top: -14px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 4px 0 8px;
+    border-radius: 8px;
+    background: var(--cp-surface, #fff);
+    border: 1px solid var(--cp-border, #e0e3e7);
+    box-shadow: var(--cp-shadow, 0 4px 16px rgba(0, 0, 0, 0.12));
+    pointer-events: auto;
+    cursor: grab;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  &__grip {
+    flex-shrink: 0;
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+    line-height: 15px;
+    color: var(--cp-text-muted, #5f6368);
+  }
+
+  &__label {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--cp-text, #1a1c1e);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 4px;
+    cursor: text;
+
+    &:focus {
+      outline: none;
+    }
+  }
+
+  &__delete {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+
+    mat-icon {
+      font-size: 13px;
+      width: 13px;
+      height: 13px;
+      line-height: 13px;
+      color: #ef4444;
+    }
+  }
+
+  &__resize {
+    position: absolute;
+    right: -6px;
+    bottom: -6px;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: var(--cp-surface, #fff);
+    border: 2px solid #14b8a6;
+    pointer-events: auto;
+    cursor: nwse-resize;
+  }
+}
+
+.cp-flow-node {
+  position: absolute;
+  width: 240px;
+  border-radius: var(--cp-radius, 12px);
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--cp-surface, #fff);
+  box-shadow: var(--cp-shadow, 0 4px 16px rgba(0, 0, 0, 0.12));
+  color: var(--cp-text, #1a1c1e);
+  cursor: grab;
+  user-select: none;
+
+  &--selected {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  // Nodes whose center sits inside a boundary get a teal ring cue.
+  &--in-boundary {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, #14b8a6 60%, transparent),
+      var(--cp-shadow, 0 4px 16px rgba(0, 0, 0, 0.12));
+  }
+
+  &--in-boundary::after {
+    content: '';
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #14b8a6;
+    border: 2px solid var(--cp-surface, #fff);
+    z-index: 2;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &__header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border-bottom: 1px solid var(--cp-border, #e0e3e7);
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--accent) 18%, var(--cp-surface, #fff));
+    color: var(--accent);
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+    }
+  }
+
+  &__titles {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__label {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__desc {
+    font-size: 11px;
+    color: var(--cp-text-muted, #5f6368);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--cp-surface-muted, #f5f6f8);
+    border-radius: 0 0 calc(var(--cp-radius, 12px) - 2px) calc(var(--cp-radius, 12px) - 2px);
+  }
+
+  &__badge {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+  }
+
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  &__action {
+    width: 26px;
+    height: 26px;
+    line-height: 26px;
+
+    mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      line-height: 15px;
+      color: var(--cp-text-muted, #5f6368);
+    }
+
+    &--danger mat-icon {
+      color: #ef4444;
+    }
+  }
+}
+
+.cp-flow-handle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cp-surface, #fff);
+  border: 2px solid var(--accent);
+  z-index: 1;
+
+  &--in {
+    left: -7px;
+  }
+
+  &--out {
+    right: -7px;
+    cursor: crosshair;
+
+    &:hover {
+      background: var(--accent);
+    }
+  }
+}
+
+.cp-flow-controls {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: var(--cp-surface, #fff);
+  border: 1px solid var(--cp-border, #e0e3e7);
+  box-shadow: var(--cp-shadow, 0 4px 16px rgba(0, 0, 0, 0.12));
+  overflow: hidden;
+
+  button {
+    width: 34px;
+    height: 34px;
+    line-height: 34px;
+    border-radius: 0;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      line-height: 16px;
+      color: var(--cp-text, #1a1c1e);
+    }
+
+    & + button {
+      border-top: 1px solid var(--cp-border, #e0e3e7);
+    }
+  }
+}

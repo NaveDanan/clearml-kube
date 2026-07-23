@@ -1,0 +1,235 @@
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+
+  // Shared theme tokens consumed by palette, canvas and inspector children.
+  --cp-surface: #ffffff;
+  --cp-surface-muted: #f5f6f8;
+  --cp-border: #e0e3e7;
+  --cp-text: #1a1c1e;
+  --cp-text-muted: #5f6368;
+  --cp-radius: 12px;
+  --cp-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --cp-dot: #c8ccd1;
+  --cp-accent-edge: #7c8598;
+}
+
+// Dark theme: remap the shared surface/text tokens to the app theme variables,
+// which flip automatically when `.dark-mode` is set on the document root. The
+// palette and config-panel children inherit these tokens from this host.
+:host-context(.dark-mode) {
+  --cp-surface: var(--color-surface-container-high);
+  --cp-surface-muted: var(--color-surface-container-lowest);
+  --cp-border: var(--color-outline-variant);
+  --cp-text: var(--color-on-surface);
+  --cp-text-muted: var(--color-on-surface-variant);
+  --cp-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --cp-dot: var(--color-outline-variant);
+  --cp-accent-edge: var(--color-on-surface-variant);
+}
+
+.cp-flow-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--cp-surface-muted, #f5f6f8);
+  color: var(--cp-text, #1a1c1e);
+}
+
+.cp-flow-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--cp-surface, #fff);
+  border-bottom: 1px solid var(--cp-border, #e0e3e7);
+  flex-shrink: 0;
+
+  &__group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  &__group--identity {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 8px;
+    background: color-mix(in srgb, #6366f1 15%, transparent);
+    color: #6366f1;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+    }
+  }
+
+  &__name {
+    border: 1px solid transparent;
+    background: transparent;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--cp-text, #1a1c1e);
+    padding: 6px 8px;
+    border-radius: 8px;
+    min-width: 0;
+    max-width: 320px;
+
+    &:hover {
+      border-color: var(--cp-border, #e0e3e7);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: #6366f1;
+      background: var(--cp-surface, #fff);
+    }
+  }
+
+  &__dirty {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f59e0b;
+    flex-shrink: 0;
+  }
+
+  &__group--actions button {
+    margin-left: 4px;
+  }
+
+  &__save {
+    background: #6366f1;
+    color: #fff;
+  }
+
+  &__run {
+    background: #22c55e;
+    color: #fff;
+  }
+
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+}
+
+.cp-flow-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.cp-flow-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--cp-surface, #fff);
+  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
+  transition: width 0.15s ease;
+
+  &--left {
+    width: 300px;
+    border-right: 1px solid var(--cp-border, #e0e3e7);
+  }
+
+  &--right {
+    width: 340px;
+    border-left: 1px solid var(--cp-border, #e0e3e7);
+  }
+
+  &--collapsed {
+    width: 40px;
+  }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: 6px 8px;
+    min-height: 44px;
+  }
+
+  &--right &__head {
+    justify-content: flex-start;
+  }
+
+  &--left &__head {
+    justify-content: flex-end;
+  }
+
+  &__collapse mat-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    color: var(--cp-text-muted, #5f6368);
+  }
+
+  &__rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+    padding: 10px 0;
+    border: none;
+    background: transparent;
+    color: var(--cp-text-muted, #5f6368);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--cp-surface-muted, #f5f6f8);
+      color: var(--cp-text, #1a1c1e);
+    }
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+      flex-shrink: 0;
+    }
+  }
+
+  &__rail-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  sm-clearpipe-flow-palette,
+  sm-clearpipe-flow-config-panel {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+.cp-flow-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}

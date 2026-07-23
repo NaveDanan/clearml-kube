@@ -1,66 +1,86 @@
 <article class="clearpipe-node-card"
+         [attr.data-kind]="presentation().node.kind"
          [class.clearpipe-node-card--selected]="presentation().selected"
          [class.clearpipe-node-card--disabled]="presentation().disabled"
          [attr.aria-label]="presentation().typeLabel + ' node ' + presentation().node.label"
          [attr.aria-disabled]="presentation().disabled || null">
-  <button type="button"
-          class="clearpipe-node-card__identity"
-          [attr.aria-pressed]="presentation().selected ?? false"
-          [attr.aria-describedby]="presentation().disabledReason ? 'clearpipe-node-reason-' + presentation().node.id : null"
-          (click)="select()">
-    <mat-icon aria-hidden="true" [fontIcon]="presentation().icon"></mat-icon>
-    <span class="clearpipe-node-card__identity-copy">
-      <span class="clearpipe-node-card__type">{{ presentation().typeLabel }}</span>
-      <strong>{{ presentation().node.label }}</strong>
-      <small>{{ presentation().summary }}</small>
+
+  <span class="clearpipe-node-card__handle clearpipe-node-card__handle--in" aria-hidden="true"></span>
+
+  <header class="clearpipe-node-card__header">
+    <button type="button"
+            class="clearpipe-node-card__identity"
+            [attr.aria-pressed]="presentation().selected ?? false"
+            [attr.aria-describedby]="presentation().disabledReason ? 'clearpipe-node-reason-' + presentation().node.id : null"
+            (click)="select()">
+      <span class="clearpipe-node-card__icon">
+        <mat-icon aria-hidden="true" fontSet="al" [fontIcon]="presentation().icon"></mat-icon>
+      </span>
+      <span class="clearpipe-node-card__identity-copy">
+        <span class="clearpipe-node-card__type">{{ presentation().typeLabel }}</span>
+        <strong>{{ presentation().node.label }}</strong>
+        <small>{{ presentation().summary }}</small>
+      </span>
+    </button>
+    <span class="clearpipe-node-card__header-status">
+      @if (headerStatusTone(); as tone) {
+        <span class="clearpipe-node-card__status-indicator" [attr.data-tone]="tone" aria-hidden="true"></span>
+      }
+      <span class="clearpipe-node-card__selection">{{ presentation().selected ? 'Selected' : 'Inspect' }}</span>
     </span>
-    <span class="clearpipe-node-card__selection">{{ presentation().selected ? 'Selected' : 'Inspect' }}</span>
-  </button>
+  </header>
 
-  <dl class="clearpipe-node-card__metadata">
-    <div><dt>Stable ID</dt><dd><code>{{ presentation().node.id }}</code></dd></div>
-    <div><dt>Kind</dt><dd>{{ presentation().node.kind }}</dd></div>
-  </dl>
+  <div class="clearpipe-node-card__body">
+    <dl class="clearpipe-node-card__metadata">
+      <div><dt>Stable ID</dt><dd><code>{{ presentation().node.id }}</code></dd></div>
+      <div><dt>Kind</dt><dd>{{ presentation().node.kind }}</dd></div>
+    </dl>
 
-  @if (presentation().disabledReason) {
-    <p class="clearpipe-node-card__reason" [id]="'clearpipe-node-reason-' + presentation().node.id">
-      <mat-icon aria-hidden="true">block</mat-icon>{{ presentation().disabledReason }}
-    </p>
-  }
+    @if (presentation().disabledReason) {
+      <p class="clearpipe-node-card__reason" [id]="'clearpipe-node-reason-' + presentation().node.id">
+        <mat-icon aria-hidden="true" fontSet="al" fontIcon="al-ico-alert"></mat-icon>{{ presentation().disabledReason }}
+      </p>
+    }
 
-  @if (presentation().statuses?.length) {
-    <section class="clearpipe-node-card__statuses" aria-label="Node status">
-      @for (status of presentation().statuses ?? []; track status.label + status.detail) {
-        <sm-clearpipe-status [status]="status"/>
-      }
-    </section>
-  }
+    @if (presentation().statuses?.length) {
+      <section class="clearpipe-node-card__statuses" aria-label="Node status">
+        @for (status of presentation().statuses ?? []; track status.label + status.detail) {
+          <sm-clearpipe-status [status]="status"/>
+        }
+      </section>
+    }
 
-  @if (presentation().validations?.length) {
-    <section class="clearpipe-node-card__validations" aria-label="Validation">
-      @for (validation of presentation().validations ?? []; track validation.code + validation.message) {
-        <sm-clearpipe-validation [validation]="validation" (focusRequested)="validationFocused.emit($event)"/>
-      }
-    </section>
-  }
+    @if (presentation().validations?.length) {
+      <section class="clearpipe-node-card__validations" aria-label="Validation">
+        @for (validation of presentation().validations ?? []; track validation.code + validation.message) {
+          <sm-clearpipe-validation [validation]="validation" (focusRequested)="validationFocused.emit($event)"/>
+        }
+      </section>
+    }
 
-  @if (presentation().ports?.length) {
-    <section class="clearpipe-node-card__ports" aria-label="Node ports">
-      @for (port of presentation().ports ?? []; track port.port.id) {
-        <sm-clearpipe-port [presentation]="port"
-                           (activated)="portActivated.emit($event)"
-                           (validationFocused)="validationFocused.emit($event)"/>
-      }
-    </section>
-  }
+    @if (presentation().ports?.length) {
+      <section class="clearpipe-node-card__ports" aria-label="Node ports">
+        @for (port of presentation().ports ?? []; track port.port.id) {
+          <sm-clearpipe-port [presentation]="port"
+                             (activated)="portActivated.emit($event)"
+                             (validationFocused)="validationFocused.emit($event)"/>
+        }
+      </section>
+    }
+  </div>
 
-  @if (presentation().actions?.length) {
-    <section class="clearpipe-node-card__actions" aria-label="Node actions">
-      @for (action of presentation().actions ?? []; track action.id) {
-        <sm-clearpipe-node-action [action]="action"
-                                  [idPrefix]="presentation().node.id"
-                                  (invoked)="actionRequested.emit($event)"/>
-      }
-    </section>
-  }
+  <footer class="clearpipe-node-card__footer">
+    <span class="clearpipe-node-card__badge">{{ presentation().typeLabel }}</span>
+    @if (presentation().actions?.length) {
+      <section class="clearpipe-node-card__actions" aria-label="Node actions">
+        @for (action of presentation().actions ?? []; track action.id) {
+          <sm-clearpipe-node-action [action]="action"
+                                    [idPrefix]="presentation().node.id"
+                                    (invoked)="actionRequested.emit($event)"/>
+        }
+      </section>
+    }
+  </footer>
+
+  <span class="clearpipe-node-card__handle clearpipe-node-card__handle--out" aria-hidden="true"></span>
 </article>

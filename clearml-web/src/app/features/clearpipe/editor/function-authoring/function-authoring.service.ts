@@ -63,8 +63,24 @@ export class ClearpipeFunctionAuthoringService {
         ...(definition.packages?.length ? {packages: [...definition.packages]} : {}),
         ...(definition.retryOnFailure !== undefined ? {retry_on_failure: definition.retryOnFailure} : {}),
       },
-      visual: {position: {x: 0, y: 0}},
+      visual: {position: this.nextPlacement()},
     });
+  }
+
+  /**
+   * Cascades newly authored nodes across the canvas so freshly created steps stay
+   * visible instead of stacking at the origin. This only seeds an initial
+   * visual.position; the graph model, persistence, and validation are unchanged.
+   */
+  private nextPlacement(): {x: number; y: number} {
+    const count = this.graphStore.nodes().length;
+    const columns = 4;
+    const stepX = 260;
+    const stepY = 170;
+    return {
+      x: 80 + (count % columns) * stepX,
+      y: 80 + Math.floor(count / columns) * stepY,
+    };
   }
 
   /**

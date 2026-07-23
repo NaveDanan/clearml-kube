@@ -1,0 +1,40 @@
+<header class="palette-header">
+  <h2>Node Palette</h2>
+  <p>Drag nodes onto the canvas</p>
+</header>
+
+@for (meta of nodeTypes; track meta.type) {
+  <div class="category-label">{{ meta.categoryLabel }}</div>
+  <div
+    class="node-card"
+    draggable="true"
+    [style.--accent]="meta.accent"
+    (dragstart)="onDragStart($event, meta.type)"
+  >
+    <mat-icon class="grip" fontSet="al" fontIcon="al-ico-drag"></mat-icon>
+    <span class="icon-chip">
+      <mat-icon fontSet="al" [fontIcon]="meta.icon"></mat-icon>
+    </span>
+    <div class="node-text">
+      <div class="node-label">{{ meta.label }}</div>
+      <div class="node-description">{{ meta.description }}</div>
+    </div>
+  </div>
+}
+
+<div class="category-label">Regions</div>
+<div
+  class="node-card node-card--boundary"
+  draggable="true"
+  style="--accent: #64748b"
+  (dragstart)="onBoundaryDragStart($event)"
+>
+  <mat-icon class="grip" fontSet="al" fontIcon="al-ico-drag"></mat-icon>
+  <span class="icon-chip">
+    <mat-icon fontSet="al" fontIcon="al-ico-frame-rule"></mat-icon>
+  </span>
+  <div class="node-text">
+    <div class="node-label">Boundary</div>
+    <div class="node-description">Scope the pipeline; it stops when it leaves this region</div>
+  </div>
+</div>

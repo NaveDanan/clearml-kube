@@ -1,45 +1,50 @@
 @if (presentation(); as inspector) {
   <section class="clearpipe-inspector" [attr.aria-label]="'Inspector for ' + inspector.title">
     <header class="clearpipe-inspector__header">
-      <div>
-        <span class="clearpipe-inspector__eyebrow">Inspector · {{ inspector.typeLabel }}</span>
-        <h2 #inspectorHeading tabindex="-1">{{ inspector.title }}</h2>
-        @if (inspector.summary) { <p>{{ inspector.summary }}</p> }
+      <div class="clearpipe-inspector__heading">
+        <span class="clearpipe-inspector__icon" aria-hidden="true"><mat-icon fontSet="al" fontIcon="al-ico-properties"></mat-icon></span>
+        <div class="clearpipe-inspector__heading-text">
+          <span class="clearpipe-inspector__eyebrow">Inspector · {{ inspector.typeLabel }}</span>
+          <h2 #inspectorHeading tabindex="-1">{{ inspector.title }}</h2>
+          @if (inspector.summary) { <p>{{ inspector.summary }}</p> }
+        </div>
       </div>
       <div class="clearpipe-inspector__header-actions">
-        <button type="button" (click)="collapseRequested.emit()" aria-label="Collapse inspector"><mat-icon aria-hidden="true">chevron_right</mat-icon></button>
-        <button type="button" (click)="closeRequested.emit()" aria-label="Close inspector"><mat-icon aria-hidden="true">close</mat-icon></button>
+        <button type="button" (click)="collapseRequested.emit()" aria-label="Collapse inspector"><mat-icon aria-hidden="true" fontSet="al" fontIcon="al-ico-arrow-right"></mat-icon></button>
+        <button type="button" (click)="closeRequested.emit()" aria-label="Close inspector"><mat-icon aria-hidden="true" fontSet="al" fontIcon="al-ico-close-circle"></mat-icon></button>
       </div>
     </header>
 
-    <dl class="clearpipe-inspector__identity">
-      <div><dt>Stable ID</dt><dd><code>{{ inspector.node.id }}</code></dd></div>
-      <div><dt>Type</dt><dd>{{ inspector.node.kind }}</dd></div>
-      <div><dt>Source</dt><dd>{{ baseReference() }}</dd></div>
-      @if (inspector.source) {
-        <div><dt>Source link</dt><dd><a [href]="inspector.source.href" rel="noopener" (click)="sourceRequested.emit(inspector.source)">{{ inspector.source.label }}</a></dd></div>
+    <div class="clearpipe-inspector__meta">
+      <dl class="clearpipe-inspector__identity clearpipe-inspector__card">
+        <div><dt>Stable ID</dt><dd><code>{{ inspector.node.id }}</code></dd></div>
+        <div><dt>Type</dt><dd>{{ inspector.node.kind }}</dd></div>
+        <div><dt>Source</dt><dd>{{ baseReference() }}</dd></div>
+        @if (inspector.source) {
+          <div><dt>Source link</dt><dd><a [href]="inspector.source.href" rel="noopener" (click)="sourceRequested.emit(inspector.source)">{{ inspector.source.label }}</a></dd></div>
+        }
+      </dl>
+
+      @if (inspector.readOnly) {
+        <p class="clearpipe-inspector__readonly" role="status"><mat-icon aria-hidden="true" fontSet="al" fontIcon="al-ico-lock"></mat-icon>{{ inspector.readOnlyReason ?? 'This node is read-only.' }}</p>
       }
-    </dl>
 
-    @if (inspector.readOnly) {
-      <p class="clearpipe-inspector__readonly" role="status"><mat-icon aria-hidden="true">lock</mat-icon>{{ inspector.readOnlyReason ?? 'This node is read-only.' }}</p>
-    }
+      @if (inspector.statuses?.length) {
+        <section class="clearpipe-inspector__statuses" aria-label="Node status">
+          @for (status of inspector.statuses ?? []; track status.label + status.detail) {
+            <sm-clearpipe-status [status]="status"/>
+          }
+        </section>
+      }
 
-    @if (inspector.statuses?.length) {
-      <section class="clearpipe-inspector__statuses" aria-label="Node status">
-        @for (status of inspector.statuses ?? []; track status.label + status.detail) {
-          <sm-clearpipe-status [status]="status"/>
-        }
-      </section>
-    }
-
-    @if (inspector.validations?.length) {
-      <section class="clearpipe-inspector__validations" aria-label="Validation">
-        @for (validation of inspector.validations ?? []; track validation.code + validation.message) {
-          <sm-clearpipe-validation [validation]="validation" (focusRequested)="validationFocused.emit($event)"/>
-        }
-      </section>
-    }
+      @if (inspector.validations?.length) {
+        <section class="clearpipe-inspector__validations" aria-label="Validation">
+          @for (validation of inspector.validations ?? []; track validation.code + validation.message) {
+            <sm-clearpipe-validation [validation]="validation" (focusRequested)="validationFocused.emit($event)"/>
+          }
+        </section>
+      }
+    </div>
 
     <div class="clearpipe-inspector__tabs" role="tablist" aria-label="Inspector sections">
       @for (tab of tabs(); track tab.id; let index = $index) {
@@ -62,30 +67,37 @@
              [id]="panelId(currentTab())"
              [attr.aria-labelledby]="tabId(currentTab())">
       @if (selectedTab() === 'configuration') {
-        <div #formOutlet></div>
-        @if (!form()) {
-          <p class="clearpipe-inspector__empty">No registered configuration form is available for this {{ inspector.typeLabel }} node.</p>
-        }
+        <div class="clearpipe-inspector__section">
+          <div #formOutlet></div>
+          @if (!form()) {
+            <p class="clearpipe-inspector__empty">No registered configuration form is available for this {{ inspector.typeLabel }} node.</p>
+          }
+        </div>
       } @else if (selectedTab() === 'general') {
-        <dl class="clearpipe-inspector__general">
+        <dl class="clearpipe-inspector__general clearpipe-inspector__card">
           <div><dt>Name</dt><dd>{{ inspector.node.name }}</dd></div>
           <div><dt>Label</dt><dd>{{ inspector.node.label }}</dd></div>
           <div><dt>Port count</dt><dd>{{ inspector.node.ports.length }}</dd></div>
           <div><dt>Read-only</dt><dd>{{ inspector.readOnly ? 'Yes' : 'No' }}</dd></div>
         </dl>
       } @else if (activeSlot(); as slot) {
-        <ng-container [ngTemplateOutlet]="slot.template" [ngTemplateOutletContext]="slotContext()"/>
+        <div class="clearpipe-inspector__section">
+          <ng-container [ngTemplateOutlet]="slot.template" [ngTemplateOutletContext]="slotContext()"/>
+        </div>
       }
     </section>
   </section>
 } @else {
   <section class="clearpipe-inspector clearpipe-inspector--empty" aria-labelledby="clearpipe-inspector-empty-title">
     <header class="clearpipe-inspector__header">
-      <div>
-        <span class="clearpipe-inspector__eyebrow">Inspector</span>
-        <h2 #inspectorHeading id="clearpipe-inspector-empty-title" tabindex="-1">No node selected</h2>
+      <div class="clearpipe-inspector__heading">
+        <span class="clearpipe-inspector__icon" aria-hidden="true"><mat-icon fontSet="al" fontIcon="al-ico-properties"></mat-icon></span>
+        <div class="clearpipe-inspector__heading-text">
+          <span class="clearpipe-inspector__eyebrow">Inspector</span>
+          <h2 #inspectorHeading id="clearpipe-inspector-empty-title" tabindex="-1">No node selected</h2>
+        </div>
       </div>
-      <button type="button" (click)="closeRequested.emit()" aria-label="Close inspector"><mat-icon aria-hidden="true">close</mat-icon></button>
+      <button type="button" (click)="closeRequested.emit()" aria-label="Close inspector"><mat-icon aria-hidden="true" fontSet="al" fontIcon="al-ico-close-circle"></mat-icon></button>
     </header>
     <p>Select a task or function node to review its safe configuration, identity, and validation.</p>
   </section>

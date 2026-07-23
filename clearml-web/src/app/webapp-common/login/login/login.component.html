@@ -51,6 +51,26 @@
             </button>
           }
 
+          @if (showSso()) {
+            @if (showLogin()) {
+              <div class="sso-divider"><span>or</span></div>
+            }
+            @for (provider of ssoProviders(); track provider.name) {
+              <button
+                mat-stroked-button
+                type="button"
+                class="sso-button"
+                (click)="loginWithSso(provider)"
+                [disabled]="showSpinner()"
+              >
+                @if (provider.icon) {
+                  <i class="al-icon {{ provider.icon }}"></i>
+                }
+                <span>Log in with {{ provider.displayName || provider.name }}</span>
+              </button>
+            }
+          }
+
           <mat-autocomplete #auto="matAutocomplete">
             @for (option of filteredOptions$ | ngrxPush; track option.name) {
               <mat-option [value]="option.name">

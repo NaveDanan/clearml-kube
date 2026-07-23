@@ -137,6 +137,40 @@
       margin-left: -2px;
     }
 
+    .sso-divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--color-secondary-fixed-dim, #8492c2);
+      font-size: 12px;
+      margin: 0 0 16px;
+
+      &::before,
+      &::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: currentColor;
+        opacity: 0.3;
+      }
+
+      span {
+        padding: 0 12px;
+      }
+    }
+
+    .sso-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 0 0 16px 0;
+
+      i {
+        font-size: 16px;
+      }
+    }
+
     &.dark-theme {
       color: rgba(255, 255, 255, 0.87);
       background-image: url(../../assets/infinity_anim--on_light.svg), linear-gradient(100deg, #22408a 6%, #09173c 82%);

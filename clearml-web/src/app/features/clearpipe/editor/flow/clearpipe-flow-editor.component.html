@@ -1,0 +1,87 @@
+<section class="cp-flow-editor">
+  <header class="cp-flow-toolbar">
+    <div class="cp-flow-toolbar__group cp-flow-toolbar__group--identity">
+      <a class="cp-flow-toolbar__back" mat-icon-button routerLink="/clearpipe" title="Back to ClearPipe library">
+        <mat-icon fontSet="al" fontIcon="al-ico-back"></mat-icon>
+      </a>
+      <span class="cp-flow-toolbar__icon">
+        <mat-icon fontSet="al" fontIcon="al-ico-pipelines"></mat-icon>
+      </span>
+      <input class="cp-flow-toolbar__name"
+             [ngModel]="name()"
+             (ngModelChange)="setName($event)"
+             aria-label="Pipeline name"
+             placeholder="Untitled ClearPipe" />
+      @if (dirty()) {
+        <span class="cp-flow-toolbar__dirty" title="Unsaved changes"></span>
+      }
+    </div>
+
+    <div class="cp-flow-toolbar__group cp-flow-toolbar__group--actions">
+      <button mat-stroked-button type="button" (click)="newPipeline()">
+        <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon>
+        New
+      </button>
+      <button mat-stroked-button type="button" (click)="triggerImport()">
+        <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
+        Import
+      </button>
+      <button mat-stroked-button type="button" (click)="exportPipeline()">
+        <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
+        Export
+      </button>
+      <button mat-flat-button type="button" class="cp-flow-toolbar__save" (click)="save()" [disabled]="saving()">
+        <mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>
+        Save
+      </button>
+      <button mat-flat-button type="button" class="cp-flow-toolbar__run" (click)="run()"
+              title="Start a new pipeline sequence from the scheduled triggers">
+        <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>
+        Run
+      </button>
+      <input #fileInput type="file" accept="application/json" hidden (change)="importPipeline($event)" />
+    </div>
+  </header>
+
+  <div class="cp-flow-body">
+    <aside class="cp-flow-panel cp-flow-panel--left" [class.cp-flow-panel--collapsed]="paletteCollapsed()">
+      @if (paletteCollapsed()) {
+        <button class="cp-flow-panel__rail" type="button" (click)="togglePalette()"
+                title="Expand node palette" aria-label="Expand node palette" [attr.aria-expanded]="false">
+          <mat-icon fontSet="al" fontIcon="al-ico-arrow-right"></mat-icon>
+          <span class="cp-flow-panel__rail-label">Node Palette</span>
+        </button>
+      } @else {
+        <div class="cp-flow-panel__head">
+          <button mat-icon-button type="button" class="cp-flow-panel__collapse" (click)="togglePalette()"
+                  title="Collapse node palette" aria-label="Collapse node palette" [attr.aria-expanded]="true">
+            <mat-icon fontSet="al" fontIcon="al-ico-arrow-left"></mat-icon>
+          </button>
+        </div>
+        <sm-clearpipe-flow-palette></sm-clearpipe-flow-palette>
+      }
+    </aside>
+
+    <main class="cp-flow-stage">
+      <sm-clearpipe-flow-canvas></sm-clearpipe-flow-canvas>
+    </main>
+
+    <aside class="cp-flow-panel cp-flow-panel--right" [class.cp-flow-panel--collapsed]="inspectorCollapsed()">
+      @if (inspectorCollapsed()) {
+        <button class="cp-flow-panel__rail" type="button" (click)="toggleInspector()"
+                title="Expand configuration" aria-label="Expand configuration" [attr.aria-expanded]="false">
+          <mat-icon fontSet="al" fontIcon="al-ico-arrow-left"></mat-icon>
+          <span class="cp-flow-panel__rail-label">Configuration</span>
+        </button>
+      } @else {
+        <div class="cp-flow-panel__head">
+          <button mat-icon-button type="button" class="cp-flow-panel__collapse" (click)="toggleInspector()"
+                  title="Collapse configuration" aria-label="Collapse configuration" [attr.aria-expanded]="true">
+            <mat-icon fontSet="al" fontIcon="al-ico-arrow-right"></mat-icon>
+          </button>
+        </div>
+        <sm-clearpipe-flow-config-panel></sm-clearpipe-flow-config-panel>
+      }
+    </aside>
+  </div>
+</section>
