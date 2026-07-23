@@ -48,7 +48,7 @@ apiserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-25"
+    tag: "2026-07-26"
   service:
     type: ClusterIP
   ingress:
@@ -73,7 +73,7 @@ fileserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-25"
+    tag: "2026-07-26"
   service:
     type: ClusterIP
   ingress:
@@ -119,7 +119,7 @@ webserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-25"
+    tag: "2026-07-26"
   service:
     type: ClusterIP
   additionalConfigs:
@@ -155,7 +155,7 @@ runaiWorker:
   image:
     repository: "runai-worker"
     pullPolicy: IfNotPresent
-    tag: "2026-07-25"
+    tag: "2026-07-26"
   replicaCount: 1
   pollInterval: 3
   batchSize: 5
