@@ -27,6 +27,7 @@ const NODE_H = 92;
 const CLICK_THRESHOLD = 4;
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 2.5;
+const FIT_VIEW_PADDING = 48;
 const BOUNDARY_MIN_W = 140;
 const BOUNDARY_MIN_H = 100;
 const VALID_TYPES: readonly ClearpipeFlowNodeType[] = [
@@ -377,7 +378,28 @@ export class ClearpipeFlowCanvasComponent {
   }
 
   protected fitView(): void {
-    this.store.setViewport({x: 40, y: 40, zoom: 1});
+    const nodes = this.nodes();
+    if (!nodes.length) {
+      this.store.setViewport({x: 40, y: 40, zoom: 1});
+      return;
+    }
+
+    const rect = this.canvasRef().nativeElement.getBoundingClientRect();
+    const minX = Math.min(...nodes.map((node) => node.position.x));
+    const minY = Math.min(...nodes.map((node) => node.position.y));
+    const maxX = Math.max(...nodes.map((node) => node.position.x + NODE_W));
+    const maxY = Math.max(...nodes.map((node) => node.position.y + NODE_H));
+    const contentWidth = maxX - minX;
+    const contentHeight = maxY - minY;
+    const availableWidth = Math.max(1, rect.width - FIT_VIEW_PADDING * 2);
+    const availableHeight = Math.max(1, rect.height - FIT_VIEW_PADDING * 2);
+    const zoom = this.clampZoom(Math.min(availableWidth / contentWidth, availableHeight / contentHeight));
+
+    this.store.setViewport({
+      x: (rect.width - contentWidth * zoom) / 2 - minX * zoom,
+      y: (rect.height - contentHeight * zoom) / 2 - minY * zoom,
+      zoom,
+    });
   }
 
   private clampZoom(zoom: number): number {

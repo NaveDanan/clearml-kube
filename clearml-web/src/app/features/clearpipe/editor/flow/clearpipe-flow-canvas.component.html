@@ -115,7 +115,7 @@
     <button mat-icon-button type="button" title="Zoom out" (pointerdown)="$event.stopPropagation()" (click)="zoomBy(0.8)">
       <mat-icon fontSet="al" fontIcon="al-ico-minus"></mat-icon>
     </button>
-    <button mat-icon-button type="button" title="Reset view" (pointerdown)="$event.stopPropagation()" (click)="fitView()">
+    <button mat-icon-button type="button" title="Fit" aria-label="Fit canvas" (pointerdown)="$event.stopPropagation()" (click)="fitView()">
       <mat-icon fontSet="al" fontIcon="al-ico-crop"></mat-icon>
     </button>
   </div>

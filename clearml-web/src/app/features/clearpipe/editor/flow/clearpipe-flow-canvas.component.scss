@@ -29,6 +29,17 @@
   --cp-accent-edge: var(--color-on-surface-variant);
 }
 
+button[mat-icon-button] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: normal;
+
+  mat-icon {
+    display: block;
+  }
+}
+
 .cp-flow-canvas {
   position: absolute;
   inset: 0;
