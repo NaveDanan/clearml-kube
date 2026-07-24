@@ -38,6 +38,7 @@ export interface ClearpipeDefinition {
   owner?: {id?: string; name?: string};
   public?: boolean;
   archived?: boolean;
+  activated?: boolean;
   can_edit?: boolean;
 }
 
@@ -180,6 +181,7 @@ export const normalizeDefinition = (raw: unknown): ClearpipeDefinition => {
     owner: typeof value.user === 'object' ? value.user : {id: value.user},
     public: value.public,
     archived: value.archived,
+    activated: Boolean(value.activated ?? graph.activated),
     can_edit: value.can_edit ?? true,
   };
 };

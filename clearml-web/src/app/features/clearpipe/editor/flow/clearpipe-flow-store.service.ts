@@ -33,6 +33,13 @@ export class ClearpipeFlowStoreService {
   /** Output port of an in-progress connection gesture (drag from a node output). */
   readonly connectingFrom = signal<string | null>(null);
 
+  /** When true the pipeline is available to run (schedulers fire as programmed). */
+  readonly activated = signal(false);
+  /** True while a real backend run is in progress (controller not yet terminal). */
+  readonly running = signal(false);
+  /** The controller run task id of the in-progress/last run, for status polling. */
+  readonly runTaskId = signal<string | null>(null);
+
   private readonly history = signal<FlowSnapshot[]>([]);
   private readonly historyIndex = signal(-1);
 
@@ -62,10 +69,12 @@ export class ClearpipeFlowStoreService {
   load(graph: ClearpipeFlowGraph): void {
     const clone = structuredClone(graph);
     if (!Array.isArray(clone.boundaries)) clone.boundaries = [];
+    this.resetRun();
     this.graph.set(clone);
     this.selectedNodeId.set(null);
     this.selectedBoundaryId.set(null);
     this.connectingFrom.set(null);
+    this.activated.set(clone.activated === true);
     this.dirty.set(false);
     this.history.set([this.snapshot(clone)]);
     this.historyIndex.set(0);
@@ -73,6 +82,18 @@ export class ClearpipeFlowStoreService {
 
   reset(): void {
     this.load(emptyClearpipeFlowGraph());
+  }
+
+  /**
+   * Set whether the pipeline is available to run. Activation is persisted
+   * server-side by the editor (clearpipe.set_activation); it is authoring
+   * metadata, not a graph change, so it never marks the graph dirty. The value
+   * is mirrored into the graph so JSON export/import carries it too.
+   */
+  setActivated(value: boolean): void {
+    this.activated.set(value);
+    if (this.graph().activated === value) return;
+    this.graph.update((graph) => ({...graph, activated: value}));
   }
 
   markSaved(graph?: ClearpipeFlowGraph): void {
@@ -313,69 +334,64 @@ export class ClearpipeFlowStoreService {
   }
 
   /**
-   * Start a pipeline run from the scheduled entry points and propagate a
-   * "running" status through connected nodes. Scheduled nodes flagged
-   * `fireWhenStart` fire immediately; edges that leave a boundary stop there.
+   * Begin tracking a real backend run. Marks the pipeline running and sets every
+   * node to "pending" until the first execution snapshot arrives. Status updates
+   * are transient UI only: they never touch undo history and never mark the graph
+   * dirty, so running a pipeline never requires re-saving.
    */
-  startSequence(): void {
-    const graph = this.graph();
-    const scheduled = graph.nodes.filter(
-      (node) => node.type === 'scheduled' && node.config['enabled'] !== false,
-    );
-    let entries = scheduled
-      .filter((node) => node.config['fireWhenStart'] === true)
-      .map((node) => node.id);
-    if (!entries.length && scheduled.length) entries = scheduled.map((node) => node.id);
-    if (!entries.length) {
-      const targets = new Set(graph.edges.map((edge) => edge.target));
-      entries = graph.nodes.filter((node) => !targets.has(node.id)).map((node) => node.id);
-    }
+  beginRun(runTaskId: string): void {
+    this.runTaskId.set(runTaskId);
+    this.running.set(true);
+    const pending = new Map<string, {status: ClearpipeFlowStatus; message?: string}>();
+    this.graph().nodes.forEach((node) => pending.set(node.id, {status: 'pending', message: 'Pending'}));
+    this.applyRunStatuses(pending);
+  }
 
-    const outgoing = new Map<string, string[]>();
-    graph.edges.forEach((edge) =>
-      outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge.target]),
-    );
-    const statuses = new Map<string, {status: ClearpipeFlowStatus; message?: string}>();
-    graph.nodes.forEach((node) => statuses.set(node.id, {status: 'idle'}));
-    entries.forEach((id) => statuses.set(id, {status: 'running', message: 'Triggered by schedule'}));
+  /** Apply real per-node statuses from a backend execution snapshot. */
+  applyRunSnapshot(statuses: Map<string, {status: ClearpipeFlowStatus; message?: string}>): void {
+    this.applyRunStatuses(statuses);
+  }
 
-    const queue = [...entries];
-    const visited = new Set<string>();
-    while (queue.length) {
-      const current = queue.shift()!;
-      if (visited.has(current)) continue;
-      visited.add(current);
-      for (const next of outgoing.get(current) ?? []) {
-        if (this.crossesBoundary(current, next)) {
-          statuses.set(next, {status: 'warning', message: 'Outside boundary \u2014 pipeline stops here'});
-          continue;
-        }
-        if ((statuses.get(next)?.status ?? 'idle') === 'idle') {
-          statuses.set(next, {status: 'running', message: 'Queued by pipeline'});
-        }
-        queue.push(next);
+  /** The controller run reached a terminal state; stop tracking as running. */
+  finishRun(): void {
+    this.running.set(false);
+  }
+
+  /** Mark an interrupted run: any not-yet-finished node becomes "stopped". */
+  markRunStopped(): void {
+    this.running.set(false);
+    const stopped = new Map<string, {status: ClearpipeFlowStatus; message?: string}>();
+    this.graph().nodes.forEach((node) => {
+      if (node.status === 'pending' || node.status === 'running') {
+        stopped.set(node.id, {status: 'stopped', message: 'Stopped'});
       }
-    }
+    });
+    if (stopped.size) this.applyRunStatuses(stopped);
+  }
 
-    this.mutate((current) => ({
-      ...current,
-      nodes: current.nodes.map((node) => {
-        const next = statuses.get(node.id) ?? {status: 'idle' as ClearpipeFlowStatus};
+  /** Clear all run state and reset node statuses to idle (on load / new). */
+  resetRun(): void {
+    this.running.set(false);
+    this.runTaskId.set(null);
+    if (this.graph().nodes.every((node) => node.status === 'idle')) return;
+    const cleared = new Map<string, {status: ClearpipeFlowStatus}>();
+    this.graph().nodes.forEach((node) => cleared.set(node.id, {status: 'idle'}));
+    this.applyRunStatuses(cleared);
+  }
+
+  /** Apply transient run statuses to the graph without dirtying it or recording
+   *  undo history (statuses are never persisted by the save codec). */
+  private applyRunStatuses(
+    statuses: Map<string, {status: ClearpipeFlowStatus; message?: string}>,
+  ): void {
+    this.graph.update((graph) => ({
+      ...graph,
+      nodes: graph.nodes.map((node) => {
+        const next = statuses.get(node.id);
+        if (!next) return node;
         return {...node, status: next.status, statusMessage: next.message};
       }),
     }));
-  }
-
-  /** True when the edge source sits inside a boundary that excludes the target. */
-  private crossesBoundary(sourceId: string, targetId: string): boolean {
-    const graph = this.graph();
-    if (!graph.boundaries.length) return false;
-    const source = graph.nodes.find((node) => node.id === sourceId);
-    const target = graph.nodes.find((node) => node.id === targetId);
-    if (!source || !target) return false;
-    return graph.boundaries.some(
-      (boundary) => this.boundaryContains(boundary, source) && !this.boundaryContains(boundary, target),
-    );
   }
 
   private boundaryContains(boundary: ClearpipeFlowBoundary, node: ClearpipeFlowNode): boolean {

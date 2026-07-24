@@ -116,9 +116,42 @@
     color: #fff;
   }
 
+  &__divider {
+    width: 1px;
+    align-self: stretch;
+    margin: 6px 4px;
+    background: var(--cp-border, #e0e3e7);
+  }
+
+  &__activate {
+    &--off {
+      background: #3b82f6;
+      color: #fff;
+    }
+
+    &--on {
+      background: #22c55e;
+      color: #fff;
+    }
+  }
+
   &__run {
     background: #22c55e;
     color: #fff;
+
+    &--running {
+      background: #f59e0b;
+      color: #fff;
+    }
+  }
+
+  &__stop {
+    background: #ef4444;
+    color: #fff;
+  }
+
+  &__spinner {
+    animation: cp-flow-toolbar-spin 0.9s linear infinite;
   }
 
   mat-icon {
@@ -128,6 +161,12 @@
     line-height: 16px;
     margin-right: 4px;
     vertical-align: middle;
+  }
+}
+
+@keyframes cp-flow-toolbar-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

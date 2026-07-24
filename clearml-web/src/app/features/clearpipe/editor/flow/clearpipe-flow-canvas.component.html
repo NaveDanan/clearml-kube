@@ -61,6 +61,11 @@
       <div class="cp-flow-node"
            [class.cp-flow-node--selected]="selectedNodeId() === node.id"
            [class.cp-flow-node--in-boundary]="containedNodeIds().has(node.id)"
+           [class.cp-flow-node--pending]="node.status === 'pending'"
+           [class.cp-flow-node--running]="node.status === 'running'"
+           [class.cp-flow-node--completed]="node.status === 'completed'"
+           [class.cp-flow-node--error]="node.status === 'error'"
+           [class.cp-flow-node--stopped]="node.status === 'stopped'"
            [style.--accent]="meta(node.type).accent"
            [style.left.px]="node.position.x"
            [style.top.px]="node.position.y"
@@ -77,9 +82,38 @@
             <span class="cp-flow-node__label">{{ node.label }}</span>
             <span class="cp-flow-node__desc">{{ node.description }}</span>
           </div>
-          <span class="cp-flow-node__status"
-                [style.background]="statusColors[node.status]"
-                [title]="node.statusMessage || node.status"></span>
+          @switch (node.status) {
+            @case ('pending') {
+              <span class="cp-flow-node__state cp-flow-node__state--pending" [title]="node.statusMessage || 'Pending'">
+                <span class="cp-flow-node__state-dot"></span>Pending
+              </span>
+            }
+            @case ('running') {
+              <span class="cp-flow-node__state cp-flow-node__state--running" [title]="node.statusMessage || 'Running'">
+                <span class="cp-flow-node__state-dot"></span>Running
+              </span>
+            }
+            @case ('completed') {
+              <span class="cp-flow-node__state cp-flow-node__state--completed" [title]="node.statusMessage || 'Completed'">
+                <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
+              </span>
+            }
+            @case ('stopped') {
+              <span class="cp-flow-node__state cp-flow-node__state--stopped" [title]="node.statusMessage || 'Stopped'">
+                <span class="cp-flow-node__state-dot"></span>Stopped
+              </span>
+            }
+            @case ('error') {
+              <span class="cp-flow-node__state cp-flow-node__state--error" [title]="node.statusMessage || 'Failed'">
+                <mat-icon fontSet="al" fontIcon="al-ico-abort"></mat-icon>
+              </span>
+            }
+            @default {
+              <span class="cp-flow-node__status"
+                    [style.background]="statusColors[node.status]"
+                    [title]="node.statusMessage || node.status"></span>
+            }
+          }
         </div>
 
         <div class="cp-flow-node__footer">

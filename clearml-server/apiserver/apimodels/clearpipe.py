@@ -61,6 +61,22 @@ class StartRequest(DefinitionRequest):
     node_queues = DictField()
     verify_watched_queue = BoolField(default=True)
     idempotency_key = StringField()
+    # "manual" (default) or "schedule". Scheduled triggers are only honored for
+    # activated definitions; manual triggers are gated by the caller's own UI.
+    trigger = StringField(default="manual")
+
+
+class SetActivationRequest(DefinitionRequest):
+    """Toggle whether a ClearPipe definition is available to run (its scheduler
+    fires). Activation is authoring metadata, not a graph change, so it does not
+    bump the definition revision."""
+
+    activated = BoolField(required=True)
+
+
+class LatestRunRequest(DefinitionRequest):
+    """Look up the most recent run started from a ClearPipe definition so the
+    editor can restore live run state after a refresh."""
 
 
 class ArchiveRequest(DefinitionRequest):
@@ -129,6 +145,22 @@ class StartResponse(models.Base):
     task = StringField(required=True)
     enqueued = BoolField(required=True)
     queue_watched = BoolField()
+
+
+class SetActivationResponse(models.Base):
+    task = StringField(required=True)
+    activated = BoolField(required=True)
+
+
+class LatestRunResponse(models.Base):
+    """`run` is null when the definition has never been started. `running`
+    reflects whether the controller task is in a non-terminal state."""
+
+    run = StringField()
+    status = StringField()
+    running = BoolField(default=False)
+    started_at = StringField()
+    revision = IntField()
 
 
 class ArchiveResponse(models.Base):

@@ -1,0 +1,83 @@
+{{- if .Values.clearpipeScheduler.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clearml.fullname" . }}-clearpipe-scheduler
+  labels:
+    {{- include "clearml.labels" . | nindent 4 }}
+    clearml.component: clearpipe-scheduler
+spec:
+  # IMPORTANT: replicas is intentionally hard-coded to 1 and is NOT configurable.
+  # Duplicate-run protection relies on a single replica plus the server-derived
+  # "last fired" marker (clearpipe.latest_run). There is NO distributed lock or
+  # schedule-slot deduplication, so running more than one replica is UNSUPPORTED
+  # and WILL cause double fires. Do not scale this Deployment.
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "clearml.selectorLabels" . | nindent 6 }}
+      clearml.component: clearpipe-scheduler
+  template:
+    metadata:
+      {{- with .Values.clearpipeScheduler.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "clearml.selectorLabels" . | nindent 8 }}
+        clearml.component: clearpipe-scheduler
+    spec:
+      {{- if .Values.imageCredentials.enabled }}
+      imagePullSecrets:
+      {{- if .Values.imageCredentials.existingSecret }}
+      - name: {{ .Values.imageCredentials.existingSecret }}
+      {{- else }}
+      - name: clearml-registry-key
+      {{- end }}
+      {{- end }}
+      {{- with .Values.clearpipeScheduler.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: clearpipe-scheduler
+          image: "{{ include "registryNamePrefix" (dict "globalValues" .Values.global "imageRegistryValue" .Values.clearpipeScheduler.image.registry) }}{{ .Values.clearpipeScheduler.image.repository }}:{{ .Values.clearpipeScheduler.image.tag }}"
+          imagePullPolicy: {{ .Values.clearpipeScheduler.image.pullPolicy }}
+          {{- with .Values.clearpipeScheduler.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: CLEARML_API_HOST
+              value: {{ .Values.clearpipeScheduler.apiHost | default (printf "http://%s:%v" (include "apiserver.referenceName" .) .Values.apiserver.service.port) | quote }}
+            - name: CLEARPIPE_SCHEDULER_POLL_SECONDS
+              value: {{ .Values.clearpipeScheduler.pollSeconds | quote }}
+            - name: CLEARPIPE_SCHEDULER_LOG_LEVEL
+              value: {{ .Values.clearpipeScheduler.logLevel | quote }}
+            - name: CLEARML_API_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.clearpipeScheduler.existingSecret | default (printf "%s-clearpipe-scheduler" (include "clearml.fullname" .)) }}
+                  key: access_key
+            - name: CLEARML_API_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.clearpipeScheduler.existingSecret | default (printf "%s-clearpipe-scheduler" (include "clearml.fullname" .)) }}
+                  key: secret_key
+          {{- with .Values.clearpipeScheduler.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.clearpipeScheduler.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.clearpipeScheduler.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.clearpipeScheduler.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

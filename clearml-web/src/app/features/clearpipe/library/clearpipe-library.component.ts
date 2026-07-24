@@ -59,6 +59,11 @@ export class ClearpipeLibraryComponent {
     this.load(this.search.value);
   }
 
+  /** Whether the pipeline is currently activated (available to run its schedulers). */
+  protected isActivated(definition: ClearpipeDefinition): boolean {
+    return definition.activated === true;
+  }
+
   protected open(definition: ClearpipeDefinition): void {
     this.router.navigate(['/clearpipe', definition.task_id ?? definition.id]);
   }

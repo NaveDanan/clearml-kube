@@ -15,7 +15,7 @@ export type ClearpipeFlowNodeType =
   | 'execute'
   | 'report';
 
-export type ClearpipeFlowStatus = 'idle' | 'running' | 'completed' | 'error' | 'warning';
+export type ClearpipeFlowStatus = 'idle' | 'pending' | 'running' | 'completed' | 'error' | 'warning' | 'stopped';
 
 /** The Dataset node's 3-way mode toggle: create a brand-new dataset, sync (re-version)
  *  an existing one, or just use an existing dataset + version as-is. */
@@ -109,6 +109,8 @@ export interface ClearpipeFlowGraph {
   id?: string;
   name: string;
   description?: string;
+  /** When true the pipeline is available to run (its schedulers fire as programmed). */
+  activated: boolean;
   nodes: ClearpipeFlowNode[];
   edges: ClearpipeFlowEdge[];
   boundaries: ClearpipeFlowBoundary[];
@@ -256,6 +258,7 @@ export const clearpipeFlowNodeMeta = (type: ClearpipeFlowNodeType): ClearpipeFlo
 
 export const emptyClearpipeFlowGraph = (): ClearpipeFlowGraph => ({
   name: 'Untitled ClearPipe',
+  activated: false,
   nodes: [],
   edges: [],
   boundaries: [],

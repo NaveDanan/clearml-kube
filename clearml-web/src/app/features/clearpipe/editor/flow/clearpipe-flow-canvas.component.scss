@@ -107,6 +107,31 @@ button[mat-icon-button] {
   }
 }
 
+// Smoothly-animatable custom property for the running node's rotating flair.
+@property --cp-flow-spin {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes cp-flow-spin {
+  to {
+    --cp-flow-spin: 360deg;
+  }
+}
+
+@keyframes cp-flow-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
 .cp-flow-boundary {
   position: absolute;
   border-radius: 12px;
@@ -256,6 +281,48 @@ button[mat-icon-button] {
     z-index: 2;
   }
 
+  // Running: a rotating conic-gradient "flair" sweeps around the node edge in the
+  // node's accent color.
+  &--running {
+    &::before {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: inherit;
+      padding: 3px;
+      background: conic-gradient(
+        from var(--cp-flow-spin, 0deg),
+        transparent 0deg,
+        color-mix(in srgb, var(--accent) 20%, transparent) 60deg,
+        var(--accent) 140deg,
+        transparent 220deg
+      );
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      animation: cp-flow-spin 1.1s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+  }
+
+  // Completed: a subtle green confirmation ring.
+  &--completed {
+    border-color: color-mix(in srgb, #22c55e 70%, transparent);
+  }
+
+  // Failed: a red ring.
+  &--error {
+    border-color: color-mix(in srgb, #ef4444 70%, transparent);
+  }
+
+  // Stopped: a muted grey ring.
+  &--stopped {
+    border-color: color-mix(in srgb, #6b7280 60%, transparent);
+  }
+
   &:active {
     cursor: grabbing;
   }
@@ -266,6 +333,8 @@ button[mat-icon-button] {
     gap: 10px;
     padding: 12px;
     border-bottom: 1px solid var(--cp-border, #e0e3e7);
+    position: relative;
+    z-index: 1;
   }
 
   &__icon {
@@ -315,6 +384,74 @@ button[mat-icon-button] {
     flex-shrink: 0;
   }
 
+  // Run-state chip shown in the node header while a pipeline run is playing.
+  &__state {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+
+    mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      line-height: 15px;
+    }
+
+    &-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    &--pending {
+      color: #6b7280;
+      background: color-mix(in srgb, #6b7280 14%, transparent);
+    }
+
+    &--running {
+      color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 16%, transparent);
+
+      .cp-flow-node__state-dot {
+        animation: cp-flow-pulse 1s ease-in-out infinite;
+      }
+    }
+
+    // Completed shows a green check inside a circle.
+    &--completed {
+      color: #fff;
+      background: #22c55e;
+      padding: 2px;
+      width: 20px;
+      height: 20px;
+      justify-content: center;
+    }
+
+    &--stopped {
+      color: #6b7280;
+      background: color-mix(in srgb, #6b7280 16%, transparent);
+    }
+
+    // Failed shows a white abort glyph inside a red circle.
+    &--error {
+      color: #fff;
+      background: #ef4444;
+      padding: 2px;
+      width: 20px;
+      height: 20px;
+      justify-content: center;
+    }
+  }
+
   &__footer {
     display: flex;
     align-items: center;
@@ -323,6 +460,8 @@ button[mat-icon-button] {
     padding: 6px 10px;
     background: var(--cp-surface-muted, #f5f6f8);
     border-radius: 0 0 calc(var(--cp-radius, 12px) - 2px) calc(var(--cp-radius, 12px) - 2px);
+    position: relative;
+    z-index: 1;
   }
 
   &__badge {

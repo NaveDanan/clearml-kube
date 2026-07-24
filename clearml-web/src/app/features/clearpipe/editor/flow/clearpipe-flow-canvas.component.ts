@@ -45,6 +45,7 @@ const STATUS_COLORS: Record<string, string> = {
   completed: '#22c55e',
   error: '#ef4444',
   warning: '#f59e0b',
+  stopped: '#6b7280',
 };
 
 interface EdgeView {

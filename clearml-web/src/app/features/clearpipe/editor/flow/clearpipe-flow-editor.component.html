@@ -34,11 +34,39 @@
         <mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>
         Save
       </button>
-      <button mat-flat-button type="button" class="cp-flow-toolbar__run" (click)="run()"
-              title="Start a new pipeline sequence from the scheduled triggers">
-        <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>
-        Run
+
+      <span class="cp-flow-toolbar__divider"></span>
+
+      <button mat-flat-button type="button"
+              class="cp-flow-toolbar__activate"
+              [class.cp-flow-toolbar__activate--on]="activated()"
+              [class.cp-flow-toolbar__activate--off]="!activated()"
+              [disabled]="busy()"
+              (click)="toggleActivated()"
+              [title]="activated() ? 'Pipeline is activated \u2014 click to deactivate' : 'Pipeline is not activated \u2014 click to activate'">
+        <mat-icon fontSet="al" [fontIcon]="activated() ? 'al-ico-success' : 'al-ico-status-pending'"></mat-icon>
+        {{ activated() ? 'Activated' : 'Not-Activated' }}
       </button>
+
+      @if (running()) {
+        <button mat-flat-button type="button" class="cp-flow-toolbar__run cp-flow-toolbar__run--running"
+                disabled title="Pipeline is running">
+          <mat-icon class="cp-flow-toolbar__spinner" fontSet="al" fontIcon="al-ico-running"></mat-icon>
+          Running…
+        </button>
+        <button mat-flat-button type="button" class="cp-flow-toolbar__stop" (click)="stop()"
+                [disabled]="busy()" title="Stop the running pipeline">
+          <mat-icon fontSet="al" fontIcon="al-ico-abort"></mat-icon>
+          Stop
+        </button>
+      } @else {
+        <button mat-flat-button type="button" class="cp-flow-toolbar__run" (click)="run()"
+                [disabled]="!activated() || busy()"
+                [title]="activated() ? 'Run the pipeline' : 'Activate the pipeline to run it'">
+          <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>
+          Run
+        </button>
+      }
       <input #fileInput type="file" accept="application/json" hidden (change)="importPipeline($event)" />
     </div>
   </header>

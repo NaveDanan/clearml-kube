@@ -41,6 +41,13 @@
           <span class="name-cell">
             <mat-icon fontSet="al" fontIcon="al-ico-pipelines"></mat-icon>
             <span><strong>{{ pipeline.name }}</strong><small>{{ pipeline.description || 'No description' }}</small></span>
+            <span class="activation-badge"
+                  [class.activation-badge--on]="isActivated(pipeline)"
+                  [class.activation-badge--off]="!isActivated(pipeline)"
+                  [title]="isActivated(pipeline) ? 'Pipeline is activated' : 'Pipeline is not activated'">
+              <mat-icon fontSet="al" [fontIcon]="isActivated(pipeline) ? 'al-ico-success' : 'al-ico-status-pending'"></mat-icon>
+              {{ isActivated(pipeline) ? 'Activated' : 'Not-Activated' }}
+            </span>
           </span>
           <span>{{ pipeline.owner?.name || '—' }}</span>
           <span>{{ (pipeline.last_update || pipeline.created) | date:'medium' }}</span>

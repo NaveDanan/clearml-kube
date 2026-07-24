@@ -325,6 +325,51 @@ apiserver:
   #  - mountPath: /dev/shm
   #    name: ramdisk
 
+# -- ClearPipe scheduler: a standalone worker that fires activated ClearPipe
+# pipelines according to their scheduler node. It talks to the apiserver over the
+# public API using a dedicated credentials pair.
+# NOTE: this Deployment runs a FIXED single replica (not configurable). Duplicate-run
+# protection relies on one replica + the server-derived last-fired marker; there is
+# no distributed lock or schedule-slot dedup yet, so running multiple replicas is
+# UNSUPPORTED and will cause double fires.
+clearpipeScheduler:
+  # -- Enable/Disable the ClearPipe scheduler deployment
+  enabled: false
+  # -- Scheduler image configuration
+  image:
+    registry: ""
+    repository: "clearpipe-scheduler"
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  # -- Poll interval in seconds between schedule evaluations
+  pollSeconds: 30
+  # -- Log level (DEBUG/INFO/WARNING/ERROR)
+  logLevel: "INFO"
+  # -- apiserver base URL. Defaults to the in-cluster apiserver service when empty.
+  apiHost: ""
+  # -- Name of an existing secret with keys `access_key` and `secret_key`.
+  # When empty, a secret is created from apiCredentials below.
+  existingSecret: ""
+  # -- ClearML App Credentials used to authenticate to the apiserver.
+  # Generate them in the web UI (Settings -> Workspace -> App Credentials).
+  apiCredentials:
+    accessKey: ""
+    secretKey: ""
+  # -- Pod annotations
+  podAnnotations: {}
+  # -- Pod-level security context
+  podSecurityContext: {}
+  # -- Container-level security context
+  containerSecurityContext: {}
+  # -- Scheduler resource requests/limits
+  resources: {}
+  # -- Node selector
+  nodeSelector: {}
+  # -- Tolerations
+  tolerations: []
+  # -- Affinity
+  affinity: {}
+
 # -- File Server configurations
 fileserver:
   # -- Enable/Disable component deployment

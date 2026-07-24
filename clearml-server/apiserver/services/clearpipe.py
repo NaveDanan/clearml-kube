@@ -25,8 +25,12 @@ from apiserver.apimodels.clearpipe import (
     ExecutionSnapshotResponse,
     GetAllRequest,
     GetAllResponse,
+    LatestRunRequest,
+    LatestRunResponse,
     ParseScriptRequest,
     ParseScriptResponse,
+    SetActivationRequest,
+    SetActivationResponse,
     StartRequest,
     StartResponse,
     TaskDescriptorRequest,
@@ -53,7 +57,7 @@ from apiserver.bll.clearpipe.graph_v2 import (
 )
 from apiserver.bll.clearpipe.generation.compiler import GenerationError, compile_graph
 from apiserver.bll.clearpipe.generation.contracts import ClearPipeRuntimeConfiguration, GeneratedDefinition
-from apiserver.bll.clearpipe.generation.function import lower_function_node
+from apiserver.bll.clearpipe.generation.flow_nodes import lower_flow_function_node
 from apiserver.bll.clearpipe.validation import (
     DiagnosticTarget,
     ValidationIssue,
@@ -225,7 +229,7 @@ def _compile_v2(graph: Mapping) -> GeneratedDefinition:
     parsed = read_graph_v2(graph)
     if not parsed.is_supported:
         raise ValueError("ClearPipe graph v2 could not be compiled")
-    return compile_graph(parsed.graph, lowerers={"function": lower_function_node})
+    return compile_graph(parsed.graph, lowerers={"function": lower_flow_function_node})
 
 
 def _v2_validation_result(
@@ -938,6 +942,11 @@ def _configurations(compiled: Mapping) -> dict:
     }
 
 
+def _is_activated(task: Task) -> bool:
+    """Whether the definition is activated (available to run / scheduler fires)."""
+    return bool((task.runtime or {}).get("clearpipe_activated"))
+
+
 def _definition(
     task: Task, company_id: str, project_name: Optional[str] = None
 ) -> dict:
@@ -1004,6 +1013,7 @@ def _definition(
         "last_update": task.last_update.isoformat() if task.last_update else None,
         "revision": revision,
         "graph": graph,
+        "activated": _is_activated(task),
         # These capabilities reflect the authenticated task boundary. CP-14
         # applies the stricter CP-06 legacy/unsupported representation policy.
         "capabilities": {
@@ -1825,6 +1835,16 @@ def start(
     definition = _get_task(company_id, request.task)
     if EntityVisibility.archived.value in (definition.system_tags or []):
         raise errors.bad_request.ValidationError("Archived ClearPipe definitions cannot be started")
+    # Activation gates EVERY run path (manual, API, and scheduler) - a definition
+    # that is not activated cannot be started at all. The `trigger` is retained
+    # for provenance/logging only.
+    trigger = (getattr(request, "trigger", None) or "manual").lower()
+    if not _is_activated(definition):
+        raise errors.bad_request.ValidationError(
+            "ClearPipe definition is not activated; activate it before running"
+            + (" (scheduled run skipped)" if trigger == "schedule" else ""),
+            task=definition.id,
+        )
     revision = _revision(definition)
     if request.revision is not None and request.revision != revision:
         raise RevisionConflict(expected=revision, received=request.revision)
@@ -1978,6 +1998,7 @@ def start(
     run_runtime = {
         "clearpipe_revision": revision,
         "_pipeline_hash": pipeline_hash,
+        "clearpipe_definition_id": definition.id,
     }
     if v2_graph:
         runtime_configuration_value = configurations[
@@ -2119,6 +2140,61 @@ def start(
             # turn a committed run into an ambiguous failed response.
             response["queue_watched"] = False
     call.result.data = response
+
+
+@endpoint(
+    "clearpipe.set_activation",
+    min_version="2.35",
+    request_data_model=SetActivationRequest,
+    response_data_model=SetActivationResponse,
+)
+def set_activation(call: APICall, company_id: str, request: SetActivationRequest):
+    task = _get_task(company_id, request.task, owned=True)
+    if not can_write_definition(task.company, task.company_origin, company_id):
+        raise errors.bad_request.ValidationError(
+            "ClearPipe definitions can only be activated by their owner"
+        )
+    activated = bool(request.activated)
+    Task.objects(Q(id=task.id) & _owned_query(company_id)).update_one(
+        **{
+            "set__runtime__clearpipe_activated": activated,
+            "set__last_update": datetime.now(timezone.utc),
+        }
+    )
+    call.result.data = {"task": task.id, "activated": activated}
+
+
+@endpoint(
+    "clearpipe.latest_run",
+    min_version="2.35",
+    request_data_model=LatestRunRequest,
+    response_data_model=LatestRunResponse,
+)
+def latest_run(call: APICall, company_id: str, request: LatestRunRequest):
+    # Confirm the definition is visible before enumerating its runs.
+    definition = _get_task(company_id, request.task)
+    run = (
+        Task.objects(
+            _visible_query(company_id)
+            & Q(runtime__clearpipe_definition_id=definition.id)
+        )
+        .only("id", "status", "started", "created", "runtime")
+        .order_by("-created")
+        .first()
+    )
+    if run is None:
+        call.result.data = {"run": None, "running": False}
+        return
+    status = str(run.status)
+    terminal = {"completed", "failed", "stopped", "closed", "published"}
+    started = getattr(run, "started", None) or run.created
+    call.result.data = {
+        "run": run.id,
+        "status": status,
+        "running": status not in terminal,
+        "started_at": _timestamp(started),
+        "revision": (run.runtime or {}).get("clearpipe_revision"),
+    }
 
 
 def _task_inventory_cursor(cursor: Optional[str], page: int) -> int:

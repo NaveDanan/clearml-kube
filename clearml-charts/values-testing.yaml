@@ -103,6 +103,17 @@ apiserver:
   # Fixed-users override (auth.fixed_users block) used by the OIDC session
   # bridge. Provided by the clearml-auth-secrets ArgoCD app.
   existingAdditionalConfigsSecret: clearml-fixed-users
+  # ClearPipe v2 execution requires a dedicated provenance signing key. Without
+  # it the apiserver reports capabilities.execution/run = false and the web
+  # "Run" button is disabled (clearpipe.start rejects with
+  # provenance_signing_unavailable). These map to
+  # secure.clearpipe.provenance_keys.* via the CLEARML__ env override.
+  # Test-only key material; do not reuse in production.
+  extraEnvs:
+    - name: CLEARML__secure__clearpipe__provenance_keys__current_key_id
+      value: "clearpipelocalkey"
+    - name: CLEARML__secure__clearpipe__provenance_keys__keys__clearpipelocalkey
+      value: "cpk9f2c7ae14b6d84035e1af97c2db6084f5a3e19c7d40b28ff"
   image:
     registry: ""
     repository: "clearml/clearml"
@@ -156,6 +167,30 @@ fileserver:
     limits:
       cpu: 500m
       memory: 512Mi
+
+# ClearPipe scheduler — fires activated ClearPipe pipelines on their schedule.
+# Enable it and provide App Credentials (Settings -> Workspace -> App Credentials)
+# to run the autonomous scheduler.
+clearpipeScheduler:
+  enabled: false
+  image:
+    registry: ""
+    repository: "clearpipe-scheduler"
+    tag: "latest"
+  pollSeconds: 30
+  apiCredentials:
+    accessKey: "X7JGMIBI03X9YS82PXY4Y7ZISBJPG6"
+    secretKey: "wW0CQACuuBqnAsHpn9WKfLvm66HU9bcaWgKyEPTppDERJq6uyWfQZamRl1fOKoVkSTw"
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
 
 webserver:
   enabled: true

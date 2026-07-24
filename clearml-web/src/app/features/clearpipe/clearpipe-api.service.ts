@@ -348,6 +348,28 @@ export class ClearpipeApiService {
     })));
   }
 
+  /** Persist whether a definition is activated (available to run / scheduler fires). */
+  setActivation(task: string, activated: boolean): Observable<{task: string; activated: boolean}> {
+    return this.requests.post<any>(this.endpoint('set_activation'), {task, activated})
+      .pipe(map(response => ({task: response?.task ?? task, activated: Boolean(response?.activated)})));
+  }
+
+  /** Most recent run started from a definition, for restoring live state on load. */
+  latestRun(task: string): Observable<{run: string | null; running: boolean; status?: string; startedAt?: string; revision?: number}> {
+    return this.requests.post<any>(this.endpoint('latest_run'), {task}).pipe(map(response => ({
+      run: response?.run ?? null,
+      running: Boolean(response?.running),
+      status: response?.status,
+      startedAt: response?.started_at,
+      revision: typeof response?.revision === 'number' ? response.revision : undefined,
+    })));
+  }
+
+  /** Stop a running pipeline by aborting its controller run task. */
+  stopRun(runTaskId: string): Observable<void> {
+    return this.requests.post<void>(`${HTTP.API_BASE_URL}/tasks.stop`, {task: runTaskId, force: true});
+  }
+
   archiveDefinition(task: string, revision?: number): Observable<ClearpipeArchiveResponse> {
     return this.requests.post<any>(this.endpoint('archive'), {task, revision})
       .pipe(map(response => ({updated: Number(response?.updated ?? 0), revision: Number(response?.revision ?? revision ?? 0)})));
