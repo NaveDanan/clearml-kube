@@ -15,6 +15,15 @@ data:
       "enabled": true,
       "sslRequired": "none",
       "loginTheme": "keycloak",
+      "smtpServer": {
+        "host": "mailpit.clearml-tools.svc.cluster.local",
+        "port": "1025",
+        "from": "keycloak@clearml.local",
+        "fromDisplayName": "Keycloak",
+        "ssl": "false",
+        "starttls": "false",
+        "auth": "false"
+      },
       "clients": [
         {
           "clientId": "clearml",
