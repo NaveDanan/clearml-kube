@@ -19,14 +19,17 @@ oauth2Proxy.ingress (and disable webserver.ingress for the same host) so that
 {{- if and .Values.webserver.enabled (eq (.Values.auth | default dict).mode "oidc") ((.Values.auth | default dict).oidc | default dict).enabled }}
 {{- $oidc := .Values.auth.oidc }}
 {{- $proxy := .Values.oauth2Proxy }}
+{{- $bridge := $oidc.sessionBridge | default dict }}
 {{- if not $oidc.existingSecret }}
-{{- fail "auth.oidc.existingSecret is required when auth.mode is 'oidc' (must contain keys: client-secret, cookie-secret)" }}
+{{- fail "auth.oidc.existingSecret is required when auth.mode is 'oidc' (must contain client-secret and cookie-secret keys)" }}
 {{- end }}
 {{- if not $oidc.issuerUrl }}
 {{- fail "auth.oidc.issuerUrl is required when auth.mode is 'oidc'" }}
 {{- end }}
+{{- if and $bridge.enabled (not $bridge.passwordKey) }}
+{{- fail "auth.oidc.sessionBridge.passwordKey is required when the session bridge is enabled" }}
+{{- end }}
 {{- $upstream := $proxy.upstream | default (printf "http://%s:%v" (include "webserver.referenceName" .) .Values.webserver.service.port) }}
-{{- $bridge := $oidc.sessionBridge | default dict }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -45,11 +48,7 @@ spec:
     spec:
       {{- if .Values.imageCredentials.enabled }}
       imagePullSecrets:
-      {{- if .Values.imageCredentials.existingSecret }}
       - name: {{ .Values.imageCredentials.existingSecret }}
-      {{- else }}
-      - name: clearml-registry-key
-      {{- end }}
       {{- end }}
       containers:
         - name: oauth2-proxy
@@ -93,7 +92,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ $oidc.existingSecret }}
-                  key: {{ $bridge.passwordKey | default "basic-auth-password" }}
+                  key: {{ $bridge.passwordKey }}
             {{- end }}
           ports:
             - name: http

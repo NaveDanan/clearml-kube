@@ -23,7 +23,7 @@ docker load -i clearml-images-slim-2026-07-26.tar
 
 The slim tar contains only the ClearML application images. The Redis, MongoDB,
 and Elasticsearch images listed above must already exist in the cluster registry,
-registry mirror, or node image cache. If your final cluster uses an internal
+registry mirror, or node image cache. If the final cluster uses an internal
 registry hostname, retag these images for that registry and update
 `global.imageRegistry` in `esa-values.yaml` to match.
 
@@ -34,7 +34,7 @@ docker push <registry>/clearml/clearml:2026-06-24
 docker push <registry>/clearml/runai-worker:2026-07-26
 ```
 
-## Required Existing Cluster Resources
+## Required existing cluster resources
 
 The ESA values intentionally keep the existing cluster-specific names. Confirm
 these resources already exist in the deployment namespace before syncing:
@@ -48,25 +48,20 @@ IngressClass: nginx
 ```
 
 `nave-pull-secret` must exist in the same namespace as the ClearML pods
-(`clearml-server`). Image pull secrets are namespace-scoped; a secret with the
-same name in `default`, `argocd`, or another namespace will not be used by
-ClearML pods.
+(`clearml-server`). Image pull Secrets are namespace-scoped; a Secret with the
+same name in another namespace will not be used by ClearML pods.
 
-Create or copy it before syncing the ArgoCD application:
+Provision or copy `nave-pull-secret` through the approved secret-management
+process before syncing the Argo CD application. Do not put registry credential
+data in this repository or in Helm values. Its name must match
+`imageCredentials.existingSecret` when private image credentials are enabled.
 
-```bash
-kubectl create namespace clearml-server
-kubectl create secret docker-registry nave-pull-secret \
-  --namespace clearml-server \
-  --docker-server=<registry> \
-  --docker-username=<username> \
-  --docker-password=<password>
-```
+The `clearml-server-secrets` Secret must be provisioned as
+`clearml.existingSecret` for the ESA release. Its required keys, along with all
+other chart credential contracts and rotation guidance, are documented in
+[CREDENTIALS.md](CREDENTIALS.md).
 
-The `clearml-server-secrets` secret must contain the ClearML keys expected by
-the chart. The chart comments in `values.yaml` document the required key names.
-
-## Helm/ArgoCD Values
+## Helm/Argo CD values
 
 Use both values files, in this order:
 
@@ -84,10 +79,10 @@ docker.io/clearml/runai-worker:local
 ```
 
 If a pod reports `ImagePullBackOff` for `docker.io/clearml/runai-worker:local`,
-the ArgoCD application is using the wrong values file. Replace
+the Argo CD application is using the wrong values file. Replace
 `values-testing.yaml` with `esa-values.yaml`, then hard refresh and sync.
 
-For ArgoCD:
+For Argo CD:
 
 ```text
 Repository/path: the transferred chart folder

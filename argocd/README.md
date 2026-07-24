@@ -24,6 +24,18 @@ spec:
     targetRevision: main
 ```
 
+### Credentials prerequisite
+
+Before syncing the ClearML application, have the platform team or approved secret
+manager create the Secrets required by
+[`clearml-charts/CREDENTIALS.md`](../clearml-charts/CREDENTIALS.md) in the
+release namespace. The retired `clearml-auth-secrets` Argo CD application no
+longer deploys credential data from Git. Previously committed credentials must
+be revoked and rotated out of band; this repository change does not rotate them.
+If the bundled Keycloak manifests are deployed, provision their separate
+`clearml-tools` namespace contract described in
+[`infra/keycloak/README.md`](../infra/keycloak/README.md) before applying them.
+
 Apply the app if you want to create the ArgoCD Application from kubectl:
 
 ```powershell
@@ -142,4 +154,3 @@ To confirm the expected image is running:
 kubectl describe pod -n clearml -l app.kubernetes.io/instance=clearml-webserver | Select-String "Image ID"
 kubectl describe pod -n clearml -l app.kubernetes.io/instance=clearml-runai-worker | Select-String "Image ID"
 ```
-

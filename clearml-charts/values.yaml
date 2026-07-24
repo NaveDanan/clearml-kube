@@ -5,18 +5,10 @@ global:
 
 # -- Container registry configuration
 imageCredentials:
-  # -- Use private authentication mode
+  # -- Use a pre-provisioned image-pull Secret when private images are required.
   enabled: false
-  # -- If this is set, chart will not generate a secret but will use what is defined here
+  # -- Required when enabled. The Secret must be type kubernetes.io/dockerconfigjson.
   existingSecret: ""
-  # -- Registry name
-  registry: docker.io
-  # -- Registry username
-  username: someone
-  # -- Registry password
-  password: pwd
-  # -- Email
-  email: someone@host.com
 
 # -- ClearMl generic configurations
 clearml:
@@ -26,31 +18,15 @@ clearml:
   cookieDomain: ""
   # -- Company name
   defaultCompany: "d1bd92a3b039400cbafc60a7a5b1e52b"
-  # -- Api Server basic auth key
-  apiserverKey: GGS9F4M6XB2DXJ5AFT9F
-  # -- Api Server basic auth secret
-  apiserverSecret: 2oGujVFhPfaozhpuz2GzQfA5OyxmMsR3WVJpsCR5hrgHFs20PO
-  # -- File Server basic auth key
-  fileserverKey: XXCRJ123CEE2KSQ068WO
-  # -- File Server basic auth secret
-  fileserverSecret: YIy8EVAC7QCT4FtgitxAQGyW7xRHDZ4jpYlTE7HKiscpORl1hG
-  # -- Readiness probe basic auth key
-  readinessprobeKey: GK4PRTVT3706T25K6BA1
-  # -- Readiness probe basic auth secret
-  readinessprobeSecret: ymLh1ok5k5xNUQfS944Xdx9xjf0wueokqKM2dMZfHuH9ayItG2
-  # -- Secure Auth secret
-  secureAuthTokenSecret: ymLh1ok5k5xNUQfS944Xdx9xjf0wueokqKM2dMZfHuH9ayItG2
-  # -- Test Server basic auth key
-  testUserKey: "ENP39EQM4SLACGD5FXB7"
-  # -- Test File Server basic auth secret
-  testUserSecret: "lPcm0imbcBZ8mwgO7tpadutiS3gnJD05x9j7afwXPS35IKbpiQ"
+  # -- Name of a pre-provisioned ClearML credential Secret. It must contain:
+  #    apiserver_key, apiserver_secret, fileserver_key, fileserver_secret,
+  #    readinessprobe_key, readinessprobe_secret, secure_auth_token_secret,
+  #    test_user_key, and test_user_secret.
   # -- Override the API Urls displayed when showing an example of the SDK's clearml.conf configuration
   clientConfigurationApiUrl: ""
   # -- Override the Files Urls displayed when showing an example of the SDK's clearml.conf configuration
   clientConfigurationFilesUrl: ""
-  # -- Pass Clearml secrets using an existing secret
-  # must contain the keys: apiserver_key, apiserver_secret, secure_auth_token_secret, test_user_key, test_user_secret
-  existingSecret: ""
+  existingSecret: "clearml-conf"
 
 # -- Authentication / login configuration
 auth:
@@ -89,12 +65,7 @@ auth:
     # -- Public redirect/callback URL registered in Keycloak
     #    (e.g. https://clearml.example.com/oauth2/callback).
     redirectUrl: ""
-    # -- Name of an existing Secret holding the OIDC client secret and the
-    #    oauth2-proxy cookie secret. Expected keys:
-    #      client-secret : the Keycloak client secret
-    #      cookie-secret : a 32-byte base64/hex random string for oauth2-proxy
-    #      basic-auth-password : (only when sessionBridge.enabled) shared password
-    #                            that mapped ClearML fixed users must also use
+    # -- Name of an externally managed OIDC Secret; see CREDENTIALS.md.
     existingSecret: ""
     # -- Session bridge: how the verified SSO identity becomes a real ClearML
     #    session. Open-source ClearML will not mint a session from an external
@@ -180,13 +151,8 @@ email:
   sender: "clearml@localhost"
   # -- From display name on outgoing mail.
   senderName: "ClearML"
-  # -- SMTP auth username (leave empty for unauthenticated relays).
-  username: ""
-  # -- Name of an existing Secret holding the SMTP password under key "smtp-password".
-  #    Preferred over inlining the password below.
+  # -- Name of an existing Secret containing `smtp-username` and `smtp-password`.
   existingSecret: ""
-  # -- Inline SMTP password (NOT recommended; use existingSecret for real deployments).
-  password: ""
 
 # -- Api Server configurations
 apiserver:
@@ -303,12 +269,10 @@ apiserver:
   #         users: [
   #           {
   #             username: "jane"
-  #             password: "12345678"
   #             name: "Jane Doe"
   #           },
   #           {
   #             username: "john"
-  #             password: "12345678"
   #             name: "John Doe"
   #           },
   #         ]
@@ -347,14 +311,9 @@ clearpipeScheduler:
   logLevel: "INFO"
   # -- apiserver base URL. Defaults to the in-cluster apiserver service when empty.
   apiHost: ""
-  # -- Name of an existing secret with keys `access_key` and `secret_key`.
-  # When empty, a secret is created from apiCredentials below.
-  existingSecret: ""
-  # -- ClearML App Credentials used to authenticate to the apiserver.
-  # Generate them in the web UI (Settings -> Workspace -> App Credentials).
-  apiCredentials:
-    accessKey: ""
-    secretKey: ""
+  # -- Required when enabled. Pre-provision this Secret with `access_key` and
+  #    `secret_key`; Helm never creates or stores scheduler credentials.
+  existingSecret: "clearpipe-scheduler-credentials"
   # -- Pod annotations
   podAnnotations: {}
   # -- Pod-level security context

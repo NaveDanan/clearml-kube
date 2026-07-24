@@ -26,11 +26,7 @@ spec:
       serviceAccountName: {{ .Values.fileserver.serviceAccountName }}-fileserver
       {{- if .Values.imageCredentials.enabled }}
       imagePullSecrets:
-      {{- if .Values.imageCredentials.existingSecret }}
       - name: {{ .Values.imageCredentials.existingSecret }}
-      {{- else }}
-      - name: clearml-registry-key
-      {{- end }}
       {{- end }}
       volumes:
         {{- if .Values.fileserver.storage.enabled }}

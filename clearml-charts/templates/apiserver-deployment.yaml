@@ -26,11 +26,7 @@ spec:
       serviceAccountName: {{ .Values.apiserver.serviceAccountName }}-apiserver
       {{- if .Values.imageCredentials.enabled }}
       imagePullSecrets:
-      {{- if .Values.imageCredentials.existingSecret }}
       - name: {{ .Values.imageCredentials.existingSecret }}
-      {{- else }}
-      - name: clearml-registry-key
-      {{- end }}
       {{- end }}
       {{- if or .Values.apiserver.additionalConfigs .Values.apiserver.existingAdditionalConfigsConfigMap .Values.apiserver.existingAdditionalConfigsSecret .Values.apiserver.additionalVolumes (and .Values.runaiWorker.enabled .Values.runaiWorker.caCert.enabled) }}
       volumes:
@@ -174,20 +170,16 @@ spec:
             value: {{ .Values.email.sender | quote | quote }}
           - name: CLEARML__apiserver__email__sender_name
             value: {{ .Values.email.senderName | quote | quote }}
-          {{- if .Values.email.username }}
           - name: CLEARML__apiserver__email__username
-            value: {{ .Values.email.username | quote | quote }}
-          {{- end }}
-          {{- if .Values.email.existingSecret }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.email.existingSecret }}
+                key: smtp-username
           - name: CLEARML__apiserver__email__password
             valueFrom:
               secretKeyRef:
                 name: {{ .Values.email.existingSecret }}
                 key: smtp-password
-          {{- else if .Values.email.password }}
-          - name: CLEARML__apiserver__email__password
-            value: {{ .Values.email.password | quote }}
-          {{- end }}
           {{- end }}
           - name: CLEARML__secure__credentials__apiserver__user_key
             valueFrom:
@@ -204,6 +196,16 @@ spec:
               secretKeyRef:
                 name: {{ include "clearml.confSecretName" .}}
                 key: secure_auth_token_secret
+          - name: CLEARML_READINESSPROBE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clearml.confSecretName" .}}
+                key: readinessprobe_key
+          - name: CLEARML_READINESSPROBE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "clearml.confSecretName" .}}
+                key: readinessprobe_secret
           {{- if .Values.apiserver.prepopulateEnabled }}
           - name: CLEARML__APISERVER__PRE_POPULATE__ENABLED
             value: "true"
@@ -243,12 +245,11 @@ spec:
           readinessProbe:
             initialDelaySeconds: 60
             failureThreshold: 8
-            httpGet:
-              path: /debug.ping
-              port: 8008
-              httpHeaders:
-                - name: Authorization
-                  value: Basic {{ include "readinessProbeAuth" . }}
+            exec:
+              command:
+                - sh
+                - -ec
+                - 'curl --fail --silent --show-error --user "$CLEARML_READINESSPROBE_KEY:$CLEARML_READINESSPROBE_SECRET" http://localhost:8008/debug.ping'
           {{- if or .Values.apiserver.additionalConfigs .Values.apiserver.existingAdditionalConfigsConfigMap  .Values.apiserver.existingAdditionalConfigsSecret .Values.apiserver.additionalVolumeMounts (and .Values.runaiWorker.enabled .Values.runaiWorker.caCert.enabled) }}
           volumeMounts:  
             {{- if or .Values.apiserver.additionalConfigs .Values.apiserver.existingAdditionalConfigsConfigMap  .Values.apiserver.existingAdditionalConfigsSecret }}

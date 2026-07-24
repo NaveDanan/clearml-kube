@@ -7,6 +7,12 @@ metadata:
     {{- include "clearml.labels" . | nindent 4 }}
     clearml.component: clearpipe-scheduler
 spec:
+  # Recreate prevents a Helm rollout from transiently running old and new scheduler
+  # Pods together. It is not a distributed lock: manual scaling or duplicate
+  # releases remain unsafe until server-side schedule-slot deduplication/distributed
+  # locking exists.
+  strategy:
+    type: Recreate
   # IMPORTANT: replicas is intentionally hard-coded to 1 and is NOT configurable.
   # Duplicate-run protection relies on a single replica plus the server-derived
   # "last fired" marker (clearpipe.latest_run). There is NO distributed lock or
@@ -29,11 +35,7 @@ spec:
     spec:
       {{- if .Values.imageCredentials.enabled }}
       imagePullSecrets:
-      {{- if .Values.imageCredentials.existingSecret }}
       - name: {{ .Values.imageCredentials.existingSecret }}
-      {{- else }}
-      - name: clearml-registry-key
-      {{- end }}
       {{- end }}
       {{- with .Values.clearpipeScheduler.podSecurityContext }}
       securityContext:
@@ -57,12 +59,12 @@ spec:
             - name: CLEARML_API_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.clearpipeScheduler.existingSecret | default (printf "%s-clearpipe-scheduler" (include "clearml.fullname" .)) }}
+                  name: {{ .Values.clearpipeScheduler.existingSecret }}
                   key: access_key
             - name: CLEARML_API_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.clearpipeScheduler.existingSecret | default (printf "%s-clearpipe-scheduler" (include "clearml.fullname" .)) }}
+                  name: {{ .Values.clearpipeScheduler.existingSecret }}
                   key: secret_key
           {{- with .Values.clearpipeScheduler.resources }}
           resources:

@@ -25,11 +25,26 @@ spec:
             - start-dev
             - --import-realm
           env:
-            # Bootstrap admin (console login at http://keycloak.clearml.local, admin/admin).
-            - name: KEYCLOAK_ADMIN
-              value: "admin"
-            - name: KEYCLOAK_ADMIN_PASSWORD
-              value: "admin"
+            # These externally managed Secret references are required. See README.md.
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-bootstrap
+                  key: admin-username
+                  optional: false
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-bootstrap
+                  key: admin-password
+                  optional: false
+            # Keycloak resolves this environment placeholder while importing the realm.
+            - name: CLEARML_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-oidc
+                  key: client-secret
+                  optional: false
             # Serve plain HTTP behind the nginx ingress.
             - name: KC_HTTP_ENABLED
               value: "true"

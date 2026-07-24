@@ -99,6 +99,12 @@ A production ready cluster should also have some different configuration like th
 helm install clearml clearml/clearml -f values-production.yaml
 ```
 
+## Credentials
+
+Create the required Kubernetes Secrets before syncing Helm or Argo CD. See
+[CREDENTIALS.md](CREDENTIALS.md) for the Secret names, required keys, and
+rotation guidance.
+
 ## Upgrades/ Values upgrades
 
 Updating to latest version of this chart can be done in two steps:
@@ -190,22 +196,13 @@ Kubernetes: `>= 1.21.0-0 < 1.33.0-0`
 | apiserver.serviceAccountAnnotations | object | `{}` | Add the provided map to the annotations for the ServiceAccount resource created by this chart. |
 | apiserver.serviceAccountName | string | `"clearml"` | The default serviceAccountName to be used |
 | apiserver.tolerations | list | `[]` | Api Server tolerations setup |
-| clearml | object | `{"apiserverKey":"GGS9F4M6XB2DXJ5AFT9F","apiserverSecret":"2oGujVFhPfaozhpuz2GzQfA5OyxmMsR3WVJpsCR5hrgHFs20PO","clientConfigurationApiUrl":"","clientConfigurationFilesUrl":"","cookieDomain":"","cookieName":"clearml-token-k8s","defaultCompany":"d1bd92a3b039400cbafc60a7a5b1e52b","existingSecret":"","fileserverKey":"XXCRJ123CEE2KSQ068WO","fileserverSecret":"YIy8EVAC7QCT4FtgitxAQGyW7xRHDZ4jpYlTE7HKiscpORl1hG","readinessprobeKey":"GK4PRTVT3706T25K6BA1","readinessprobeSecret":"ymLh1ok5k5xNUQfS944Xdx9xjf0wueokqKM2dMZfHuH9ayItG2","secureAuthTokenSecret":"ymLh1ok5k5xNUQfS944Xdx9xjf0wueokqKM2dMZfHuH9ayItG2","testUserKey":"ENP39EQM4SLACGD5FXB7","testUserSecret":"lPcm0imbcBZ8mwgO7tpadutiS3gnJD05x9j7afwXPS35IKbpiQ"}` | ClearMl generic configurations |
-| clearml.apiserverKey | string | `"GGS9F4M6XB2DXJ5AFT9F"` | Api Server basic auth key |
-| clearml.apiserverSecret | string | `"2oGujVFhPfaozhpuz2GzQfA5OyxmMsR3WVJpsCR5hrgHFs20PO"` | Api Server basic auth secret |
+| clearml | object | See values.yaml | ClearML configuration; credentials are supplied only through `clearml.existingSecret`. |
 | clearml.clientConfigurationApiUrl | string | `""` | Override the API Urls displayed when showing an example of the SDK's clearml.conf configuration |
 | clearml.clientConfigurationFilesUrl | string | `""` | Override the Files Urls displayed when showing an example of the SDK's clearml.conf configuration |
 | clearml.cookieDomain | string | `""` | Cookie domain to be left empty if not exposed with an ingress |
 | clearml.cookieName | string | `"clearml-token-k8s"` | Name fo the UI cookie |
 | clearml.defaultCompany | string | `"d1bd92a3b039400cbafc60a7a5b1e52b"` | Company name |
-| clearml.existingSecret | string | `""` | Pass Clearml secrets using an existing secret must contain the keys: apiserver_key, apiserver_secret, secure_auth_token_secret, test_user_key, test_user_secret |
-| clearml.fileserverKey | string | `"XXCRJ123CEE2KSQ068WO"` | File Server basic auth key |
-| clearml.fileserverSecret | string | `"YIy8EVAC7QCT4FtgitxAQGyW7xRHDZ4jpYlTE7HKiscpORl1hG"` | File Server basic auth secret |
-| clearml.readinessprobeKey | string | `"GK4PRTVT3706T25K6BA1"` | Readiness probe basic auth key |
-| clearml.readinessprobeSecret | string | `"ymLh1ok5k5xNUQfS944Xdx9xjf0wueokqKM2dMZfHuH9ayItG2"` | Readiness probe basic auth secret |
-| clearml.secureAuthTokenSecret | string | `"ymLh1ok5k5xNUQfS944Xdx9xjf0wueokqKM2dMZfHuH9ayItG2"` | Secure Auth secret |
-| clearml.testUserKey | string | `"ENP39EQM4SLACGD5FXB7"` | Test Server basic auth key |
-| clearml.testUserSecret | string | `"lPcm0imbcBZ8mwgO7tpadutiS3gnJD05x9j7afwXPS35IKbpiQ"` | Test File Server basic auth secret |
+| clearml.existingSecret | string | `"clearml-conf"` | Pre-provisioned ClearML credentials Secret. Required keys are documented in CREDENTIALS.md. |
 | elasticsearch | object | `{"clusterHealthCheckParams":"wait_for_status=yellow&timeout=1s","clusterName":"clearml-elastic","enabled":true,"esConfig":{"elasticsearch.yml":"xpack.security.enabled: false\n"},"esJavaOpts":"-Xmx2g -Xms2g","extraEnvs":[{"name":"bootstrap.memory_lock","value":"false"},{"name":"cluster.routing.allocation.node_initial_primaries_recoveries","value":"500"},{"name":"cluster.routing.allocation.disk.watermark.low","value":"500mb"},{"name":"cluster.routing.allocation.disk.watermark.high","value":"500mb"},{"name":"cluster.routing.allocation.disk.watermark.flood_stage","value":"500mb"},{"name":"http.compression_level","value":"7"},{"name":"reindex.remote.whitelist","value":"*.*"},{"name":"xpack.monitoring.enabled","value":"false"},{"name":"xpack.security.enabled","value":"false"}],"httpPort":9200,"minimumMasterNodes":1,"persistence":{"enabled":true},"rbac":{"create":true},"replicas":1,"resources":{"limits":{"cpu":"2000m","memory":"4Gi"},"requests":{"cpu":"100m","memory":"2Gi"}},"roles":{"data":"true","ingest":"true","master":"true","remote_cluster_client":"true"},"volumeClaimTemplate":{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"50Gi"}},"storageClassName":null}}` | Configuration from https://github.com/elastic/helm-charts/blob/7.16/elasticsearch/values.yaml |
 | externalServices | object | `{"elasticsearchConnectionString":"[{\"host\":\"es_hostname1\",\"port\":9200},{\"host\":\"es_hostname2\",\"port\":9200},{\"host\":\"es_hostname3\",\"port\":9200}]","mongodbConnectionStringAuth":"mongodb://mongodb_hostname:27017/auth","mongodbConnectionStringBackend":"mongodb://mongodb_hostnamehostname:27017/backend","redisHost":"redis_hostname","redisPort":6379}` | Definition of external services to use if not enabled as dependency charts here |
 | externalServices.elasticsearchConnectionString | string | `"[{\"host\":\"es_hostname1\",\"port\":9200},{\"host\":\"es_hostname2\",\"port\":9200},{\"host\":\"es_hostname3\",\"port\":9200}]"` | Existing ElasticSearch connectionstring if elasticsearch.enabled is false (example in values.yaml) |
@@ -248,13 +245,9 @@ Kubernetes: `>= 1.21.0-0 < 1.33.0-0`
 | fileserver.tolerations | list | `[]` | File Server tolerations setup |
 | global | object | `{"imageRegistry":"docker.io"}` | Global parameters section |
 | global.imageRegistry | string | `"docker.io"` | Images registry |
-| imageCredentials | object | `{"email":"someone@host.com","enabled":false,"existingSecret":"","password":"pwd","registry":"docker.io","username":"someone"}` | Container registry configuration |
-| imageCredentials.email | string | `"someone@host.com"` | Email |
+| imageCredentials | object | See values.yaml | Container registry configuration; use `imageCredentials.existingSecret`. |
 | imageCredentials.enabled | bool | `false` | Use private authentication mode |
-| imageCredentials.existingSecret | string | `""` | If this is set, chart will not generate a secret but will use what is defined here |
-| imageCredentials.password | string | `"pwd"` | Registry password |
-| imageCredentials.registry | string | `"docker.io"` | Registry name |
-| imageCredentials.username | string | `"someone"` | Registry username |
+| imageCredentials.existingSecret | string | `""` | Required when enabled; names a pre-provisioned `kubernetes.io/dockerconfigjson` Secret. |
 | mongodb | object | `{"architecture":"standalone","auth":{"enabled":false},"enabled":true,"persistence":{"accessModes":["ReadWriteOnce"],"enabled":true,"size":"50Gi","storageClass":null},"replicaCount":1,"updateStrategy":{"rollingUpdate":{"maxSurge":0,"maxUnavailable":1},"type":"RollingUpdate"}}` | Configuration from https://github.com/bitnami/charts/blob/master/bitnami/mongodb/values.yaml |
 | redis | object | `{"architecture":"standalone","auth":{"enabled":false},"databaseNumber":0,"enabled":true,"master":{"name":"{{ .Release.Name }}-redis-master","persistence":{"accessModes":["ReadWriteOnce"],"enabled":true,"size":"5Gi","storageClass":null},"port":6379}}` | Configuration from https://github.com/bitnami/charts/blob/master/bitnami/redis/values.yaml |
 | webserver | object | `{"additionalConfigs":{},"additionalVolumeMounts":{},"additionalVolumes":{},"affinity":{},"containerSecurityContext":{},"deploymentAnnotations":{},"enabled":true,"extraEnvs":[],"image":{"pullPolicy":"IfNotPresent","registry":"","repository":"allegroai/clearml","tag":"2.0.0-613"},"ingress":{"annotations":{},"enabled":false,"hostName":"app.clearml.127-0-0-1.nip.io","ingressClassName":"","path":"/","tlsSecretName":""},"initContainers":{"resources":{"limits":{"cpu":"10m","memory":"64Mi"},"requests":{"cpu":"10m","memory":"64Mi"}}},"nodeSelector":{},"podAnnotations":{},"podSecurityContext":{},"replicaCount":1,"resources":{"limits":{"cpu":"2000m","memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"service":{"annotations":{},"nodePort":30080,"port":8080,"type":"NodePort"},"serviceAccountAnnotations":{},"serviceAccountName":"clearml","tolerations":[]}` | Web Server configurations |
