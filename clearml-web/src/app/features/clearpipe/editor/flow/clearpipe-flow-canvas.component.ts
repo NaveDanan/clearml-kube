@@ -78,6 +78,7 @@ export class ClearpipeFlowCanvasComponent {
   protected readonly viewport = this.store.viewport;
   protected readonly selectedNodeId = this.store.selectedNodeId;
   protected readonly selectedBoundaryId = this.store.selectedBoundaryId;
+  protected readonly layoutOnly = this.store.layoutOnly;
   protected readonly statusColors = STATUS_COLORS;
 
   protected readonly panning = signal(false);
@@ -188,6 +189,7 @@ export class ClearpipeFlowCanvasComponent {
 
   protected onDrop(event: DragEvent): void {
     event.preventDefault();
+    if (this.layoutOnly()) return;
     const point = this.graphPointFromClient(event.clientX, event.clientY);
     const boundary = event.dataTransfer?.getData('application/x-clearpipe-flow-boundary');
     if (boundary) {
@@ -214,7 +216,7 @@ export class ClearpipeFlowCanvasComponent {
 
   // --- connection gesture --------------------------------------------------
   protected onOutputPointerDown(event: PointerEvent, node: ClearpipeFlowNode): void {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || this.layoutOnly()) return;
     event.stopPropagation();
     this.store.beginConnection(node.id);
     this.connecting.set(true);
@@ -224,7 +226,7 @@ export class ClearpipeFlowCanvasComponent {
 
   // --- boundary move + resize ---------------------------------------------
   protected onBoundaryPointerDown(event: PointerEvent, boundary: ClearpipeFlowBoundary): void {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || this.layoutOnly()) return;
     event.stopPropagation();
     this.store.selectBoundary(boundary.id);
     this.boundaryMove = {
@@ -237,7 +239,7 @@ export class ClearpipeFlowCanvasComponent {
   }
 
   protected onBoundaryResizePointerDown(event: PointerEvent, boundary: ClearpipeFlowBoundary): void {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || this.layoutOnly()) return;
     event.stopPropagation();
     this.store.selectBoundary(boundary.id);
     this.boundaryResize = {
@@ -415,17 +417,20 @@ export class ClearpipeFlowCanvasComponent {
 
   protected duplicate(event: Event, node: ClearpipeFlowNode): void {
     event.stopPropagation();
+    if (this.layoutOnly()) return;
     this.store.duplicateNode(node.id);
   }
 
   protected remove(event: Event, node: ClearpipeFlowNode): void {
     event.stopPropagation();
+    if (this.layoutOnly()) return;
     this.store.removeNode(node.id);
   }
 
   protected removeEdge(event: Event, edgeId: string): void {
     event.preventDefault();
     event.stopPropagation();
+    if (this.layoutOnly()) return;
     this.store.removeEdge(edgeId);
   }
 

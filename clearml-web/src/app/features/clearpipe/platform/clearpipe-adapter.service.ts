@@ -63,6 +63,8 @@ export type ClearpipeAdapterOutcome<T> =
 export interface ClearpipeDefinitionState {
   definition: ClearpipeDefinition;
   graph?: GraphV2;
+  /** Original payload retained for read-only inspection/export of newer schemas. */
+  rawGraph?: unknown;
   representation: 'clearpipe_graph_v2' | 'legacy_clearpipe_graph' | 'unsupported_clearpipe_graph';
   capabilities: ClearpipeCapabilities;
 }
@@ -393,6 +395,7 @@ export class ClearpipeAdapterService {
     return {
       definition: response.definition,
       graph: decoded.status === 'ok' ? decoded.graph : undefined,
+      rawGraph: response.graph,
       representation,
       capabilities,
     };

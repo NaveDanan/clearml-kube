@@ -30,6 +30,11 @@ export class ClearpipeFlowStoreService {
   readonly selectedNodeId = signal<string | null>(null);
   readonly selectedBoundaryId = signal<string | null>(null);
   readonly dirty = signal(false);
+  /**
+   * Existing canonical GraphV2 task documents can safely change metadata and
+   * layout only. The generic Flow controls cannot author typed ports/config.
+   */
+  readonly layoutOnly = signal(false);
   /** Output port of an in-progress connection gesture (drag from a node output). */
   readonly connectingFrom = signal<string | null>(null);
 
@@ -80,7 +85,12 @@ export class ClearpipeFlowStoreService {
     this.historyIndex.set(0);
   }
 
+  setLayoutOnly(value: boolean): void {
+    this.layoutOnly.set(value);
+  }
+
   reset(): void {
+    this.layoutOnly.set(false);
     this.load(emptyClearpipeFlowGraph());
   }
 
@@ -107,6 +117,7 @@ export class ClearpipeFlowStoreService {
   }
 
   addNode(type: ClearpipeFlowNodeType, position: ClearpipeFlowPoint): string {
+    if (this.layoutOnly()) return '';
     const meta = clearpipeFlowNodeMeta(type);
     const id = `${type}-${crypto.randomUUID()}`;
     this.mutate((graph) => ({
@@ -145,6 +156,7 @@ export class ClearpipeFlowStoreService {
   }
 
   updateNode(nodeId: string, patch: Partial<ClearpipeFlowNode>): void {
+    if (this.layoutOnly()) return;
     this.mutate((graph) => ({
       ...graph,
       nodes: graph.nodes.map((node) => (node.id === nodeId ? {...node, ...patch} : node)),
@@ -162,6 +174,7 @@ export class ClearpipeFlowStoreService {
   }
 
   removeNode(nodeId: string): void {
+    if (this.layoutOnly()) return;
     this.mutate((graph) => ({
       ...graph,
       nodes: graph.nodes.filter((node) => node.id !== nodeId),
@@ -171,6 +184,7 @@ export class ClearpipeFlowStoreService {
   }
 
   duplicateNode(nodeId: string): string | null {
+    if (this.layoutOnly()) return null;
     const node = this.graph().nodes.find((item) => item.id === nodeId);
     if (!node) return null;
     const copy = structuredClone(node);
@@ -190,6 +204,7 @@ export class ClearpipeFlowStoreService {
   // --- boundaries ----------------------------------------------------------
   /** Create a resizable boundary region at the given top-left position. */
   addBoundary(position: ClearpipeFlowPoint, size?: {width: number; height: number}): string {
+    if (this.layoutOnly()) return '';
     const id = `boundary-${crypto.randomUUID()}`;
     const count = this.graph().boundaries.length + 1;
     this.mutate((graph) => ({
@@ -248,6 +263,7 @@ export class ClearpipeFlowStoreService {
   }
 
   updateBoundary(id: string, patch: Partial<Omit<ClearpipeFlowBoundary, 'id'>>): void {
+    if (this.layoutOnly()) return;
     this.mutate((graph) => ({
       ...graph,
       boundaries: graph.boundaries.map((b) => (b.id === id ? {...b, ...patch} : b)),
@@ -255,6 +271,7 @@ export class ClearpipeFlowStoreService {
   }
 
   removeBoundary(id: string): void {
+    if (this.layoutOnly()) return;
     this.mutate((graph) => ({...graph, boundaries: graph.boundaries.filter((b) => b.id !== id)}));
     if (this.selectedBoundaryId() === id) this.selectedBoundaryId.set(null);
   }
@@ -266,6 +283,7 @@ export class ClearpipeFlowStoreService {
 
   /** Create an ordering edge source -> target if it is valid (no dup, no cycle, no self). */
   connect(source: string, target: string): boolean {
+    if (this.layoutOnly()) return false;
     if (source === target) return false;
     const graph = this.graph();
     const ids = new Set(graph.nodes.map((node) => node.id));
@@ -280,6 +298,7 @@ export class ClearpipeFlowStoreService {
   }
 
   removeEdge(edgeId: string): void {
+    if (this.layoutOnly()) return;
     this.mutate((graph) => ({...graph, edges: graph.edges.filter((edge) => edge.id !== edgeId)}));
   }
 

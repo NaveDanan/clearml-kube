@@ -10,14 +10,14 @@ import {addMessage} from '@common/core/actions/layout.actions';
 
 import {ClearpipeApiService} from '../../clearpipe-api.service';
 import {ClearpipeAdapterService} from '../../platform/clearpipe-adapter.service';
-import {createEmptyGraphV2} from '../../domain/graph-store.service';
+import {GraphV2} from '../../domain/graph-v2.types';
 import {ClearpipeFlowPaletteComponent} from './clearpipe-flow-palette.component';
 import {ClearpipeFlowCanvasComponent} from './clearpipe-flow-canvas.component';
 import {ClearpipeFlowConfigPanelComponent} from './clearpipe-flow-config-panel.component';
 import {ClearpipeFlowStoreService} from './clearpipe-flow-store.service';
-import {ClearpipeFlowResourcesService, FlowResourceOption} from './clearpipe-flow-resources.service';
+import {ClearpipeFlowResourcesService} from './clearpipe-flow-resources.service';
 import {mapSnapshotNodeStatus, TERMINAL_CONTROLLER_STATUSES} from './clearpipe-flow-run-status';
-import {flowToGraphNodes, graphV2ToFlow} from './clearpipe-flow-codec';
+import {applyFlowCanonicalPatch, graphV2ToFlow, reviewFlowGraphV2} from './clearpipe-flow-codec';
 import {ClearpipeFlowGraph, ClearpipeFlowStatus, emptyClearpipeFlowGraph} from './clearpipe-flow.models';
 
 const RUN_POLL_INTERVAL_MS = 5000;
@@ -49,7 +49,6 @@ export class ClearpipeFlowEditorComponent {
   private readonly fileInput = viewChild.required<ElementRef<HTMLInputElement>>('fileInput');
   private readonly api = inject(ClearpipeApiService);
   private readonly adapter = inject(ClearpipeAdapterService);
-  private readonly resources = inject(ClearpipeFlowResourcesService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly appStore = inject(Store);
@@ -60,6 +59,8 @@ export class ClearpipeFlowEditorComponent {
   protected readonly activated = this.store.activated;
   protected readonly running = this.store.running;
   protected readonly saving = signal(false);
+  /** A reason the legacy Flow surface must not save or execute this document. */
+  protected readonly flowBlockedReason = signal<string | null>(null);
   /** True while an activation toggle or run submission request is in flight. */
   protected readonly busy = signal(false);
 
@@ -70,22 +71,22 @@ export class ClearpipeFlowEditorComponent {
   protected readonly editingTaskId = signal<string | null>(null);
   protected readonly loadingExisting = signal(false);
   private editingRevision = 0;
-
-  /** Execution queues used to satisfy the compiler's default-queue requirement. */
-  private readonly queues = signal<FlowResourceOption[]>([]);
+  /** Exact canonical document loaded from the server; never reconstruct from cards. */
+  private loadedCanonicalGraph: GraphV2 | null = null;
+  /** Retained for raw export when a document is intentionally read-only. */
+  private rawLoadedGraph: unknown = null;
 
   /** Collapsed state for the left palette and right configuration panels. */
   protected readonly paletteCollapsed = signal(false);
   protected readonly inspectorCollapsed = signal(true);
 
   constructor() {
-    this.resources.listQueues().subscribe(items => this.queues.set(items));
-
     const taskId = this.route.snapshot.paramMap.get('taskId');
     if (taskId) {
       this.loadExisting(taskId);
     } else if (this.store.isEmpty()) {
       this.store.reset();
+      this.flowBlockedReason.set('Create canonical task graphs in the typed task editor.');
     }
 
     // Mirror the configuration panel to the canvas selection: expand when a node
@@ -107,22 +108,38 @@ export class ClearpipeFlowEditorComponent {
     ).subscribe(outcome => {
       const state = outcome.data;
       if (!state?.graph) {
-        this.appStore.dispatch(addMessage(
-          'error',
-          outcome.status === 'ready' ? 'This pipeline has no editable ClearPipe graph.' : (outcome.problem?.message ?? 'Failed to load ClearPipe definition'),
-        ));
-        void this.router.navigate(['/clearpipe']);
+        this.rawLoadedGraph = state?.rawGraph ?? null;
+        this.loadedCanonicalGraph = null;
+        this.editingTaskId.set(state?.definition.task_id ?? state?.definition.id ?? taskId);
+        this.editingRevision = state?.definition.revision ?? 0;
+        this.store.reset();
+        this.store.setLayoutOnly(true);
+        this.flowBlockedReason.set(
+          outcome.status === 'ready'
+            ? 'This pipeline has no canonical GraphV2 document that Flow can edit.'
+            : (outcome.problem?.message ?? 'This graph is read-only in the Flow editor.'),
+        );
         return;
       }
-      const flow = graphV2ToFlow(state.graph);
-      flow.name = state.definition.name ?? flow.name;
-      this.store.load(flow);
-      this.store.markSaved(this.store.graph());
+      this.rawLoadedGraph = structuredClone(state.graph);
+      this.loadedCanonicalGraph = structuredClone(state.graph);
+      const profile = reviewFlowGraphV2(state.graph);
       const definitionId = state.definition.task_id ?? state.definition.id ?? taskId;
       this.editingTaskId.set(definitionId);
       this.editingRevision = state.definition.revision ?? 0;
       // Activation is authoritative from the backend definition.
       this.store.setActivated(state.definition.activated === true);
+      if (profile.status !== 'editable') {
+        this.flowBlockedReason.set(profile.reason ?? 'This graph is read-only in the Flow editor.');
+        this.store.reset();
+        this.store.setLayoutOnly(true);
+        return;
+      }
+      const flow = graphV2ToFlow(state.graph);
+      this.store.load(flow);
+      this.store.setLayoutOnly(true);
+      this.store.markSaved(this.store.graph());
+      this.flowBlockedReason.set(null);
       // Restore live run state (if a run is in progress) after a refresh.
       this.restoreRun(definitionId);
     });
@@ -159,6 +176,7 @@ export class ClearpipeFlowEditorComponent {
   }
 
   protected setName(name: string): void {
+    if (this.flowBlockedReason()) return;
     this.store.updateMetadata({name});
   }
 
@@ -166,46 +184,41 @@ export class ClearpipeFlowEditorComponent {
     this.stopPolling();
     this.editingTaskId.set(null);
     this.editingRevision = 0;
+    this.loadedCanonicalGraph = null;
+    this.rawLoadedGraph = null;
     this.store.reset();
+    this.flowBlockedReason.set('Create canonical task graphs in the typed task editor.');
     void this.router.navigate(['/clearpipe/new']);
   }
 
   protected save(afterSave?: () => void): void {
     if (this.saving()) return;
-    const flow = this.graph();
-    const queueId = this.resolveExecutionQueue(flow);
-    if (!queueId) {
-      this.appStore.dispatch(addMessage(
-        'error',
-        'Cannot save: select an execution queue on a node, or create a queue in Workers & Queues first.',
-      ));
+    if (this.flowBlockedReason()) {
+      this.appStore.dispatch(addMessage('error', this.flowBlockedReason()!));
       return;
     }
-    const name = flow.name.trim() || 'Untitled ClearPipe';
-    const graph = createEmptyGraphV2({
-      name: this.generatedName(name),
-      description: flow.description,
-    });
-    // Every generated step needs a resolvable execution queue; expose the chosen
-    // queue as a graph resource and set it as the graph's default (CPSEM008).
-    graph.settings = {default_execution_queue_id: 'queue_default'};
-    graph.resources = [{
-      id: 'queue_default',
-      kind: 'queue',
-      resource_id: queueId,
-      ...(this.queues().find(queue => queue.id === queueId)?.name
-        ? {label: this.queues().find(queue => queue.id === queueId)!.name}
-        : {}),
-    }];
-    const {nodes, bindings} = flowToGraphNodes(flow);
-    graph.nodes = nodes;
-    graph.bindings = bindings;
+    const flow = this.graph();
+    const patch = applyFlowCanonicalPatch(this.loadedCanonicalGraph, flow);
+    if (patch.status !== 'ok') {
+      this.appStore.dispatch(addMessage('error', patch.reason));
+      return;
+    }
+    const name = flow.name;
+    const graph = patch.graph;
 
     const editingTaskId = this.editingTaskId();
+    if (!editingTaskId) {
+      this.flowBlockedReason.set('No persisted canonical task graph is loaded.');
+      return;
+    }
     this.saving.set(true);
-    const request$ = editingTaskId
-      ? this.api.updateDefinition({task: editingTaskId, revision: this.editingRevision, name, description: flow.description, graph})
-      : this.api.createDefinition({name, description: flow.description, graph});
+    const request$ = this.api.updateDefinition({
+      task: editingTaskId,
+      revision: this.editingRevision,
+      name,
+      description: flow.description,
+      graph,
+    });
     request$.pipe(
       finalize(() => this.saving.set(false)),
     ).subscribe({
@@ -215,32 +228,25 @@ export class ClearpipeFlowEditorComponent {
         if (editingTaskId) {
           const revision = response?.definition?.revision;
           if (typeof revision === 'number') this.editingRevision = revision;
+          this.loadedCanonicalGraph = structuredClone(graph);
+          this.rawLoadedGraph = structuredClone(graph);
           afterSave?.();
-        } else {
-          void this.router.navigate(['/clearpipe']);
         }
       },
-      error: () => this.appStore.dispatch(addMessage('error', 'Failed to save ClearPipe definition')),
+      error: (error: {status?: number}) => this.appStore.dispatch(addMessage(
+        'error',
+        error.status === 409
+          ? 'ClearPipe definition changed on the server. Reload before saving again.'
+          : 'Failed to save ClearPipe definition',
+      )),
     });
-  }
-
-  private generatedName(name: string): string {
-    const normalized = name.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
-    return /^[A-Za-z]/.test(normalized) ? normalized : `clearpipe_${normalized || 'flow'}`;
-  }
-
-  /** Prefer a queue explicitly configured on a node, else the first available queue. */
-  private resolveExecutionQueue(flow: ClearpipeFlowGraph): string | undefined {
-    const fromNodes = flow.nodes
-      .flatMap(node => [node.config['queue'], node.config['createQueue']])
-      .find((value): value is string => typeof value === 'string' && value.length > 0);
-    return fromNodes ?? this.queues()[0]?.id;
   }
 
   /** Toggle whether the pipeline is available to run (schedulers fire when on). */
   /** Toggle whether the pipeline is available to run; persisted server-side so
    *  the scheduler and the /clearpipe library see the same state. */
   protected toggleActivated(): void {
+    if (this.flowBlockedReason()) return;
     const id = this.editingTaskId();
     if (!id) {
       this.appStore.dispatch(addMessage('info', 'Save the pipeline before activating it.'));
@@ -260,6 +266,7 @@ export class ClearpipeFlowEditorComponent {
   }
 
   protected run(): void {
+    if (this.flowBlockedReason()) return;
     if (this.running()) {
       this.stop();
       return;
@@ -385,7 +392,8 @@ export class ClearpipeFlowEditorComponent {
   }
 
   protected exportPipeline(): void {
-    const blob = new Blob([JSON.stringify(this.graph(), null, 2)], {type: 'application/json'});
+    const payload = this.rawLoadedGraph ?? this.graph();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -395,6 +403,7 @@ export class ClearpipeFlowEditorComponent {
   }
 
   protected triggerImport(): void {
+    if (this.flowBlockedReason()) return;
     this.fileInput().nativeElement.click();
   }
 
@@ -404,6 +413,9 @@ export class ClearpipeFlowEditorComponent {
     if (!file) return;
     try {
       const parsed = JSON.parse(await file.text()) as Partial<ClearpipeFlowGraph>;
+      this.loadedCanonicalGraph = null;
+      this.rawLoadedGraph = null;
+      this.flowBlockedReason.set('Imported Flow JSON is not a canonical task graph and cannot be saved.');
       this.store.load({...emptyClearpipeFlowGraph(), ...parsed} as ClearpipeFlowGraph);
     } catch {
       // Ignore malformed files; the current graph is preserved.
