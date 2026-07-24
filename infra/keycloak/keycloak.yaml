@@ -38,7 +38,7 @@ spec:
             # Fixed public issuer so the token "iss" is stable regardless of the
             # in-cluster service DNS oauth2-proxy uses for token/jwks calls.
             - name: KC_HOSTNAME
-              value: "http://keycloak.clearml.local"
+              value: "http://keycloak.127.0.0.1.nip.io"
             - name: KC_HOSTNAME_STRICT
               value: "false"
             # Allow backchannel (token/jwks) requests via any host (service DNS).
@@ -114,7 +114,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: keycloak.clearml.local
+    - host: keycloak.127.0.0.1.nip.io
       http:
         paths:
           - path: /

@@ -46,9 +46,9 @@ clearml:
 
 # OIDC SSO login through the oauth2-proxy front door, backed by the Keycloak
 # instance deployed by the "keycloak" ArgoCD app (namespace clearml-tools).
-# Requires the minikube ingress addon and /etc/hosts entries pointing
-# clearml.clearml.local and keycloak.clearml.local at the ingress (127.0.0.1
-# when using `minikube tunnel`).
+# Uses nip.io wildcard DNS (clearml.127.0.0.1.nip.io etc. auto-resolve to
+# 127.0.0.1) so NO /etc/hosts edits are needed - just run `minikube tunnel`
+# so the nginx ingress is reachable on 127.0.0.1:80.
 auth:
   mode: "oidc"
   fixedUsers:
@@ -57,10 +57,10 @@ auth:
   oidc:
     enabled: true
     displayName: "Keycloak"
-    issuerUrl: "http://keycloak.clearml.local/realms/clearml"
+    issuerUrl: "http://keycloak.127.0.0.1.nip.io/realms/clearml"
     clientId: "clearml"
     scopes: "openid profile email"
-    redirectUrl: "http://clearml.clearml.local/oauth2/callback"
+    redirectUrl: "http://clearml.127.0.0.1.nip.io/oauth2/callback"
     existingSecret: "clearml-oidc"
     sessionBridge:
       enabled: true
@@ -76,19 +76,19 @@ oauth2Proxy:
   extraArgs:
     cookie-secure: "false"
     skip-oidc-discovery: "true"
-    login-url: "http://keycloak.clearml.local/realms/clearml/protocol/openid-connect/auth"
+    login-url: "http://keycloak.127.0.0.1.nip.io/realms/clearml/protocol/openid-connect/auth"
     redeem-url: "http://keycloak.clearml-tools.svc.cluster.local:8080/realms/clearml/protocol/openid-connect/token"
     oidc-jwks-url: "http://keycloak.clearml-tools.svc.cluster.local:8080/realms/clearml/protocol/openid-connect/certs"
-    whitelist-domain: "keycloak.clearml.local"
+    whitelist-domain: "keycloak.127.0.0.1.nip.io"
   ingress:
     enabled: true
     ingressClassName: "nginx"
-    hostName: "clearml.clearml.local"
+    hostName: "clearml.127.0.0.1.nip.io"
     path: "/"
 
 # Outgoing SMTP routed to the Mailpit test sink deployed by the "mailpit"
 # ArgoCD app (namespace clearml-tools). Captured mail is viewable at
-# http://mailpit.clearml.local.
+# http://mailpit.127.0.0.1.nip.io.
 email:
   enabled: true
   smtpServer: "mailpit.clearml-tools.svc.cluster.local"

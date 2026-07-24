@@ -35,10 +35,10 @@ data:
           "standardFlowEnabled": true,
           "directAccessGrantsEnabled": true,
           "redirectUris": [
-            "http://clearml.clearml.local/oauth2/callback"
+            "http://clearml.127.0.0.1.nip.io/oauth2/callback"
           ],
           "webOrigins": [
-            "http://clearml.clearml.local"
+            "http://clearml.127.0.0.1.nip.io"
           ]
         }
       ],
