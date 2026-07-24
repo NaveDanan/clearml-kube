@@ -457,6 +457,50 @@ class ReportRuntimeTests(unittest.TestCase):
                 current_task=_FakeCurrentTask(),
             )
 
+    def test_artifact_preview_secrets_are_redacted(self):
+        session = self._session()
+        secret_preview = (
+            "AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE\n"
+            "password = hunter2\napi_key: sk-livedeadbeef123456"
+        )
+        artifact = SimpleNamespace(preview=secret_preview, url=None)
+        tasks = {"taskA": _FakeArtifactTask({"metrics": artifact})}
+        _run_report_body(
+            "report_step",
+            "R",
+            "",
+            ["taskA.metrics"],
+            session=session,
+            current_task=_FakeCurrentTask(),
+            tasks_by_id=tasks,
+        )
+        report_md = session.calls[-1]["json"]["report"]
+        self.assertIn("***REDACTED***", report_md)
+        self.assertNotIn("hunter2", report_md)
+        self.assertNotIn("AKIAIOSFODNN7EXAMPLE", report_md)
+        self.assertNotIn("sk-livedeadbeef123456", report_md)
+
+    def test_error_message_secrets_are_redacted(self):
+        session = self._session()
+
+        class _RaisingArtifacts:
+            def get(self, name):
+                raise RuntimeError("connect failed token=supersecrettoken123")
+
+        tasks = {"taskA": SimpleNamespace(artifacts=_RaisingArtifacts())}
+        _run_report_body(
+            "report_step",
+            "R",
+            "",
+            ["taskA.metrics"],
+            session=session,
+            current_task=_FakeCurrentTask(),
+            tasks_by_id=tasks,
+        )
+        report_md = session.calls[-1]["json"]["report"]
+        self.assertIn("***REDACTED***", report_md)
+        self.assertNotIn("supersecrettoken123", report_md)
+
 
 if __name__ == "__main__":
     unittest.main()
