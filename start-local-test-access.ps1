@@ -10,9 +10,10 @@
 # No-admin alternative (no tunnel): port-forward the ingress controller to a
 # high local port, e.g. `kubectl -n ingress-nginx port-forward
 # svc/ingress-nginx-controller 8085:80` -> http://clearml.127.0.0.1.nip.io:8085
-# (that requires baking :8085 into the OIDC issuergit add infra/ clearml-charts/values-testing.yaml start-local-test-access.ps1
-git commit -m "test: switch OIDC/ingress hostnames to nip.io (no hosts file)"
-git pushonPolicy Bypass -File .\start-local-test-access.ps1
+# (that requires baking :8085 into the OIDC issuer/redirect URLs; the :80 tunnel
+# keeps URLs clean).
+#
+# Usage:  powershell -ExecutionPolicy Bypass -File .\start-local-test-access.ps1
 param([string]$MinikubeProfile = 'clearml')
 
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()

@@ -39,6 +39,18 @@ data:
           ],
           "webOrigins": [
             "http://clearml.127.0.0.1.nip.io"
+          ],
+          "protocolMappers": [
+            {
+              "name": "clearml-audience",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-audience-mapper",
+              "config": {
+                "included.client.audience": "clearml",
+                "id.token.claim": "true",
+                "access.token.claim": "true"
+              }
+            }
           ]
         }
       ],
