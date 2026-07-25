@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy, Component, ElementRef, OnDestroy, TemplateRef, computed, effect, inject, isDevMode, signal, untracked, viewChild} from '@angular/core';
+import {ChangeDetectionStrategy, Component, ElementRef, OnDestroy, TemplateRef, computed, effect, inject, signal, untracked, viewChild} from '@angular/core';
 import {Store} from '@ngrx/store';
 import {DecimalPipe, NgTemplateOutlet, TitleCasePipe} from '@angular/common';
 import {AbstractControl, FormArray, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
@@ -7,7 +7,6 @@ import {MatInputModule} from '@angular/material/input';
 import {MatSelectModule} from '@angular/material/select';
 import {MatAutocompleteModule} from '@angular/material/autocomplete';
 import {MatCheckboxModule} from '@angular/material/checkbox';
-import {MatSlideToggleModule} from '@angular/material/slide-toggle';
 import {MatButton, MatIconButton} from '@angular/material/button';
 import {MatIcon} from '@angular/material/icon';
 import {MatTabsModule} from '@angular/material/tabs';
@@ -22,7 +21,6 @@ import {
   AutoscalerComputeResource,
   AutoscalerDataSourceResource,
   AutoscalerEnvironmentResource,
-  AutoscalerWorkloadInfo,
 } from '../../actions/autoscaler.actions';
 import {
   selectAutoscalerSettings,
@@ -45,30 +43,15 @@ import {debounceTime, distinctUntilChanged} from 'rxjs/operators';
 export type WorkloadType = 'training' | 'workspace' | 'inference';
 
 const INSTANCE_LOG_REFRESH_INTERVAL = 4000;
-// One refresh reads four REST resources and may page through the complete event
-// history, so avoid issuing a new aggregate request every five seconds.
-const WORKLOAD_INFO_REFRESH_INTERVAL = 15000;
+const WORKLOAD_INFO_REFRESH_INTERVAL = 5000;
 const ASSET_PAGE_SIZE = 6;
-const RUNAI_WORKLOAD_PHASES = ['Running', 'Completed', 'Creating', 'Initializing', 'Pending', 'Failed'];
 
 type ConnectionMethod = 'openshift' | 'runai_application';
 type OpenshiftLoginMode = 'fields' | 'command';
 type RunaiCliVersion = 'auto' | 'v1' | 'v2';
-type WorkloadLogsMethod = 'api' | 'cli';
 type ImportMode = 'command' | 'json';
-type AppInstanceSource = 'runai' | 'local' | 'demo';
+type AppInstanceSource = 'runai' | 'local';
 type AppInstanceFilter = 'type' | 'status' | 'project';
-type EventHistoryItem = NonNullable<AutoscalerWorkloadInfo['events']>[number];
-type EventTimelineStatus = 'running' | 'initializing' | 'pending' | 'issues' | 'stopped' | 'failed';
-
-const EVENT_TIMELINE_ROWS: ReadonlyArray<{key: EventTimelineStatus; label: string}> = [
-  {key: 'running', label: 'Running'},
-  {key: 'initializing', label: 'Initializing'},
-  {key: 'pending', label: 'Pending'},
-  {key: 'issues', label: 'Running with issues'},
-  {key: 'stopped', label: 'Stopped'},
-  {key: 'failed', label: 'Failed'},
-];
 
 type WorkloadFormValue = Partial<{
   workload_type: WorkloadType;
@@ -95,12 +78,8 @@ type WorkloadFormValue = Partial<{
   node_type: string;
   priority: string;
   preemptibility: string;
-  run_as_uid: string;
-  run_as_gid: string;
-  supplemental_groups: string;
   existing_pvc: string;
   working_dir: string;
-  large_shm: boolean;
   parallelism: string;
   runs: string;
   restart_policy: string;
@@ -129,63 +108,6 @@ interface AppInstance {
   workload?: WorkloadFormValue;
 }
 
-const DEV_DEMO_INSTANCES: AppInstance[] = [
-  {
-    key: 'demo:training',
-    source: 'demo',
-    name: 'llm-finetune-demo',
-    type: 'training',
-    status: 'Running',
-    project: 'ml-platform',
-    gpus: 2,
-    age: '8 minutes',
-    workload: {
-      workload_type: 'training',
-      workload_name: 'llm-finetune-demo',
-      project: 'ml-platform',
-      image: 'nvcr.io/nvidia/pytorch:25.06-py3',
-      command: 'python train.py --epochs 10',
-      gpu_devices_request: '2',
-    },
-  },
-  {
-    key: 'demo:workspace',
-    source: 'demo',
-    name: 'research-notebook-demo',
-    type: 'workspace',
-    status: 'Initializing',
-    project: 'research',
-    gpus: 1,
-    age: '3 minutes',
-    workload: {
-      workload_type: 'workspace',
-      workload_name: 'research-notebook-demo',
-      project: 'research',
-      image: 'jupyter/scipy-notebook:latest',
-      gpu_devices_request: '1',
-    },
-  },
-  {
-    key: 'demo:inference',
-    source: 'demo',
-    name: 'vision-endpoint-demo',
-    type: 'inference',
-    status: 'Failed',
-    project: 'inference',
-    gpus: 1,
-    age: '14 minutes',
-    workload: {
-      workload_type: 'inference',
-      workload_name: 'vision-endpoint-demo',
-      project: 'inference',
-      image: 'nvcr.io/nvidia/tritonserver:25.06-py3',
-      command: 'tritonserver --model-repository=/models',
-      gpu_devices_request: '1',
-      serving_port: '8000',
-    },
-  },
-];
-
 interface EnvVarGroup {
   key: FormControl<string>;
   value: FormControl<string>;
@@ -202,7 +124,6 @@ interface EnvVarGroup {
     MatSelectModule,
     MatAutocompleteModule,
     MatCheckboxModule,
-    MatSlideToggleModule,
     MatButton,
     MatIconButton,
     MatIcon,
@@ -225,11 +146,6 @@ export class AutoscalerComponent implements OnDestroy {
   private route = inject(ActivatedRoute);
   private dashboardRefreshId?: ReturnType<typeof setInterval>;
   private formSubscription = new Subscription();
-  private readonly devDemoStartedAt = Date.now();
-  protected readonly devDemoEnabled = isDevMode() &&
-    typeof window !== 'undefined' &&
-    window.location.port === '4300' &&
-    new URLSearchParams(window.location.search).get('demo') !== '0';
   protected autoscalerVersion = this.formatAutoscalerVersion(versionConf);
 
   protected selectedProvider = signal<'runai' | null>(null);
@@ -336,22 +252,23 @@ export class AutoscalerComponent implements OnDestroy {
       (dashboard?.instances ?? []).some(instance => this.isCompletedWorkloadStatus(instance.status));
   });
   protected appInstances = computed<AppInstance[]>(() => {
-    const saved = new Map<string, AppInstance>();
-    const identities = new Set<string>();
-    const instances: AppInstance[] = [];
+    // A single workload (identified by project + name) must appear as exactly one
+    // app instance, regardless of how many sources report it. We merge the saved
+    // (Mongo) record, the live Run:ai status, and any locally imported draft into
+    // one entry keyed by workload identity.
+    const merged = new Map<string, AppInstance>();
 
     // Saved instances from Mongo carry the persistent id + full workload params.
     (this.dashboard()?.saved_instances ?? []).forEach((instance, index) => {
       const name = instance.name || `Saved workload ${index + 1}`;
       const key = this.instanceKey(name, instance.project);
-      identities.add(key);
-      saved.set(key, {
+      merged.set(key, {
         key,
         id: instance.id,
         source: 'local',
         name,
         type: instance.type,
-        status: this.appInstancePhase(instance.status),
+        status: instance.status || 'saved',
         project: instance.project,
         gpus: Number(instance.workload?.gpu_devices_request) || 0,
         age: instance.created || '',
@@ -359,21 +276,13 @@ export class AutoscalerComponent implements OnDestroy {
       });
     });
 
-    // Preserve every row returned by `runai workload list --json -A`. A map keyed
-    // only by project + name used to collapse distinct live workloads. Saved form
-    // details are still overlaid onto the first matching live workload.
-    (this.dashboard()?.instances ?? []).forEach((instance, index) => {
+    // Live Run:ai workloads reflect the real cluster status; overlay them onto the
+    // matching saved record (keeping its id + workload params) or add a new entry.
+    (this.dashboard()?.instances ?? []).forEach(instance => {
       const name = instance.name || 'Unnamed workload';
-      const identity = this.instanceKey(name, instance.project);
-      const existing = saved.get(identity);
-      if (existing) {
-        saved.delete(identity);
-      }
-      identities.add(identity);
-      const key = instance.workload_id
-        ? `runai:${instance.workload_id}`
-        : `runai:${identity}:${instance.type || 'workload'}:${index}`;
-      instances.push({
+      const key = this.instanceKey(name, instance.project);
+      const existing = merged.get(key);
+      merged.set(key, {
         ...existing,
         key,
         id: existing?.id,
@@ -381,7 +290,7 @@ export class AutoscalerComponent implements OnDestroy {
         source: 'runai',
         name,
         type: instance.type || existing?.type,
-        status: this.appInstancePhase(instance.status || existing?.status),
+        status: instance.status || existing?.status,
         project: instance.project ?? existing?.project,
         gpus: instance.gpus || existing?.gpus || 0,
         age: instance.age || existing?.age || '',
@@ -389,22 +298,19 @@ export class AutoscalerComponent implements OnDestroy {
       });
     });
 
-    instances.push(...saved.values());
-
     // Locally imported workloads that have not been persisted/launched yet.
     this.importedWorkloads().forEach((workload, index) => {
       const name = workload.workload_name || `Imported workload ${index + 1}`;
-      const identity = this.instanceKey(name, workload.project);
-      if (identities.has(identity)) {
+      const key = this.instanceKey(name, workload.project);
+      if (merged.has(key)) {
         return;
       }
-      identities.add(identity);
-      instances.push({
-        key: identity,
+      merged.set(key, {
+        key,
         source: 'local',
         name,
         type: workload.workload_type,
-        status: 'Pending',
+        status: 'imported',
         project: workload.project,
         gpus: Number(workload.gpu_devices_request) || 0,
         age: '',
@@ -412,14 +318,10 @@ export class AutoscalerComponent implements OnDestroy {
       });
     });
 
-    if (!instances.length && this.devDemoEnabled) {
-      instances.push(...DEV_DEMO_INSTANCES);
-    }
-
-    return instances;
+    return [...merged.values()];
   });
   protected instanceTypeOptions = computed(() => this.instanceFilterOptions('type'));
-  protected instanceStatusOptions = computed(() => [...RUNAI_WORKLOAD_PHASES]);
+  protected instanceStatusOptions = computed(() => this.instanceFilterOptions('status'));
   protected instanceProjectOptions = computed(() => this.instanceFilterOptions('project'));
   protected filteredAppInstances = computed(() => {
     const query = this.instanceSearchQuery().trim().toLowerCase();
@@ -510,7 +412,6 @@ export class AutoscalerComponent implements OnDestroy {
     const instances = this.appInstances();
     return instances.find(instance => instance.key === this.selectedInstanceKey()) ?? instances[0] ?? null;
   });
-  protected demoInstanceSelected = computed(() => this.selectedInstance()?.source === 'demo');
   protected consoleLines = computed(() => {
     const logs = this.dashboard()?.console_log || [];
     if (!logs.length) {
@@ -525,18 +426,12 @@ export class AutoscalerComponent implements OnDestroy {
   });
   protected instanceLogs = this.store.selectSignal(selectAutoscalerWorkloadLogs);
   protected instanceLogsLoading = this.store.selectSignal(selectAutoscalerWorkloadLogsLoading);
-  private selectedInstanceLogs = computed(() => {
-    const selected = this.selectedInstance();
-    const logs = this.instanceLogs();
-    return selected && logs?.workload_name === selected.name &&
-      (logs.project || '') === (selected.project || '') ? logs : null;
-  });
   protected instanceConsoleLines = computed<string[]>(() => {
     const selected = this.selectedInstance();
     if (!selected) {
       return [];
     }
-    const logs = this.selectedInstanceLogs();
+    const logs = this.instanceLogs();
     if (logs?.error && !(logs?.lines?.length)) {
       return [logs.error];
     }
@@ -546,13 +441,7 @@ export class AutoscalerComponent implements OnDestroy {
     }
     return lines;
   });
-  protected instanceLogSource = computed(() => {
-    const source = this.selectedInstanceLogs()?.source || '';
-    return source === 'runai' ? 'Run:ai CLI' : source === 'openshift' ? 'OpenShift CLI' : source;
-  });
-  protected useCliWorkloadLogs = computed(() =>
-    !this.demoInstanceSelected() && (this.settings()?.workload_logs_method || 'api') === 'cli'
-  );
+  protected instanceLogSource = computed(() => this.instanceLogs()?.source || '');
   // The selected app instance is identified by name + project; track that as a
   // stable string so the log refresh effect does not restart on every dashboard
   // poll (which recreates the instance objects).
@@ -562,106 +451,14 @@ export class AutoscalerComponent implements OnDestroy {
   });
 
   // ── Workload info visualizer (REST API: details / events / logs / metrics) ──
-  private liveWorkloadInfo = this.store.selectSignal(selectAutoscalerWorkloadInfo);
-  private liveWorkloadInfoLoading = this.store.selectSignal(selectAutoscalerWorkloadInfoLoading);
-  protected workloadInfo = computed(() => {
-    const instance = this.selectedInstance();
-    return instance?.source === 'demo' ? this.createDevDemoWorkloadInfo(instance) : this.liveWorkloadInfo();
-  });
-  protected workloadInfoLoading = computed(() => this.demoInstanceSelected() ? false : this.liveWorkloadInfoLoading());
-  protected activeWorkloadTab = signal<'metrics' | 'events' | 'logs' | 'details'>('events');
+  protected workloadInfo = this.store.selectSignal(selectAutoscalerWorkloadInfo);
+  protected workloadInfoLoading = this.store.selectSignal(selectAutoscalerWorkloadInfoLoading);
+  protected activeWorkloadTab = signal<'metrics' | 'events' | 'logs' | 'details'>('metrics');
   protected selectedWorkloadId = computed(() => this.selectedInstance()?.workload_id || '');
   protected wlDetails = computed(() => this.workloadInfo()?.details ?? null);
   protected wlEvents = computed(() => this.workloadInfo()?.events ?? []);
-  protected eventSearchOpen = signal(false);
-  protected eventSearchTerm = signal('');
-  protected filteredWlEvents = computed(() => {
-    const term = this.eventSearchTerm().trim().toLowerCase();
-    return [...this.wlEvents()]
-      .filter(event => !term || [
-        event.time,
-        event.reason,
-        event.event_type,
-        event.issuer,
-        event.component,
-        event.message,
-      ].some(value => String(value || '').toLowerCase().includes(term)))
-      .sort((left, right) => (this.eventTimestamp(right.time) || 0) - (this.eventTimestamp(left.time) || 0));
-  });
-  protected eventTimeline = computed(() => {
-    const timestamped = this.wlEvents()
-      .map(event => ({event, time: this.eventTimestamp(event.time)}))
-      .filter(item => item.time !== null) as Array<{event: EventHistoryItem; time: number}>;
-    timestamped.sort((left, right) => left.time - right.time);
-
-    const created = this.eventTimestamp(this.wlDetails()?.created);
-    const now = Date.now();
-    const start = timestamped[0]?.time ?? created ?? now - 60_000;
-    const currentStatus = this.timelineStatusForText(this.workloadPhase());
-    const active = currentStatus === 'running' || currentStatus === 'initializing' ||
-      currentStatus === 'pending' || currentStatus === 'issues';
-    let end = timestamped[timestamped.length - 1]?.time ?? now;
-    end = Math.max(end, active ? now : start + 1_000);
-
-    const transitions: Array<{status: EventTimelineStatus; time: number}> = [];
-    timestamped.forEach(({event, time}) => {
-      const status = this.timelineStatusForEvent(event);
-      if (status && transitions[transitions.length - 1]?.status !== status) {
-        transitions.push({status, time});
-      }
-    });
-    if (!transitions.length) {
-      transitions.push({status: currentStatus || 'pending', time: start});
-    } else if (transitions[0].time > start) {
-      transitions.unshift({status: 'pending', time: start});
-    }
-    if (currentStatus && transitions[transitions.length - 1]?.status !== currentStatus) {
-      transitions.push({
-        status: currentStatus,
-        time: timestamped[timestamped.length - 1]?.time ?? start,
-      });
-    }
-
-    const duration = Math.max(end - start, 1);
-    const segments = transitions.map((transition, index) => {
-      const nextTime = transitions[index + 1]?.time ?? end;
-      const left = Math.max(0, Math.min(100, ((transition.time - start) / duration) * 100));
-      const naturalWidth = ((Math.max(nextTime, transition.time) - transition.time) / duration) * 100;
-      return {
-        status: transition.status,
-        left,
-        width: Math.max(0.8, Math.min(100 - left, naturalWidth)),
-      };
-    });
-    const rows = EVENT_TIMELINE_ROWS.map(row => ({
-      ...row,
-      segments: segments.filter(segment => segment.status === row.key),
-    }));
-    const tickCount = 8;
-    const ticks = Array.from(
-      {length: tickCount},
-      (_, index) => start + (duration * index) / (tickCount - 1)
-    );
-    return {rows, ticks};
-  });
-  protected wlLogLines = computed<string[]>(() => this.useCliWorkloadLogs()
-    ? this.selectedInstanceLogs()?.lines ?? []
-    : this.workloadInfo()?.logs?.lines ?? []
-  );
-  protected wlLogSource = computed(() => this.useCliWorkloadLogs()
-    ? this.instanceLogSource() || 'Run:ai CLI'
-    : this.workloadInfo()?.logs?.source || 'Run:ai REST API'
-  );
-  protected wlLogsLoading = computed(() => this.useCliWorkloadLogs()
-    ? this.instanceLogsLoading()
-    : this.workloadInfoLoading()
-  );
-  protected workloadMetricRangeTitle = computed(() => {
-    const range = this.workloadInfo()?.metrics?.range;
-    return range?.start && range?.end ? `${range.start} – ${range.end}` : 'Workload lifetime';
-  });
+  protected wlLogLines = computed<string[]>(() => this.workloadInfo()?.logs?.lines ?? []);
   protected workloadStatusText = computed(() => this.wlDetails()?.status || this.selectedInstance()?.status || '');
-  protected workloadPhase = computed(() => this.appInstancePhase(this.wlDetails()?.status || this.selectedInstance()?.status));
   protected wlMetricAverages = computed<{label: string; value: number}[]>(() => {
     const avg = this.workloadInfo()?.metrics?.averages ?? {};
     const labels: Record<string, string> = {
@@ -683,9 +480,7 @@ export class AutoscalerComponent implements OnDestroy {
     const x0 = 40, x1 = 780, yTop = 20, yBottom = 230;
     return series
       .map(s => ({
-        id: s.id || s.type || '',
         type: s.type || '',
-        labels: s.labels || {},
         points: (s.points ?? [])
           .map(p => p.v)
           .filter((v): v is number => typeof v === 'number' && isFinite(v)),
@@ -704,246 +499,11 @@ export class AutoscalerComponent implements OnDestroy {
           })
           .join(' ');
         const m = meta[s.type] || {label: s.type || 'Metric', color: '#3b82f6'};
-        const labelDetails = Object.entries(s.labels).map(([key, value]) => `${key}=${value}`).join(', ');
-        return {
-          id: s.id,
-          type: s.type,
-          label: labelDetails ? `${m.label} (${labelDetails})` : m.label,
-          color: m.color,
-          path,
-        };
+        return {type: s.type, label: m.label, color: m.color, path};
       });
   });
   private workloadInfoRefreshId?: ReturnType<typeof setInterval>;
   private activeWorkloadInfoId: string | null = null;
-
-  protected workloadSectionError(section: 'details' | 'events' | 'logs' | 'metrics'): string {
-    if (section === 'logs' && this.useCliWorkloadLogs()) {
-      return this.selectedInstanceLogs()?.error || '';
-    }
-    const info = this.workloadInfo();
-    return info?.errors?.[section] || (info?.connected === false ? info.error || 'Run:ai API request failed' : '');
-  }
-
-  protected isDemoInstance(instance: AppInstance): boolean {
-    return instance.source === 'demo';
-  }
-
-  private createDevDemoWorkloadInfo(instance: AppInstance): AutoscalerWorkloadInfo {
-    const at = (minutesAgo: number) => new Date(this.devDemoStartedAt - minutesAgo * 60_000).toISOString();
-    const baseEvents: EventHistoryItem[] = [
-      {
-        time: at(8),
-        reason: 'WorkloadSubmitted',
-        event_type: 'Normal',
-        issuer: 'runai-controller',
-        component: 'Workload',
-        level: 'Normal',
-        message: 'Workload transitioned to Pending',
-      },
-      {
-        time: at(7),
-        reason: 'Scheduled',
-        event_type: 'Normal',
-        issuer: 'runai-scheduler',
-        component: 'Pod',
-        level: 'Normal',
-        message: 'Successfully assigned workload pod to gpu-node-03',
-      },
-      {
-        time: at(6),
-        reason: 'Pulling',
-        event_type: 'Normal',
-        issuer: 'kubelet',
-        component: 'Pod',
-        level: 'Normal',
-        message: 'Containers transitioned to Initializing',
-      },
-      {
-        time: at(5),
-        reason: 'Started',
-        event_type: 'Normal',
-        issuer: 'kubelet',
-        component: 'Pod',
-        level: 'Normal',
-        message: 'Workload transitioned to Running',
-      },
-      {
-        time: at(3),
-        reason: 'Unhealthy',
-        event_type: 'Warning',
-        issuer: 'kubelet',
-        component: 'Pod',
-        level: 'Warning',
-        message: 'Readiness probe reported a temporary issue',
-      },
-      {
-        time: at(2),
-        reason: 'Ready',
-        event_type: 'Normal',
-        issuer: 'kubelet',
-        component: 'Pod',
-        level: 'Normal',
-        message: 'Workload transitioned to Running and is ready',
-      },
-    ];
-    const phase = this.appInstancePhase(instance.status);
-    let events = phase === 'Initializing' ? baseEvents.slice(0, 3) : [...baseEvents];
-    if (phase === 'Failed') {
-      events.push({
-        time: at(1),
-        reason: 'Failed',
-        event_type: 'Warning',
-        issuer: 'kubelet',
-        component: 'Pod',
-        level: 'Error',
-        message: 'Workload transitioned to Failed after container restart backoff',
-      });
-    }
-
-    const pointTimes = [8, 7, 6, 5, 4, 3, 2, 1].map(at);
-    const metricPoints = (values: number[]) => values.map((value, index) => ({
-      t: pointTimes[index],
-      v: value,
-    }));
-
-    return {
-      connected: true,
-      workload_id: instance.key,
-      details: {
-        name: instance.name,
-        type: instance.type,
-        status: phase,
-        project: instance.project,
-        cluster: 'development-cluster',
-        image: instance.workload?.image || 'nvcr.io/nvidia/pytorch:25.06-py3',
-        gpus: instance.gpus,
-        node_pool: 'gpu-a100-pool',
-        command: instance.workload?.command || 'python app.py',
-        created: at(8),
-        submitted_by: 'developer@example.com',
-      },
-      events,
-      logs: {
-        source: 'Development fixture',
-        lines: [
-          `${at(5)}  INFO  Starting ${instance.name}`,
-          `${at(4)}  INFO  CUDA devices available: ${instance.gpus || 0}`,
-          `${at(3)}  INFO  Loading model and dataset`,
-          `${at(2)}  INFO  Workload is ready`,
-        ],
-      },
-      metrics: {
-        range: {start: at(8), end: at(0)},
-        averages: {
-          GPU_UTILIZATION: 72.4,
-          GPU_MEMORY_USAGE_BYTES: 68.1,
-          CPU_USAGE_CORES: 41.7,
-          CPU_MEMORY_USAGE_BYTES: 55.2,
-        },
-        series: [
-          {id: 'demo-gpu', type: 'GPU_UTILIZATION', labels: {gpu: '0'}, points: metricPoints([12, 35, 61, 78, 84, 71, 76, 82])},
-          {id: 'demo-gpu-memory', type: 'GPU_MEMORY_USAGE_BYTES', labels: {gpu: '0'}, points: metricPoints([18, 43, 64, 70, 72, 69, 74, 76])},
-          {id: 'demo-cpu', type: 'CPU_USAGE_CORES', labels: {pod: instance.name}, points: metricPoints([8, 22, 47, 39, 52, 44, 48, 50])},
-          {id: 'demo-cpu-memory', type: 'CPU_MEMORY_USAGE_BYTES', labels: {pod: instance.name}, points: metricPoints([20, 31, 42, 55, 59, 61, 62, 64])},
-        ],
-      },
-    };
-  }
-
-  protected toggleEventSearch() {
-    this.eventSearchOpen.update(open => !open);
-    if (this.eventSearchOpen() === false) {
-      this.eventSearchTerm.set('');
-    }
-  }
-
-  protected updateEventSearch(event: Event) {
-    this.eventSearchTerm.set((event.target as HTMLInputElement).value);
-  }
-
-  protected formatEventTime(value?: string): string {
-    const timestamp = this.eventTimestamp(value);
-    if (timestamp === null) {
-      return value || '—';
-    }
-    const date = new Date(timestamp);
-    const pad = (part: number, length = 2) => String(part).padStart(length, '0');
-    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}, ` +
-      `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}:${pad(date.getMilliseconds(), 3)}`;
-  }
-
-  protected formatTimelineTick(timestamp: number): string {
-    const date = new Date(timestamp);
-    const pad = (part: number) => String(part).padStart(2, '0');
-    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()},\n` +
-      `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  }
-
-  protected isSuccessfulEvent(event: EventHistoryItem): boolean {
-    return this.timelineStatusForEvent(event) === 'running';
-  }
-
-  private eventTimestamp(value?: string): number | null {
-    if (!value) {
-      return null;
-    }
-    const timestamp = Date.parse(value);
-    return Number.isFinite(timestamp) ? timestamp : null;
-  }
-
-  private timelineStatusForEvent(event: EventHistoryItem): EventTimelineStatus | null {
-    const text = [event.reason, event.event_type, event.message, event.level]
-      .map(value => String(value || '').toLowerCase())
-      .join(' ');
-    const transition = text.match(/\bto\s+(running with issues|containercreating|initializing|creating|pending|running|stopped|failed|completed|suspended)\b/);
-    if (transition) {
-      return this.timelineStatusForText(transition[1]);
-    }
-    if (/failedscheduling|backoff|warning|unhealthy|issue/.test(text)) {
-      return 'issues';
-    }
-    if (/\bfailed\b|\bfatal\b/.test(text)) {
-      return 'failed';
-    }
-    if (/\bstopped\b|\bsuspended\b|\bcompleted\b|\bsucceeded\b|\bterminated\b|\bdeleted\b/.test(text)) {
-      return 'stopped';
-    }
-    if (/containercreating|initializ|\bpulling\b|\bpulled\b|\bcreated\b/.test(text)) {
-      return 'initializing';
-    }
-    if (/\bpending\b|\bqueued\b|\bscheduled\b/.test(text)) {
-      return 'pending';
-    }
-    if (/\brunning\b|\bstarted\b|\bready\b/.test(text)) {
-      return 'running';
-    }
-    return null;
-  }
-
-  private timelineStatusForText(value?: string): EventTimelineStatus | null {
-    const phase = String(value || '').trim().toLowerCase();
-    if (phase.includes('running with issues')) {
-      return 'issues';
-    }
-    if (phase.includes('failed') || phase.includes('error')) {
-      return 'failed';
-    }
-    if (phase.includes('completed') || phase.includes('succeeded') || phase.includes('stopped') ||
-        phase.includes('suspended') || phase.includes('deleted')) {
-      return 'stopped';
-    }
-    if (phase.includes('initializ') || phase.includes('creating') || phase.includes('containercreating')) {
-      return 'initializing';
-    }
-    if (phase.includes('pending') || phase.includes('queued')) {
-      return 'pending';
-    }
-    if (phase.includes('running') || phase.includes('ready')) {
-      return 'running';
-    }
-    return null;
-  }
 
   // Console log panels: the main connection log is collapsed by default and the
   // app-instance-specific log opens when an instance is selected. Only one is
@@ -969,7 +529,6 @@ export class AutoscalerComponent implements OnDestroy {
     runai_cluster: [''],
     runai_project: [''],
     runai_cli_version: ['auto' as RunaiCliVersion],
-    workload_logs_method: ['api' as WorkloadLogsMethod],
   });
 
   workloadForm = this.fb.group({
@@ -1000,14 +559,9 @@ export class AutoscalerComponent implements OnDestroy {
     node_type: [''],
     priority: [''],
     preemptibility: [''],
-    // Security
-    run_as_uid: [''],
-    run_as_gid: [''],
-    supplemental_groups: [''],
     // Storage
     existing_pvc: [''],
     working_dir: [''],
-    large_shm: [false],
     // Training-specific
     parallelism: [''],
     runs: [''],
@@ -1035,7 +589,6 @@ export class AutoscalerComponent implements OnDestroy {
     this.store.dispatch(autoscalerActions.getSettings());
     this.formSubscription.add(this.connectionForm.controls.connection_method.valueChanges.subscribe(() => this.updateConnectionValidators()));
     this.formSubscription.add(this.connectionForm.controls.openshift_login_mode.valueChanges.subscribe(() => this.updateConnectionValidators()));
-    this.formSubscription.add(this.connectionForm.controls.runai_cli_version.valueChanges.subscribe(() => this.updateConnectionValidators()));
     this.updateConnectionValidators();
     this.formSubscription.add(this.workloadForm.controls.project.valueChanges.subscribe(project => {
       this.projectFilter.set(project || '');
@@ -1053,13 +606,12 @@ export class AutoscalerComponent implements OnDestroy {
       this.patchConnectionFormFromSettings();
     });
 
-    // Drive worker-side CLI log collection while either the legacy instance
-    // panel is expanded or the workload Logs tab is configured for CLI logs.
+    // Drive the app-instance-specific console log: fetch + periodically refresh
+    // the logs for the selected instance while its panel is expanded.
     effect(() => {
       const key = this.selectedInstanceLogKey();
       const expanded = this.instanceLogExpanded();
-      const cliTabActive = this.useCliWorkloadLogs() && this.activeWorkloadTab() === 'logs';
-      const active = this.selectedProvider() === 'runai' && !!key && (expanded || cliTabActive) && !this.demoInstanceSelected();
+      const active = this.selectedProvider() === 'runai' && !!key && expanded;
       untracked(() => this.syncInstanceLogRefresh(key, active));
     });
 
@@ -1183,7 +735,7 @@ export class AutoscalerComponent implements OnDestroy {
 
   selectInstance(instance: AppInstance) {
     this.selectedInstanceKey.set(instance.key);
-    this.activeWorkloadTab.set('events');
+    this.activeWorkloadTab.set('metrics');
   }
 
   protected setWorkloadTab(tab: 'metrics' | 'events' | 'logs' | 'details') {
@@ -1199,24 +751,6 @@ export class AutoscalerComponent implements OnDestroy {
       return 'pending';
     }
     return '';
-  }
-
-  private appInstancePhase(status?: string): string {
-    const normalized = (status || '').trim().toLowerCase();
-    const phase = RUNAI_WORKLOAD_PHASES.find(item => item.toLowerCase() === normalized);
-    if (phase) {
-      return phase;
-    }
-    if (['error', 'crashed', 'evicted'].includes(normalized)) {
-      return 'Failed';
-    }
-    if (['success', 'submitted'].includes(normalized)) {
-      return 'Creating';
-    }
-    if (['completed', 'succeeded', 'finished', 'stopped'].includes(normalized)) {
-      return 'Completed';
-    }
-    return 'Pending';
   }
 
   protected instanceTypeIcon(type?: string): string {
@@ -1441,7 +975,7 @@ export class AutoscalerComponent implements OnDestroy {
 
   resetWorkload() {
     const project = this.settings()?.runai_project || '';
-    this.workloadForm.reset({workload_type: 'training', project, large_shm: false}, {emitEvent: false});
+    this.workloadForm.reset({workload_type: 'training', project}, {emitEvent: false});
     this.projectFilter.set(project);
     this.setEnvVars([]);
     this.addEnvVar('', '', false);
@@ -1610,8 +1144,12 @@ export class AutoscalerComponent implements OnDestroy {
   }
 
   protected toggleEnvironment(resource: AutoscalerEnvironmentResource) {
-    const adding = this.workloadForm.controls.environment.value !== resource.name;
-    this.workloadForm.controls.environment.setValue(adding ? resource.name : '');
+    const selected = this.selectedEnvironments();
+    const adding = !selected.includes(resource.name);
+    const next = adding
+      ? [...selected, resource.name]
+      : selected.filter(name => name !== resource.name);
+    this.workloadForm.controls.environment.setValue(next.join(','));
     if (adding) {
       this.workloadForm.patchValue({
         image: resource.image || this.workloadForm.controls.image.value || '',
@@ -1619,13 +1157,7 @@ export class AutoscalerComponent implements OnDestroy {
         command: resource.command || this.workloadForm.controls.command.value || '',
         args: resource.args || this.workloadForm.controls.args.value || '',
         working_dir: resource.working_dir || this.workloadForm.controls.working_dir.value || '',
-        run_as_uid: resource.run_as_uid || this.workloadForm.controls.run_as_uid.value || '',
-        run_as_gid: resource.run_as_gid || this.workloadForm.controls.run_as_gid.value || '',
-        supplemental_groups: resource.supplemental_groups || this.workloadForm.controls.supplemental_groups.value || '',
       });
-      this.setEnvVarsFromString(resource.environment_variables);
-    } else {
-      this.setEnvVars([]);
     }
     this.workloadForm.markAsDirty();
   }
@@ -1673,8 +1205,10 @@ export class AutoscalerComponent implements OnDestroy {
   }
 
   protected selectedEnvironments(): string[] {
-    const selected = (this.workloadForm.controls.environment.value || '').split(',', 1)[0].trim();
-    return selected ? [selected] : [];
+    return (this.workloadForm.controls.environment.value || '')
+      .split(',')
+      .map(name => name.trim())
+      .filter(Boolean);
   }
 
   protected isEnvironmentSelected(resource: AutoscalerEnvironmentResource) {
@@ -1751,7 +1285,6 @@ export class AutoscalerComponent implements OnDestroy {
       runai_cluster: settings.runai_cluster || '',
       runai_project: settings.runai_project || '',
       runai_cli_version: (settings.runai_cli_version as RunaiCliVersion) || 'auto',
-      workload_logs_method: (settings.workload_logs_method as WorkloadLogsMethod) || 'api',
     }, {emitEvent: false});
     this.updateConnectionValidators();
   }
@@ -1778,11 +1311,9 @@ export class AutoscalerComponent implements OnDestroy {
   private updateConnectionValidators() {
     const method = this.connectionForm.controls.connection_method.value;
     const openshiftMode = this.connectionForm.controls.openshift_login_mode.value;
-    const cliVersion = this.connectionForm.controls.runai_cli_version.value;
     this.setRequired(this.connectionForm.controls.openshift_api_url, method === 'openshift' && openshiftMode === 'fields');
     this.setRequired(this.connectionForm.controls.openshift_token, method === 'openshift' && openshiftMode === 'fields');
     this.setRequired(this.connectionForm.controls.openshift_login_command, method === 'openshift' && openshiftMode === 'command');
-    this.setRequired(this.connectionForm.controls.runai_cp_url, method === 'runai_application' || cliVersion !== 'v1');
     this.setRequired(this.connectionForm.controls.runai_access_key, method === 'runai_application');
     this.setRequired(this.connectionForm.controls.runai_secret_key, method === 'runai_application');
   }
@@ -1807,7 +1338,7 @@ export class AutoscalerComponent implements OnDestroy {
       args: workload.args || '',
       template: workload.template || '',
       compute: workload.compute || '',
-      environment: (workload.environment || '').split(',', 1)[0].trim(),
+      environment: workload.environment || '',
       data_sources: workload.data_sources || '',
       cpu_core_request: workload.cpu_core_request || '',
       cpu_core_limit: workload.cpu_core_limit || '',
@@ -1821,12 +1352,8 @@ export class AutoscalerComponent implements OnDestroy {
       node_type: workload.node_type || '',
       priority: workload.priority || '',
       preemptibility: workload.preemptibility || '',
-      run_as_uid: workload.run_as_uid || '',
-      run_as_gid: workload.run_as_gid || '',
-      supplemental_groups: workload.supplemental_groups || '',
       existing_pvc: workload.existing_pvc || '',
       working_dir: workload.working_dir || '',
-      large_shm: !!workload.large_shm,
       parallelism: workload.parallelism || '',
       runs: workload.runs || '',
       restart_policy: workload.restart_policy || '',
@@ -1901,10 +1428,9 @@ export class AutoscalerComponent implements OnDestroy {
     const workloadType = this.detectWorkloadType(command, submitIndex);
     const workload: WorkloadFormValue = {workload_type: workloadType};
     const environments: string[] = [];
-    const environmentVariables: string[] = [];
     let idx = submitIndex + 1;
 
-    if (command[idx] && !command[idx].startsWith('-')) {
+    if (command[1] && command[1] !== 'submit' && !command[idx]?.startsWith('-')) {
       workload.workload_name = command[idx++];
     }
 
@@ -1943,15 +1469,10 @@ export class AutoscalerComponent implements OnDestroy {
         case 'image':
           workload.image = value;
           break;
+        case 'e':
         case 'environment':
           if (value) {
             environments.push(value);
-          }
-          break;
-        case 'e':
-        case 'environment-variable':
-          if (value) {
-            environmentVariables.push(value);
           }
           break;
         case 'g':
@@ -1994,18 +1515,6 @@ export class AutoscalerComponent implements OnDestroy {
           break;
         case 'preemptibility':
           workload.preemptibility = value;
-          break;
-        case 'run-as-uid':
-          workload.run_as_uid = value;
-          break;
-        case 'run-as-gid':
-          workload.run_as_gid = value;
-          break;
-        case 'supplemental-groups':
-          workload.supplemental_groups = value;
-          break;
-        case 'large-shm':
-          workload.large_shm = true;
           break;
         case 'pvc-exists':
         case 'existing-pvc':
@@ -2054,8 +1563,7 @@ export class AutoscalerComponent implements OnDestroy {
       idx++;
     }
 
-    workload.environment = environments[0] || '';
-    workload.environment_variables = environmentVariables.join(',');
+    workload.environment_variables = environments.join(',');
     return this.normalizeWorkloadConfig(workload);
   }
 
@@ -2101,7 +1609,7 @@ export class AutoscalerComponent implements OnDestroy {
       return '';
     };
     const commandValue = value('command');
-    const environmentValue = data?.['environment_variables'] ?? data?.['environmentVariables'] ?? data?.['env'];
+    const environmentValue = data?.['environment_variables'] ?? data?.['environment'] ?? data?.['env'];
 
     return {
       workload_type: (value('workload_type', 'type') as WorkloadType) || 'training',
@@ -2114,7 +1622,7 @@ export class AutoscalerComponent implements OnDestroy {
       environment_variables: Array.isArray(environmentValue) ? environmentValue.join(',') : String(environmentValue ?? ''),
       template: value('template'),
       compute: value('compute', 'compute_resource', 'computeResource'),
-      environment: value('environment', 'environment_asset', 'environmentAsset', 'environment_name').split(',', 1)[0].trim(),
+      environment: value('environment_asset', 'environmentAsset', 'environment_name'),
       data_sources: value('data_sources', 'dataSources', 'data_source', 'dataSource'),
       cpu_core_request: value('cpu_core_request', 'cpuCoreRequest'),
       cpu_core_limit: value('cpu_core_limit', 'cpuCoreLimit'),
@@ -2128,12 +1636,8 @@ export class AutoscalerComponent implements OnDestroy {
       node_type: value('node_type', 'nodeType'),
       priority: value('priority'),
       preemptibility: value('preemptibility'),
-      run_as_uid: value('run_as_uid', 'runAsUid'),
-      run_as_gid: value('run_as_gid', 'runAsGid'),
-      supplemental_groups: value('supplemental_groups', 'supplementalGroups'),
       existing_pvc: value('existing_pvc', 'existingPvc', 'pvc_exists'),
       working_dir: value('working_dir', 'workingDir'),
-      large_shm: this.booleanConfigValue(data, 'large_shm', 'largeShm'),
       parallelism: value('parallelism'),
       runs: value('runs'),
       restart_policy: value('restart_policy', 'restartPolicy'),
@@ -2147,22 +1651,6 @@ export class AutoscalerComponent implements OnDestroy {
       metric_threshold: value('metric_threshold', 'metricThreshold'),
       scale_to_zero_retention: value('scale_to_zero_retention', 'scaleToZeroRetention'),
     };
-  }
-
-  private booleanConfigValue(data: Record<string, unknown>, ...keys: string[]): boolean {
-    for (const key of keys) {
-      const value = data[key];
-      if (typeof value === 'boolean') {
-        return value;
-      }
-      if (typeof value === 'number') {
-        return value !== 0;
-      }
-      if (typeof value === 'string' && value.trim()) {
-        return ['true', '1', 'yes', 'on'].includes(value.trim().toLowerCase());
-      }
-    }
-    return false;
   }
 
   private tokenizeCommand(source: string) {

@@ -1,0 +1,17 @@
+# OIDC regression fixture: oauth2-proxy renders the confidential client-secret
+# reference along with cookie and session-bridge credentials.
+auth:
+  mode: "oidc"
+  fixedUsers:
+    existingSecret: "test-fixed-users"
+  oidc:
+    enabled: true
+    issuerUrl: "https://issuer.example.invalid/realms/clearml"
+    redirectUrl: "https://clearml.example.invalid/oauth2/callback"
+    existingSecret: "test-oidc"
+    sessionBridge:
+      enabled: true
+      passwordKey: "basic-auth-password"
+
+apiserver:
+  existingAdditionalConfigsSecret: "test-fixed-users"

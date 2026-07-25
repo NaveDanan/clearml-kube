@@ -20,11 +20,18 @@ oauth2Proxy.ingress (and disable webserver.ingress for the same host) so that
 {{- $oidc := .Values.auth.oidc }}
 {{- $proxy := .Values.oauth2Proxy }}
 {{- $bridge := $oidc.sessionBridge | default dict }}
+{{- $clientAuthenticationMode := $oidc.clientAuthenticationMode | default "confidential" }}
+{{- if ne $clientAuthenticationMode "confidential" }}
+{{- fail "auth.oidc.clientAuthenticationMode must be 'confidential'; oauth2-proxy requires a confidential Keycloak client secret" }}
+{{- end }}
 {{- if not $oidc.existingSecret }}
-{{- fail "auth.oidc.existingSecret is required when auth.mode is 'oidc' (must contain client-secret and cookie-secret keys)" }}
+{{- fail "auth.oidc.existingSecret is required when auth.mode is 'oidc'; it must contain client-secret and cookie-secret keys" }}
 {{- end }}
 {{- if not $oidc.issuerUrl }}
 {{- fail "auth.oidc.issuerUrl is required when auth.mode is 'oidc'" }}
+{{- end }}
+{{- if not $oidc.redirectUrl }}
+{{- fail "auth.oidc.redirectUrl is required when auth.mode is 'oidc'" }}
 {{- end }}
 {{- if and $bridge.enabled (not $bridge.passwordKey) }}
 {{- fail "auth.oidc.sessionBridge.passwordKey is required when the session bridge is enabled" }}

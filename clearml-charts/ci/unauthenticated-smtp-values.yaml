@@ -1,0 +1,9 @@
+# SMTP regression fixture for a relay that does not use SMTP credentials.
+email:
+  enabled: true
+  authentication:
+    enabled: false
+  smtpServer: "smtp.example.invalid"
+  smtpPort: 1025
+  useTls: false
+  useSsl: false

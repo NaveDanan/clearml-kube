@@ -10,9 +10,9 @@ require an ExternalSecret, SealedSecret, or SOPS controller.
 | `keycloak-oidc` | `client-secret` | ClearML OIDC client during realm import |
 
 The Keycloak Deployment uses required `secretKeyRef` entries, so it cannot start
-with a missing Secret or key. The realm import resolves its client credential
-from the `CLEARML_OIDC_CLIENT_SECRET` environment variable; it contains no
-credential data and seeds no users.
+with a missing Secret or key. The realm import resolves its confidential client
+credential from the `CLEARML_OIDC_CLIENT_SECRET` environment variable, uses the
+standard authorization-code flow, and seeds no users.
 
 The `client-secret` in `keycloak-oidc` must be the same value as
 `client-secret` in the chart's `auth.oidc.existingSecret` in the ClearML release

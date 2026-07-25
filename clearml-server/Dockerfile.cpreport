@@ -1,0 +1,2 @@
+FROM clearml/clearml:2026-07-26
+COPY apiserver /opt/clearml/apiserver

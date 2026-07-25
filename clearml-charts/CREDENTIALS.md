@@ -27,8 +27,11 @@ When `imageCredentials.enabled` is true,
 `imageCredentials.existingSecret` is required. It must name a Secret of type
 `kubernetes.io/dockerconfigjson`.
 
-When `email.enabled` is true, `email.existingSecret` is required. It must
-contain `smtp-username` and `smtp-password`.
+When `email.enabled` and `email.authentication.enabled` are both true (the
+default), `email.existingSecret` is required. It must contain `smtp-username`
+and `smtp-password`. When `email.authentication.enabled` is false, configure
+an unauthenticated relay with `email.smtpServer`, port, and TLS mode; no SMTP
+credential Secret is required or referenced.
 
 When `auth.mode` is `password` or `oidc`, both
 `auth.fixedUsers.existingSecret` and
@@ -37,15 +40,16 @@ same Secret. It must contain an `apiserver.conf` file with the fixed-user
 configuration. Do not use inline `additionalConfigs` for that authentication
 configuration.
 
-When OIDC is enabled, `auth.oidc.existingSecret` is required. It must contain
-`client-secret` and `cookie-secret`; when the session bridge is enabled, it must
-also contain the key named by `auth.oidc.sessionBridge.passwordKey`.
+When OIDC is enabled, oauth2-proxy requires a confidential Keycloak client.
+`auth.oidc.existingSecret` is required and must contain `client-secret` and
+`cookie-secret`; when the session bridge is enabled, it must also contain the
+key named by `auth.oidc.sessionBridge.passwordKey`.
 
 For the bundled Keycloak manifests, also read
 [`infra/keycloak/README.md`](../infra/keycloak/README.md). Its externally
-managed client-secret value must be the same value used by the chart OIDC
-Secret's `client-secret` key, even though the two Secrets may be in different
-namespaces.
+managed `keycloak-oidc` Secret must supply the same client secret as the
+chart's OIDC Secret `client-secret` key, even though the Secrets may be in
+different namespaces.
 
 ## Rotation prerequisite
 

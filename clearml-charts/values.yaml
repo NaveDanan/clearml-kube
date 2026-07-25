@@ -58,14 +58,15 @@ auth:
     startUrl: "/oauth2/start"
     # -- Keycloak/OIDC issuer (e.g. https://keycloak.example.com/realms/clearml).
     issuerUrl: ""
-    # -- OIDC client id registered in Keycloak for ClearML.
+    # -- OIDC client id registered for oauth2-proxy as a confidential Keycloak client.
     clientId: "clearml"
     # -- Requested OIDC scopes.
     scopes: "openid profile email"
     # -- Public redirect/callback URL registered in Keycloak
     #    (e.g. https://clearml.example.com/oauth2/callback).
     redirectUrl: ""
-    # -- Name of an externally managed OIDC Secret; see CREDENTIALS.md.
+    # -- Name of an externally managed OIDC Secret. It must contain client-secret
+    #    and cookie-secret; see CREDENTIALS.md for session-bridge requirements.
     existingSecret: ""
     # -- Session bridge: how the verified SSO identity becomes a real ClearML
     #    session. Open-source ClearML will not mint a session from an external
@@ -139,19 +140,24 @@ oauth2Proxy:
 email:
   # -- Master switch. When true, the apiserver can send notification emails.
   enabled: false
+  authentication:
+    # -- Enable SMTP username/password authentication. Set false for an
+    #    unauthenticated relay; existingSecret is then not required or referenced.
+    enabled: true
   # -- SMTP relay host.
   smtpServer: ""
   # -- SMTP relay port (587 for STARTTLS, 465 for implicit SSL).
   smtpPort: 587
-  # -- Use STARTTLS (typically with port 587).
+  # -- Use STARTTLS (typically with port 587). Cannot be enabled with useSsl.
   useTls: true
-  # -- Use implicit SSL (typically with port 465).
+  # -- Use implicit TLS/SSL (typically with port 465). Cannot be enabled with useTls.
   useSsl: false
   # -- From address on outgoing mail.
   sender: "clearml@localhost"
   # -- From display name on outgoing mail.
   senderName: "ClearML"
   # -- Name of an existing Secret containing `smtp-username` and `smtp-password`.
+  #    Required only when email.authentication.enabled is true.
   existingSecret: ""
 
 # -- Api Server configurations

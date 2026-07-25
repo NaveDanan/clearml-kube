@@ -1,4 +1,10 @@
 {{- if .Values.apiserver.enabled }}
+{{- $email := .Values.email | default dict }}
+{{- $emailAuthentication := $email.authentication | default dict }}
+{{- $emailAuthenticationEnabled := true }}
+{{- if hasKey $emailAuthentication "enabled" }}
+{{- $emailAuthenticationEnabled = $emailAuthentication.enabled }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -150,7 +156,7 @@ spec:
           - name: CLEARML__apiserver__auth__fixed_users__pass_hashed
             value: {{ .Values.auth.fixedUsers.passHashed | quote }}
           {{- end }}
-          {{- if (.Values.email | default dict).enabled }}
+          {{- if $email.enabled }}
           # Outgoing SMTP for user notifications (task/pipeline/dataset/report done).
           - name: CLEARML__apiserver__email__enabled
             value: "true"
@@ -159,27 +165,29 @@ spec:
           # (e.g. an email sender address). Without this the apiserver crashes on
           # startup with a pyhocon ParseException.
           - name: CLEARML__apiserver__email__smtp_server
-            value: {{ .Values.email.smtpServer | quote | quote }}
+            value: {{ $email.smtpServer | quote | quote }}
           - name: CLEARML__apiserver__email__smtp_port
-            value: {{ .Values.email.smtpPort | quote }}
+            value: {{ $email.smtpPort | quote }}
           - name: CLEARML__apiserver__email__use_tls
-            value: {{ .Values.email.useTls | quote }}
+            value: {{ $email.useTls | quote }}
           - name: CLEARML__apiserver__email__use_ssl
-            value: {{ .Values.email.useSsl | quote }}
+            value: {{ $email.useSsl | quote }}
           - name: CLEARML__apiserver__email__sender
-            value: {{ .Values.email.sender | quote | quote }}
+            value: {{ $email.sender | quote | quote }}
           - name: CLEARML__apiserver__email__sender_name
-            value: {{ .Values.email.senderName | quote | quote }}
+            value: {{ $email.senderName | quote | quote }}
+          {{- if $emailAuthenticationEnabled }}
           - name: CLEARML__apiserver__email__username
             valueFrom:
               secretKeyRef:
-                name: {{ .Values.email.existingSecret }}
+                name: {{ $email.existingSecret }}
                 key: smtp-username
           - name: CLEARML__apiserver__email__password
             valueFrom:
               secretKeyRef:
-                name: {{ .Values.email.existingSecret }}
+                name: {{ $email.existingSecret }}
                 key: smtp-password
+          {{- end }}
           {{- end }}
           - name: CLEARML__secure__credentials__apiserver__user_key
             valueFrom:

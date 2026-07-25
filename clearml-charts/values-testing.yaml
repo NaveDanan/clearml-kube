@@ -50,13 +50,19 @@ clearml:
 # 127.0.0.1) so NO /etc/hosts edits are needed - just run `minikube tunnel`
 # so the nginx ingress is reachable on 127.0.0.1:80.
 auth:
-  mode: "oidc"
+  # OIDC/SSO DISABLED for ClearPipe functional validation (test-only). The dev
+  # web server (localhost:4200) and direct apiserver access are used for E2E, so
+  # the oauth2-proxy front door is not required. Re-enable later for auth work.
+  mode: "password"
   fixedUsers:
     # The externally managed clearml-fixed-users Secret supplies apiserver.conf.
     passHashed: false
     existingSecret: "clearml-fixed-users"
   oidc:
-    enabled: true
+    enabled: false
+    # oauth2-proxy requires a confidential Keycloak client. The externally
+    # managed Secret supplies client-secret, cookie-secret, and the session
+    # bridge password.
     displayName: "Keycloak"
     issuerUrl: "http://keycloak.127.0.0.1.nip.io/realms/clearml"
     clientId: "clearml"
@@ -92,16 +98,10 @@ oauth2Proxy:
 # Outgoing SMTP routed to the Mailpit test sink deployed by the "mailpit"
 # ArgoCD app (namespace clearml-tools). Captured mail is viewable at
 # http://mailpit.127.0.0.1.nip.io.
+# SMTP DISABLED for ClearPipe functional validation (test-only). Email delivery
+# is not exercised by ClearPipe validation; re-enable later for notification work.
 email:
-  # Pre-provision this Secret with smtp-username and smtp-password keys.
-  existingSecret: clearml-smtp
-  enabled: true
-  smtpServer: "mailpit.clearml-tools.svc.cluster.local"
-  smtpPort: 1025
-  useTls: false
-  useSsl: false
-  sender: "clearml@clearml.local"
-  senderName: "ClearML"
+  enabled: false
 
 apiserver:
   enabled: true

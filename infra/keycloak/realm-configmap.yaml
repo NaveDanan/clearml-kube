@@ -7,8 +7,8 @@ metadata:
     app.kubernetes.io/name: keycloak
     app.kubernetes.io/part-of: clearml-tools
 data:
-  # Imported on start-dev. The client secret is resolved from the required
-  # CLEARML_OIDC_CLIENT_SECRET environment variable; no users are seeded.
+  # Imported on start-dev. The confidential client secret is resolved from the
+  # required CLEARML_OIDC_CLIENT_SECRET environment variable; no users are seeded.
   clearml-realm.json: |
     {
       "realm": "clearml",
