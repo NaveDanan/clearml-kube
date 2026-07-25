@@ -179,7 +179,7 @@ fileserver:
 # ClearPipe scheduler — fires activated ClearPipe pipelines on their schedule.
 # Create clearpipe-scheduler-credentials externally before enabling it.
 clearpipeScheduler:
-  enabled: false
+  enabled: true
   image:
     registry: ""
     repository: "clearpipe-scheduler"
