@@ -13,6 +13,7 @@ import {
   clearpipeFlowNodeMeta,
   emptyClearpipeFlowGraph,
 } from './clearpipe-flow.models';
+import {ReportSlotMapping} from './clearpipe-report-mapping';
 
 interface FlowSnapshot {
   nodes: ClearpipeFlowNode[];
@@ -180,6 +181,96 @@ export class ClearpipeFlowStoreService {
     this.mutate((graph) => ({...graph, nodes: [...graph.nodes, copy]}));
     this.selectedNodeId.set(copy.id);
     return copy.id;
+  }
+
+  /**
+   * Split a legacy multi-task Task node into one Task node per base task. Each
+   * new node inherits the ordering dependencies (in/out edges) of the original,
+   * and Report mappings that referenced one of the split task ids (as advanced
+   * external-task sources) are rewritten to bind the matching new pipeline node.
+   * Returns the ids of the created nodes.
+   */
+  splitTaskNode(nodeId: string): string[] {
+    const graph = this.graph();
+    const original = graph.nodes.find((item) => item.id === nodeId);
+    if (!original || original.type !== 'task') return [];
+    const taskIds = Array.isArray(original.config['taskIds'])
+      ? (original.config['taskIds'] as unknown[]).filter((value): value is string => typeof value === 'string' && !!value)
+      : [];
+    if (taskIds.length < 2) return [];
+
+    const defaults = clearpipeFlowNodeMeta('task').defaults;
+    const newNodes: ClearpipeFlowNode[] = taskIds.map((taskId, index) => ({
+      id: `task-${crypto.randomUUID()}`,
+      type: 'task',
+      position: {
+        x: original.position.x,
+        y: original.position.y + index * (CLEARPIPE_FLOW_NODE_SIZE.height + 24),
+      },
+      label: `${original.label} ${index + 1}`,
+      status: 'idle' as ClearpipeFlowStatus,
+      config: {
+        ...structuredClone(defaults),
+        baseTaskId: taskId,
+        project: original.config['project'] ?? '',
+        queue: original.config['queue'] ?? '',
+      },
+    }));
+    const taskIdToNewNode = new Map(taskIds.map((taskId, index) => [taskId, newNodes[index].id]));
+    const newNodeIds = new Set(newNodes.map((node) => node.id));
+
+    // Duplicate the original node's ordering edges onto every new node.
+    const newEdges: ClearpipeFlowEdge[] = [];
+    const edgeExists = (source: string, target: string): boolean =>
+      graph.edges.some((edge) => edge.source === source && edge.target === target) ||
+      newEdges.some((edge) => edge.source === source && edge.target === target);
+    for (const edge of graph.edges) {
+      if (edge.source === nodeId) {
+        for (const node of newNodes) {
+          if (!edgeExists(node.id, edge.target)) newEdges.push({id: `edge-${crypto.randomUUID()}`, source: node.id, target: edge.target});
+        }
+      } else if (edge.target === nodeId) {
+        for (const node of newNodes) {
+          if (!edgeExists(edge.source, node.id)) newEdges.push({id: `edge-${crypto.randomUUID()}`, source: edge.source, target: node.id});
+        }
+      }
+    }
+
+    // Rewrite Report mappings that referenced a split task id, and connect them.
+    const nodes = graph.nodes.map((node) => {
+      if (node.type !== 'report') return node;
+      const mappings = Array.isArray(node.config['reportMappings'])
+        ? (node.config['reportMappings'] as ReportSlotMapping[])
+        : [];
+      let changed = false;
+      const next = mappings.map((mapping) => {
+        const external = mapping.source?.externalTaskId;
+        const mappedNode = external ? taskIdToNewNode.get(external) : undefined;
+        if (mappedNode) {
+          changed = true;
+          return {...mapping, source: {sourceNodeId: mappedNode}};
+        }
+        return mapping;
+      });
+      for (const mapping of next) {
+        const sourceId = mapping.source?.sourceNodeId;
+        if (sourceId && newNodeIds.has(sourceId) && !edgeExists(sourceId, node.id)) {
+          newEdges.push({id: `edge-${crypto.randomUUID()}`, source: sourceId, target: node.id});
+        }
+      }
+      if (!changed) return node;
+      const config = {...node.config, reportMappings: next};
+      delete (config as Record<string, unknown>)['migrationReview'];
+      return {...node, config};
+    });
+
+    this.mutate((current) => ({
+      ...current,
+      nodes: [...nodes.filter((node) => node.id !== nodeId), ...newNodes],
+      edges: [...current.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId), ...newEdges],
+    }));
+    this.selectedNodeId.set(newNodes[0].id);
+    return newNodes.map((node) => node.id);
   }
 
   selectNode(nodeId: string | null): void {

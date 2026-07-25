@@ -483,6 +483,19 @@
         @case ('task') {
           <section class="section">
             <h3 class="section-heading">Task</h3>
+            @if (requiresSplit()) {
+              <div class="split-banner">
+                <mat-icon fontSet="al" fontIcon="al-ico-alert"></mat-icon>
+                <div>
+                  <strong>This Task node references {{ legacyTaskIds().length }} tasks.</strong>
+                  <p>A Task node runs exactly one base task. Split it into one node per task to keep runtime ids, statuses and report mappings unambiguous.</p>
+                  <button mat-flat-button class="action-btn" (click)="splitTaskNode()">
+                    <mat-icon fontSet="al" fontIcon="al-ico-flow"></mat-icon>
+                    Split into Task nodes
+                  </button>
+                </div>
+              </div>
+            }
             <div class="field">
               <label class="field-label">Project</label>
               <select [ngModel]="cfg('project')" (ngModelChange)="setCfg('project', $event)">
@@ -662,7 +675,8 @@
 }
 
 @if (mappingOpen() && node()?.type === 'report') {
-  <div class="mapping-overlay" role="dialog" aria-label="Report mapping workspace">
+  <div class="mapping-overlay" role="dialog" aria-label="Report mapping workspace"
+       tabindex="-1" (keydown)="onMappingKeydown($event)">
     <header class="mapping-overlay__header">
       <div>
         <h2>Map report template</h2>
@@ -706,17 +720,24 @@
                     <em class="slot-row__suggest">suggested: {{ slotSuggestion(slot.key)?.sourceLabel }} · {{ slotSuggestion(slot.key)?.label }}</em>
                   }
                 </div>
-                <select [ngModel]="currentIdentity(slot.key)" (ngModelChange)="setSlotSource(slot, $event)">
-                  <option value="">— unmapped —</option>
-                  @for (option of sourceOptionsForSlot(slot); track option.identity) {
-                    <option [value]="option.identity">{{ option.sourceLabel }} · {{ option.label }}</option>
-                  }
-                </select>
+                @if (isSlotExternal(slot.key)) {
+                  <input type="text" class="external-input" [ngModel]="slotExternalId(slot.key)"
+                         (ngModelChange)="setSlotExternalId(slot, $event)" placeholder="External task id…" />
+                } @else {
+                  <select [ngModel]="currentIdentity(slot.key)" (ngModelChange)="setSlotSource(slot, $event)">
+                    <option value="">— unmapped —</option>
+                    @for (option of sourceOptionsForSlot(slot); track option.identity) {
+                      <option [value]="option.identity">{{ option.sourceLabel }} · {{ option.label }}</option>
+                    }
+                  </select>
+                }
                 <div class="slot-row__controls">
                   <label class="mini-toggle">
                     <input type="checkbox" [checked]="mappingFor(slot.key)?.required !== false" (change)="toggleSlotRequired(slot.key)" [disabled]="!mappingFor(slot.key)" />
                     Required
                   </label>
+                  <button type="button" class="link-btn" (click)="toggleSlotAdvanced(slot)" [class.link-btn--on]="isSlotExternal(slot.key)"
+                          title="Bind to a fixed external (historical) task instead of a pipeline source">Advanced</button>
                   <button type="button" class="link-btn" (click)="ignoreSlot(slot)">Ignore</button>
                 </div>
               </div>

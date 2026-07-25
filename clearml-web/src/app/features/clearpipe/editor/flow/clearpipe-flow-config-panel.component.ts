@@ -208,6 +208,14 @@ export class ClearpipeFlowConfigPanelComponent {
       this.lastProject = project;
       untracked(() => this.loadForNode(node.type, project));
     });
+
+    // Move focus into the mapping workspace when it opens (keyboard access).
+    effect(() => {
+      if (!this.mappingOpen()) return;
+      setTimeout(() => {
+        document.querySelector<HTMLElement>('.mapping-overlay input[type=search]')?.focus();
+      });
+    });
   }
 
   private loadForNode(type: string, project: string): void {
@@ -1023,6 +1031,92 @@ export class ClearpipeFlowConfigPanelComponent {
       }
     }
     return markdown.replace(/<iframe\b[\s\S]*?<\/iframe>/gi, '⟦ embed ⟧');
+  }
+
+  // --- Legacy multi-task node: blocking "Split into Task nodes" migration ---
+
+  protected requiresSplit(): boolean {
+    const node = this.node();
+    return !!node && node.type === 'task' && !!node.config['requiresSplit'];
+  }
+
+  protected legacyTaskIds(): string[] {
+    const value = this.node()?.config['taskIds'];
+    return Array.isArray(value) ? (value as unknown[]).filter((v): v is string => typeof v === 'string') : [];
+  }
+
+  protected splitTaskNode(): void {
+    const node = this.node();
+    if (!node) return;
+    this.store.splitTaskNode(node.id);
+  }
+
+  // --- Advanced: fixed external-task Report sources ------------------------
+
+  protected isSlotExternal(slotKey: string): boolean {
+    return !!this.mappingFor(slotKey)?.source.externalTaskId;
+  }
+
+  protected slotExternalId(slotKey: string): string {
+    return this.mappingFor(slotKey)?.source.externalTaskId ?? '';
+  }
+
+  /** Toggle a slot between pipeline-source binding and an advanced fixed external task. */
+  protected toggleSlotAdvanced(slot: ReportTemplateSlot): void {
+    const node = this.node();
+    if (!node) return;
+    const existing = this.mappingFor(slot.key);
+    const next = this.graphMappings().filter((mapping) => mapping.slotKey !== slot.key);
+    if (this.isSlotExternal(slot.key)) {
+      // Switch back to unmapped pipeline source.
+      this.store.updateNodeConfig(node.id, 'reportMappings', next);
+      return;
+    }
+    next.push({
+      slotKey: slot.key,
+      source: {externalTaskId: existing?.source.externalTaskId ?? ''},
+      outputKind: existing?.outputKind ?? (slot.kind === 'text' ? 'field' : 'scalar'),
+      selector: existing?.selector ?? (slot.kind === 'text' ? {field: 'name'} : {}),
+      required: existing?.required ?? true,
+      confirmed: true,
+    });
+    this.store.updateNodeConfig(node.id, 'reportMappings', next);
+  }
+
+  /** Set the fixed external task id for an advanced slot source. */
+  protected setSlotExternalId(slot: ReportTemplateSlot, taskId: string): void {
+    const node = this.node();
+    if (!node) return;
+    const next = this.graphMappings().map((mapping) =>
+      mapping.slotKey === slot.key
+        ? {...mapping, source: {externalTaskId: taskId.trim()}, broken: !taskId.trim()}
+        : mapping,
+    );
+    this.store.updateNodeConfig(node.id, 'reportMappings', next);
+  }
+
+  // --- Mapping workspace keyboard + focus management ----------------------
+
+  /** Roving focus across slot rows with ArrowUp/ArrowDown; Escape closes. */
+  protected onMappingKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      this.closeMappings();
+      return;
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const container = event.currentTarget as HTMLElement;
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('.slot-row select'));
+    if (!rows.length) return;
+    const active = document.activeElement as HTMLElement | null;
+    const index = active ? rows.indexOf(active) : -1;
+    const nextIndex = event.key === 'ArrowDown'
+      ? Math.min(rows.length - 1, index + 1)
+      : Math.max(0, index - 1);
+    if (nextIndex !== index && nextIndex >= 0) {
+      event.preventDefault();
+      rows[nextIndex].focus();
+    }
   }
 
   private summarize(result: Record<string, unknown>, fallback: string): string {
