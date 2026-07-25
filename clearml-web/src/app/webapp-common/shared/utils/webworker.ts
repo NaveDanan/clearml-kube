@@ -1,15 +1,16 @@
 import 'reflect-metadata';
 import {from, Observable} from 'rxjs';
 
+type WorkerFunction = (...args: any[]) => any;
 
 export class CreateWebWorker {
 
   private promiseToWorkerMap: WeakMap<Promise<any>, Worker>;
-  private workerFunctionToUrlMap: WeakMap<Function, string>;
+  private workerFunctionToUrlMap: WeakMap<WorkerFunction, string>;
 
   constructor() {
     this.promiseToWorkerMap     = new WeakMap<Promise<any>, Worker>();
-    this.workerFunctionToUrlMap = new WeakMap<Function, string>();
+    this.workerFunctionToUrlMap = new WeakMap<WorkerFunction, string>();
   }
 
   public run<T>(workerFunction: (input: any) => T, data?: any): Promise<T> {
@@ -44,7 +45,7 @@ export class CreateWebWorker {
     });
   }
 
-  public getOrCreateWorkerUrl(fn: Function): string {
+  public getOrCreateWorkerUrl(fn: WorkerFunction): string {
     if (!this.workerFunctionToUrlMap.has(fn)) {
       const url = this.createWorkerUrl(fn);
       this.workerFunctionToUrlMap.set(fn, url);
@@ -53,7 +54,7 @@ export class CreateWebWorker {
     return this.workerFunctionToUrlMap.get(fn);
   }
 
-  public createWorkerUrl(resolve: Function, template?): string {
+  public createWorkerUrl(resolve: WorkerFunction, template?): string {
     const resolveString     = resolve.toString();
     const webWorkerTemplate = template ? template : this.createDefaultTemplate(resolveString);
     const blob              = new Blob([webWorkerTemplate], {type: 'text/javascript'});
@@ -93,9 +94,8 @@ export function WebWorkerMethod() {
 
   return function (target, propertyKey: string, descriptor: PropertyDescriptor) {
     const method     = descriptor.value;
-    descriptor.value = function (): Observable<any> {
-      const args = Array.from(arguments);
-      return from(webWorker.run(method, ...args));
+    descriptor.value = function (data?: any): Observable<any> {
+      return from(webWorker.run(method, data));
     };
   };
 }

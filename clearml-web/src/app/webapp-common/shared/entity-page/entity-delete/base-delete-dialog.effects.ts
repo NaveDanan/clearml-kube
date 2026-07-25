@@ -141,7 +141,6 @@ export class DeleteDialogEffectsBase {
     }
   }
 
-  // @ts-ignore
   getEntitySelector(entityType: EntityTypeEnum): MemoizedSelector<any, any[]> {
     switch (entityType) {
       case EntityTypeEnum.dataset:

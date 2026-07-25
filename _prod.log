@@ -1,0 +1,225 @@
+[33m❯[39m Building...
+[32m✔[39m Building...
+[1mInitial chunk files[22m       [2m | [22m[1mNames[22m                                          [2m | [22m [1mRaw size[22m[2m | [22m[1mEstimated transfer size[22m
+[32mchunk-WUALPNLM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m348.53 kB[39m[2m | [22m               [36m80.81 kB[39m
+[32mglobal-styles-VYEI3KIP.css[39m[2m | [22m[2mglobal-styles[22m                                  [2m | [22m[36m270.80 kB[39m[2m | [22m               [36m20.77 kB[39m
+[32mchunk-LCIG2DJX.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m216.74 kB[39m[2m | [22m               [36m63.12 kB[39m
+[32mchunk-K72QSK73.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m208.00 kB[39m[2m | [22m               [36m62.28 kB[39m
+[32mmain-6FRKNYW2.js[39m          [2m | [22m[2mmain[22m                                           [2m | [22m[36m198.63 kB[39m[2m | [22m               [36m48.41 kB[39m
+[32mchunk-OXYHYSLR.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m106.59 kB[39m[2m | [22m               [36m26.17 kB[39m
+[32mchunk-QV6TYXZ3.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m79.94 kB[39m[2m | [22m               [36m20.00 kB[39m
+[32mchunk-7WOVZU5Q.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m72.12 kB[39m[2m | [22m               [36m25.41 kB[39m
+[32mchunk-XMKGXXEO.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m62.66 kB[39m[2m | [22m                [36m9.49 kB[39m
+[32mchunk-ENU546KS.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m61.19 kB[39m[2m | [22m               [36m10.83 kB[39m
+[32mchunk-AKSH5VAX.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m60.04 kB[39m[2m | [22m               [36m18.11 kB[39m
+[32mchunk-KF7I3Z62.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m58.43 kB[39m[2m | [22m               [36m15.06 kB[39m
+[32mchunk-WARIXU6Y.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m56.52 kB[39m[2m | [22m                [36m9.34 kB[39m
+[32mchunk-XGT7QQNM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m49.65 kB[39m[2m | [22m                [36m9.83 kB[39m
+[32mscripts-KMOI7N5P.js[39m       [2m | [22m[2mscripts[22m                                        [2m | [22m [36m49.14 kB[39m[2m | [22m               [36m17.81 kB[39m
+[32mchunk-MGCVSAZL.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m48.06 kB[39m[2m | [22m               [36m16.25 kB[39m
+[32mchunk-Z6XFPHTB.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m46.40 kB[39m[2m | [22m               [36m15.90 kB[39m
+[32mchunk-MQDFJB4P.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m45.70 kB[39m[2m | [22m               [36m12.89 kB[39m
+[32mchunk-BGSJMLMM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m43.51 kB[39m[2m | [22m               [36m12.24 kB[39m
+[32mchunk-MOJHKNH5.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m43.25 kB[39m[2m | [22m               [36m10.93 kB[39m
+[32mchunk-ZZF5MDVW.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m41.83 kB[39m[2m | [22m                [36m9.91 kB[39m
+[32mchunk-N4JCUFS5.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m36.82 kB[39m[2m | [22m                [36m9.13 kB[39m
+[32mchunk-ZEAJWRJB.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m36.45 kB[39m[2m | [22m                [36m5.13 kB[39m
+[32mchunk-4N63SJOO.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m34.63 kB[39m[2m | [22m                [36m7.98 kB[39m
+[32mpolyfills-5CFQRCPP.js[39m     [2m | [22m[2mpolyfills[22m                                      [2m | [22m [36m34.59 kB[39m[2m | [22m               [36m11.33 kB[39m
+[32mchunk-VC3E4FVD.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m32.24 kB[39m[2m | [22m                [36m9.49 kB[39m
+[32mchunk-6NYOEFL6.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m29.78 kB[39m[2m | [22m               [36m10.09 kB[39m
+[32mchunk-GCIDVYI6.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m29.21 kB[39m[2m | [22m                [36m1.42 kB[39m
+[32mchunk-OUHBKIQE.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m27.40 kB[39m[2m | [22m                [36m4.82 kB[39m
+[32mchunk-V5EHVJ57.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m25.98 kB[39m[2m | [22m                [36m7.06 kB[39m
+[32mchunk-YJ77NBO4.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m23.99 kB[39m[2m | [22m                [36m4.24 kB[39m
+[32mchunk-ETATWWD2.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m23.29 kB[39m[2m | [22m                [36m6.08 kB[39m
+[32mchunk-BW6WJ372.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m22.96 kB[39m[2m | [22m                [36m6.33 kB[39m
+[32mchunk-AUKGLQRA.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m21.79 kB[39m[2m | [22m                [36m5.73 kB[39m
+[32mchunk-PMRURN2N.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m19.87 kB[39m[2m | [22m                [36m6.17 kB[39m
+[32mchunk-RS6CBWVA.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m18.10 kB[39m[2m | [22m                [36m4.17 kB[39m
+[32mchunk-PZAZA7IL.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m17.69 kB[39m[2m | [22m                [36m4.64 kB[39m
+[32mchunk-EFNX3MQS.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m17.64 kB[39m[2m | [22m                [36m5.54 kB[39m
+[32mchunk-3MA4SIY7.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m17.59 kB[39m[2m | [22m                [36m4.80 kB[39m
+[32mchunk-FQDXK3L6.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m16.12 kB[39m[2m | [22m                [36m5.33 kB[39m
+[32mchunk-EPTFIAS4.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m15.62 kB[39m[2m | [22m                [36m1.14 kB[39m
+[32mchunk-5JCHRXEF.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m14.91 kB[39m[2m | [22m                [36m4.93 kB[39m
+[32mchunk-K6XAYP3B.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m13.79 kB[39m[2m | [22m                [36m1.02 kB[39m
+[32mchunk-UNT3H6YA.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m13.48 kB[39m[2m | [22m                [36m1.02 kB[39m
+[32mchunk-PSLU5T2J.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m13.39 kB[39m[2m | [22m                [36m4.22 kB[39m
+[32mchunk-MFWE52NF.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m12.84 kB[39m[2m | [22m                [36m3.97 kB[39m
+[32mchunk-YUDNCTFN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m11.80 kB[39m[2m | [22m                [36m4.18 kB[39m
+[32mchunk-OTMDG6FY.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m11.39 kB[39m[2m | [22m                [36m3.57 kB[39m
+[32mchunk-DRE7OTHI.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m11.36 kB[39m[2m | [22m                [36m3.13 kB[39m
+[32mchunk-MGIJ7KH3.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m10.78 kB[39m[2m | [22m                [36m3.27 kB[39m
+[32mchunk-YLHJKN5E.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m10.41 kB[39m[2m | [22m                [36m3.60 kB[39m
+[32mchunk-BTLOMLD6.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m10.39 kB[39m[2m | [22m                [36m3.01 kB[39m
+[32mchunk-P45NVTYV.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m10.03 kB[39m[2m | [22m                [36m3.09 kB[39m
+[32mchunk-N5PRHB4W.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m10.02 kB[39m[2m | [22m                [36m2.76 kB[39m
+[32mchunk-WMIATBNW.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m9.39 kB[39m[2m | [22m                [36m2.35 kB[39m
+[32mchunk-5QF7VH2H.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m8.13 kB[39m[2m | [22m                [36m2.74 kB[39m
+[32mchunk-KFDIUUTX.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m7.77 kB[39m[2m | [22m                [36m2.58 kB[39m
+[32mchunk-23FUVAHM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m7.71 kB[39m[2m | [22m                [36m2.47 kB[39m
+[32mchunk-Y34NMGEK.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m7.24 kB[39m[2m | [22m              [36m823 bytes[39m
+[32mchunk-AHNE4BRZ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m7.07 kB[39m[2m | [22m                [36m2.40 kB[39m
+[32mchunk-RXWRB25W.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m6.49 kB[39m[2m | [22m                [36m2.29 kB[39m
+[32mchunk-24UEIBWV.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m6.47 kB[39m[2m | [22m                [36m2.18 kB[39m
+[32mchunk-7W4ZYFS6.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m6.31 kB[39m[2m | [22m                [36m2.09 kB[39m
+[32mchunk-MZ5T2PVJ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m6.17 kB[39m[2m | [22m                [36m1.82 kB[39m
+[32mchunk-3V7P6I24.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m6.08 kB[39m[2m | [22m              [36m787 bytes[39m
+[32mchunk-6PZEQ5YW.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m5.75 kB[39m[2m | [22m                [36m1.89 kB[39m
+[32mchunk-CX2OVGPI.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m5.64 kB[39m[2m | [22m                [36m1.55 kB[39m
+[32mchunk-TFUMCT6O.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m5.63 kB[39m[2m | [22m                [36m1.91 kB[39m
+[32mchunk-MSPBZPZK.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m5.23 kB[39m[2m | [22m                [36m1.90 kB[39m
+[32mchunk-HSHMUCDJ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m5.09 kB[39m[2m | [22m                [36m1.98 kB[39m
+[32mchunk-B74MEEPQ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m5.00 kB[39m[2m | [22m                [36m1.72 kB[39m
+[32mchunk-T6NYRLIS.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m4.99 kB[39m[2m | [22m              [36m791 bytes[39m
+[32mchunk-MCOCKWUR.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m4.77 kB[39m[2m | [22m                [36m1.35 kB[39m
+[32mchunk-FJEBC7UG.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m4.56 kB[39m[2m | [22m                [36m1.06 kB[39m
+[32mchunk-EES6G3XG.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m4.49 kB[39m[2m | [22m                [36m1.51 kB[39m
+[32mchunk-QYVR6S4I.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m4.47 kB[39m[2m | [22m              [36m696 bytes[39m
+[32mchunk-OOL7S3HG.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m4.08 kB[39m[2m | [22m                [36m1.13 kB[39m
+[32mchunk-MM5ADMLQ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m4.04 kB[39m[2m | [22m                [36m1.24 kB[39m
+[32mchunk-INDJDTUT.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.92 kB[39m[2m | [22m                [36m1.41 kB[39m
+[32mchunk-LGCH6H6G.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.91 kB[39m[2m | [22m                [36m1.73 kB[39m
+[32mchunk-LPBD5ZMJ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.65 kB[39m[2m | [22m                [36m1.73 kB[39m
+[32mchunk-4HFLJ5TX.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.52 kB[39m[2m | [22m              [36m788 bytes[39m
+[32mchunk-LTTQKFWQ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.48 kB[39m[2m | [22m                [36m1.48 kB[39m
+[32mchunk-C5JF2NHS.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.34 kB[39m[2m | [22m                [36m1.18 kB[39m
+[32mchunk-LCXO6LRQ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.33 kB[39m[2m | [22m                [36m1.19 kB[39m
+[32mchunk-N4UYSZNN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.27 kB[39m[2m | [22m                [36m1.08 kB[39m
+[32mchunk-W33D3LI3.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.22 kB[39m[2m | [22m                [36m1.09 kB[39m
+[32mchunk-AVMLCPCE.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.06 kB[39m[2m | [22m                [36m1.46 kB[39m
+[32mchunk-GOJ7S7F5.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m3.05 kB[39m[2m | [22m                [36m1.03 kB[39m
+[32mchunk-KKSSLWDN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.97 kB[39m[2m | [22m              [36m925 bytes[39m
+[32mchunk-AGO3HQN7.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.96 kB[39m[2m | [22m                [36m1.07 kB[39m
+[32mchunk-RVOYFSFB.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.82 kB[39m[2m | [22m                [36m1.12 kB[39m
+[32mchunk-HOHMK3S2.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.81 kB[39m[2m | [22m                [36m1.17 kB[39m
+[32mchunk-JFZCH7MN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.77 kB[39m[2m | [22m              [36m963 bytes[39m
+[32mchunk-RJZPLZKV.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.73 kB[39m[2m | [22m                [36m1.15 kB[39m
+[32mchunk-4KTDCPLB.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.67 kB[39m[2m | [22m                [36m1.04 kB[39m
+[32mchunk-2L75WXIN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.63 kB[39m[2m | [22m              [36m840 bytes[39m
+[32mchunk-F3WNRJMM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.59 kB[39m[2m | [22m              [36m701 bytes[39m
+[32mchunk-L7UPM2ZN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.52 kB[39m[2m | [22m              [36m947 bytes[39m
+[32mchunk-AUVR2A5G.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.51 kB[39m[2m | [22m              [36m744 bytes[39m
+[32mchunk-GUI74CBI.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.44 kB[39m[2m | [22m              [36m993 bytes[39m
+[32mchunk-TGZK3XOW.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.34 kB[39m[2m | [22m              [36m791 bytes[39m
+[32mchunk-ZTF7XNSB.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.14 kB[39m[2m | [22m              [36m814 bytes[39m
+[32mchunk-KLDZIYAO.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.12 kB[39m[2m | [22m              [36m549 bytes[39m
+[32mchunk-ITBYIZNQ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.03 kB[39m[2m | [22m              [36m678 bytes[39m
+[32mchunk-SEO65CL6.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m2.02 kB[39m[2m | [22m              [36m855 bytes[39m
+[32mchunk-CQ5OJQPC.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.92 kB[39m[2m | [22m              [36m630 bytes[39m
+[32mchunk-YRSUZRMP.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.87 kB[39m[2m | [22m              [36m625 bytes[39m
+[32mchunk-MBJQ4I7I.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.79 kB[39m[2m | [22m              [36m769 bytes[39m
+[32mchunk-QV7SGQ5Q.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.74 kB[39m[2m | [22m              [36m690 bytes[39m
+[32mchunk-OTOTFQIW.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.72 kB[39m[2m | [22m              [36m631 bytes[39m
+[32mchunk-EXNO25WF.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.69 kB[39m[2m | [22m              [36m554 bytes[39m
+[32mchunk-PBXLL2ZJ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.68 kB[39m[2m | [22m              [36m770 bytes[39m
+[32mchunk-CRIMLEHH.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.66 kB[39m[2m | [22m              [36m867 bytes[39m
+[32mstyles-FPCECE3V.css[39m       [2m | [22m[2mstyles[22m                                         [2m | [22m  [36m1.57 kB[39m[2m | [22m              [36m453 bytes[39m
+[32mchunk-ZBZC4XKM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.54 kB[39m[2m | [22m              [36m540 bytes[39m
+[32mchunk-ZXEAHIWL.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.50 kB[39m[2m | [22m              [36m666 bytes[39m
+[32mchunk-QUPNZH54.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.45 kB[39m[2m | [22m              [36m603 bytes[39m
+[32mchunk-LSFWBGQT.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.43 kB[39m[2m | [22m              [36m669 bytes[39m
+[32mchunk-Z7UHZJKX.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.41 kB[39m[2m | [22m              [36m586 bytes[39m
+[32mchunk-WVBAB4TH.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.31 kB[39m[2m | [22m              [36m501 bytes[39m
+[32mchunk-NEXWRC36.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.30 kB[39m[2m | [22m              [36m459 bytes[39m
+[32mchunk-Z4BOBS4N.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.27 kB[39m[2m | [22m              [36m520 bytes[39m
+[32mchunk-UHZF7ZSI.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.23 kB[39m[2m | [22m              [36m569 bytes[39m
+[32mchunk-GGLHBI6M.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.17 kB[39m[2m | [22m              [36m510 bytes[39m
+[32mchunk-H63WNYO5.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.11 kB[39m[2m | [22m              [36m468 bytes[39m
+[32mchunk-O5EKXHUK.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m  [36m1.01 kB[39m[2m | [22m                [36m1.01 kB[39m
+[32mchunk-SN55ECEK.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m989 bytes[39m[2m | [22m              [36m989 bytes[39m
+[32mchunk-Y7HEA3ZU.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m968 bytes[39m[2m | [22m              [36m968 bytes[39m
+[32mchunk-TI4Z2AMN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m943 bytes[39m[2m | [22m              [36m943 bytes[39m
+[32mchunk-IUTTRHYM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m941 bytes[39m[2m | [22m              [36m941 bytes[39m
+[32mchunk-AZYYWSDJ.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m933 bytes[39m[2m | [22m              [36m933 bytes[39m
+[32mchunk-SA6XQGQB.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m925 bytes[39m[2m | [22m              [36m925 bytes[39m
+[32mchunk-QXLZ3NKG.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m908 bytes[39m[2m | [22m              [36m908 bytes[39m
+[32mchunk-INV5NBGU.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m803 bytes[39m[2m | [22m              [36m803 bytes[39m
+[32mchunk-QIU4YEX2.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m796 bytes[39m[2m | [22m              [36m796 bytes[39m
+[32mchunk-DKGLJWI4.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m786 bytes[39m[2m | [22m              [36m786 bytes[39m
+[32mchunk-4WW23P46.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m766 bytes[39m[2m | [22m              [36m766 bytes[39m
+[32mchunk-MBMQGM2N.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m743 bytes[39m[2m | [22m              [36m743 bytes[39m
+[32mchunk-MRDRQJGB.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m737 bytes[39m[2m | [22m              [36m737 bytes[39m
+[32mchunk-KNZ4MA24.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m735 bytes[39m[2m | [22m              [36m735 bytes[39m
+[32mchunk-UT5AAFLT.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m696 bytes[39m[2m | [22m              [36m696 bytes[39m
+[32mchunk-XTFRFVEU.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m695 bytes[39m[2m | [22m              [36m695 bytes[39m
+[32mchunk-OWBEFCQM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m616 bytes[39m[2m | [22m              [36m616 bytes[39m
+[32mchunk-GNULTQQ3.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m591 bytes[39m[2m | [22m              [36m591 bytes[39m
+[32mchunk-6R3HM4UU.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m531 bytes[39m[2m | [22m              [36m531 bytes[39m
+[32mchunk-E4K5YLFN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m524 bytes[39m[2m | [22m              [36m524 bytes[39m
+[32mchunk-OLRP6MOE.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m492 bytes[39m[2m | [22m              [36m492 bytes[39m
+[32mchunk-I3VEU2JD.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m483 bytes[39m[2m | [22m              [36m483 bytes[39m
+[32mchunk-PKCTG6QY.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m468 bytes[39m[2m | [22m              [36m468 bytes[39m
+[32mchunk-XOMW4SZ2.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m456 bytes[39m[2m | [22m              [36m456 bytes[39m
+[32mchunk-I26KJ4KY.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m360 bytes[39m[2m | [22m              [36m360 bytes[39m
+[32mchunk-PA3EKHED.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m349 bytes[39m[2m | [22m              [36m349 bytes[39m
+[32mchunk-3EFBUL5O.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m346 bytes[39m[2m | [22m              [36m346 bytes[39m
+[32mchunk-DKTHTJ56.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m345 bytes[39m[2m | [22m              [36m345 bytes[39m
+[32mchunk-AKTZG6KI.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m316 bytes[39m[2m | [22m              [36m316 bytes[39m
+[32mchunk-BEDIYU3T.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m300 bytes[39m[2m | [22m              [36m300 bytes[39m
+[32mchunk-IVXWFTSE.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m292 bytes[39m[2m | [22m              [36m292 bytes[39m
+[32mchunk-KECCZLYE.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m256 bytes[39m[2m | [22m              [36m256 bytes[39m
+[32mchunk-DW6ZMPIE.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m248 bytes[39m[2m | [22m              [36m248 bytes[39m
+[32mchunk-74MRJX57.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m235 bytes[39m[2m | [22m              [36m235 bytes[39m
+[32mchunk-BXYUPXMS.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m214 bytes[39m[2m | [22m              [36m214 bytes[39m
+[32mchunk-GRJHIK6H.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m174 bytes[39m[2m | [22m              [36m174 bytes[39m
+[32mchunk-C3ZOFBU2.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m159 bytes[39m[2m | [22m              [36m159 bytes[39m
+[32mchunk-MABE6BTK.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m121 bytes[39m[2m | [22m              [36m121 bytes[39m
+[32mchunk-7OIDFSSH.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m110 bytes[39m[2m | [22m              [36m110 bytes[39m
+
+[1m [22m                         [2m | [22m[1mInitial total[22m                                  [2m | [22m  [1m3.10 MB[22m[2m | [22m              [1m783.17 kB[22m
+
+[1mLazy chunk files[22m          [2m | [22m[1mNames[22m                                          [2m | [22m [1mRaw size[22m[2m | [22m[1mEstimated transfer size[22m
+[32mchunk-TYBYVWNX.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m492.89 kB[39m[2m | [22m               [36m82.41 kB[39m
+[32mchunk-7TNUUIDW.js[39m         [2m | [22m[2mclearpipe-flow-editor-component[22m                [2m | [22m[36m182.83 kB[39m[2m | [22m               [36m39.55 kB[39m
+[32mchunk-G6ZHUCSV.js[39m         [2m | [22m[2mglobal-search-dialog-component[22m                 [2m | [22m[36m150.52 kB[39m[2m | [22m               [36m23.82 kB[39m
+[32mchunk-OBPHGAWW.js[39m         [2m | [22m[2mautoscaler-component[22m                           [2m | [22m[36m113.23 kB[39m[2m | [22m               [36m23.80 kB[39m
+[32mchunk-TT43KXWK.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m111.05 kB[39m[2m | [22m               [36m25.42 kB[39m
+[32mchunk-GUQ3ECOY.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m110.45 kB[39m[2m | [22m               [36m19.80 kB[39m
+[32mchunk-HNJS6YKC.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m[36m101.87 kB[39m[2m | [22m               [36m23.70 kB[39m
+[32mchunk-K4CJ64EM.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m87.39 kB[39m[2m | [22m               [36m21.51 kB[39m
+[32mchunk-P62HG2GT.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m77.15 kB[39m[2m | [22m               [36m16.77 kB[39m
+[32mchunk-HT3N6OKB.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m72.13 kB[39m[2m | [22m               [36m20.39 kB[39m
+[32mchunk-BNC4JKQP.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m65.67 kB[39m[2m | [22m               [36m15.04 kB[39m
+[32mchunk-VOEJVZHI.js[39m         [2m | [22m[2mexperiment-compare-hyper-params-graph-component[22m[2m | [22m [36m59.89 kB[39m[2m | [22m               [36m14.42 kB[39m
+[32mchunk-3S6NBYN2.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m57.06 kB[39m[2m | [22m               [36m12.49 kB[39m
+[32mchunk-7CG6WRJ4.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m57.00 kB[39m[2m | [22m               [36m13.58 kB[39m
+[32mchunk-W7H23YKN.js[39m         [2m | [22m[2m-[22m                                              [2m | [22m [36m50.33 kB[39m[2m | [22m                [36m9.30 kB[39m
+[2m...and 196 more lazy chunks files. Use "--verbose" to show all the files.[22m
+
+Application bundle generation complete. [91.584 seconds] - 2026-07-25T18:06:37.841Z
+
+▲ [WARNING] Ignoring this import because "node_modules/ngx-markdown-editor/fesm2020/ngx-markdown-editor.mjs" was marked as having no side effects [ignored-bare-import]
+
+    src/app/webapp-common/project-info/project-info.component.ts:5:7:
+      5 │ import 'ngx-markdown-editor';
+        ╵        ~~~~~~~~~~~~~~~~~~~~~
+
+  "sideEffects" is false in the enclosing "package.json" file:
+
+    node_modules/ngx-markdown-editor/package.json:52:2:
+      52 │   "sideEffects": false,
+         ╵   ~~~~~~~~~~~~~
+
+
+▲ [WARNING] src/app/features/clearpipe/editor/flow/clearpipe-flow-canvas.component.scss exceeded maximum budget. Budget 6.00 kB was not met by 2.99 kB with a total of 8.99 kB.
+
+
+▲ [WARNING] src/app/features/clearpipe/editor/flow/clearpipe-flow-config-panel.component.scss exceeded maximum budget. Budget 6.00 kB was not met by 6.22 kB with a total of 12.22 kB.
+
+
+▲ [WARNING] src/app/webapp-common/workers-and-queues/containers/autoscaler/autoscaler.component.scss exceeded maximum budget. Budget 6.00 kB was not met by 18.24 kB with a total of 24.24 kB.
+
+
+▲ [WARNING] src/app/webapp-common/shared/experiment-graphs/experiment-graphs.component.scss exceeded maximum budget. Budget 6.00 kB was not met by 1.16 kB with a total of 7.16 kB.
+
+
+▲ [WARNING] src/app/webapp-common/shared/ui-components/data/table/table.component.scss exceeded maximum budget. Budget 6.00 kB was not met by 2.49 kB with a total of 8.49 kB.
+
+
+▲ [WARNING] src/app/webapp-common/shared/components/markdown-editor/markdown-editor.component.scss exceeded maximum budget. Budget 6.00 kB was not met by 6.36 kB with a total of 12.36 kB.
+
+
+Output location: D:\Projects\clearml\clearml-web\build\copilot-verify
+

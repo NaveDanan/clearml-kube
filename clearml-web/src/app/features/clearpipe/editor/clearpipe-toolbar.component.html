@@ -21,25 +21,6 @@
 
   <div class="toolbar__group">
     @for (action of actions(); track action.id) {
-      @if (action.id === 'import' || action.id === 'export') {
-        <button mat-button
-                type="button"
-                class="toolbar__btn"
-                [disabled]="action.disabled"
-                [attr.title]="action.disabledReason"
-                [attr.aria-describedby]="action.disabledReason ? 'clearpipe-action-' + action.id : null"
-                (click)="invoke(action.id)">
-          <mat-icon fontSet="al" [fontIcon]="iconFor(action.id)"></mat-icon>
-          <span class="toolbar__label">{{ action.label }}</span>
-        </button>
-      }
-    }
-  </div>
-
-  <span class="toolbar__separator" aria-hidden="true"></span>
-
-  <div class="toolbar__group">
-    @for (action of actions(); track action.id) {
       @if (action.id === 'validate' || action.id === 'preview') {
         <button mat-button
                 type="button"
@@ -77,16 +58,29 @@
         <button mat-icon-button
                 type="button"
                 class="toolbar__icon-btn"
-                [disabled]="action.disabled"
-                [attr.title]="action.disabledReason ?? action.label"
-                [attr.aria-label]="action.label"
-                [attr.aria-describedby]="action.disabledReason ? 'clearpipe-action-' + action.id : null"
-                (click)="invoke(action.id)">
-          <mat-icon fontSet="al" [fontIcon]="iconFor(action.id)"></mat-icon>
+                aria-label="More ClearPipe actions"
+                [matMenuTriggerFor]="moreActions">
+          <mat-icon fontSet="al" fontIcon="al-ico-dots-h-menu"></mat-icon>
         </button>
       }
     }
   </div>
+
+  <mat-menu #moreActions="matMenu">
+    @for (action of actions(); track action.id) {
+      @if (action.id === 'import' || action.id === 'export' || action.id === 'settings') {
+        <button mat-menu-item
+                type="button"
+                [disabled]="action.disabled"
+                [attr.title]="action.disabledReason"
+                [attr.aria-describedby]="action.disabledReason ? 'clearpipe-action-' + action.id : null"
+                (click)="invoke(action.id)">
+          <mat-icon fontSet="al" [fontIcon]="iconFor(action.id)"></mat-icon>
+          <span>{{ action.label }}</span>
+        </button>
+      }
+    }
+  </mat-menu>
 
   <input #importInput hidden type="file" accept="application/json,.json" (change)="importGraph($event)">
   <span class="toolbar__message" aria-live="polite">{{ transferMessage() }}</span>

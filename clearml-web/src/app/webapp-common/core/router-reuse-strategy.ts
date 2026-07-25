@@ -110,7 +110,7 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     for (const baseProperty in base) {
 
       // determine if comparrison object has that property, if not: return false
-      if (compare.hasOwnProperty(baseProperty)) {
+      if (Object.hasOwn(compare, baseProperty)) {
         switch (typeof base[baseProperty]) {
           // if one is object and other is not: return false
           // if they are both objects, recursively call this comparison function

@@ -6,7 +6,7 @@ export const isS3Url = (src) => src?.startsWith('s3://');
 export const isGoogleCloudUrl = (src) => src?.startsWith('gs://');
 
 const replaceAll = (baseString: string, toReplace: string, replaceWith: string, ignore = false) =>
-  baseString.replace(new RegExp(toReplace.replace(/([\/\,\!\\\^\$\{\}\[\]\(\)\.\*\+\?\|\<\>\-\&])/g, '\\$&'), (ignore ? 'gi' : 'g')), (typeof (replaceWith) == 'string') ? replaceWith.replace(/\$/g, '$$$$') : replaceWith);
+  baseString.replace(new RegExp(toReplace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), (ignore ? 'gi' : 'g')), (typeof (replaceWith) == 'string') ? replaceWith.replace(/\$/g, '$$$$') : replaceWith);
 const encodeSpecialCharacters = (src: string) => {
   src = replaceAll(src, '%', '%25');
   src = replaceAll(src, '#', '%23');

@@ -383,7 +383,7 @@ export function convertNetworkDesignFromExperiments<T extends IExperimentDetail>
     const inputModelNetworkDesignValues = compareArrayOfStrings(modelNetworkDesignData);
 
     experiments.forEach((experiment, index) => {
-      if (experiment.artifacts[model].hasOwnProperty(key)) {
+      if (Object.hasOwn(experiment.artifacts[model], key)) {
         experiment.artifacts[model][key].network_design = inputModelNetworkDesignValues[index];
       }
     });
@@ -421,7 +421,7 @@ export function convertExperimentsArrays(experiment, origin, experiments, path =
         case 'setup_shell_script':
           convertedExperiment[key] = experiment[key];
           break;
-        default:
+        default: {
           const alternativeConvertedExperiment = getAlternativeConvertedExperiment(newPath, experiment[key]);
           if (alternativeConvertedExperiment) {
             convertedExperiment[key] = alternativeConvertedExperiment;
@@ -453,6 +453,7 @@ export function convertExperimentsArrays(experiment, origin, experiments, path =
           } else {
             convertedExperiment[key] = experiment[key];
           }
+        }
       }
     }
   );

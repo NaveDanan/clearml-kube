@@ -11,9 +11,9 @@
     "build-dev": "node ./node_modules/.bin/ng build --extract-css=false",
     "build-widgets": "ng build --project report-widgets --configuration production",
     "fetch": "./scripts/get-remote-build.sh",
-    "test": "ng test",
-    "test-clearpipe": "ng run trains-webapp:test-clearpipe",
-    "test-pipelines-regression": "ng run trains-webapp:test-pipelines-regression",
+    "test": "node --require ./scripts/karma-minimatch-compat.cjs ./node_modules/@angular/cli/bin/ng test",
+    "test-clearpipe": "node --require ./scripts/karma-minimatch-compat.cjs ./node_modules/@angular/cli/bin/ng run trains-webapp:test-clearpipe",
+    "test-pipelines-regression": "node --require ./scripts/karma-minimatch-compat.cjs ./node_modules/@angular/cli/bin/ng run trains-webapp:test-pipelines-regression",
     "lint": "ng lint",
     "e2e": "ng e2e --port 4300",
     "bundle-report": "node --max_old_space_size=3248 ./node_modules/.bin/ng build --configuration production --aot --stats-json; webpack-bundle-analyzer build/stats.json",
@@ -130,6 +130,7 @@
   },
   "overrides": {
     "minimatch": "^10.2.3",
-    "@hono/node-server": "^2.0.5"
+    "@hono/node-server": "^2.0.5",
+    "brace-expansion": "^5.0.8"
   }
 }

@@ -32,7 +32,7 @@ export class EditProjectFormComponent {
   public readonly projectsRoot = 'Projects root';
 
   projectForm = this.formBuilder.group({
-    name: ['', [Validators.required, minLengthTrimmed(1), Validators.pattern(/^[^\/]*$/)]],
+    name: ['', [Validators.required, minLengthTrimmed(1), Validators.pattern(/^[^/]*$/)]],
     parent: [{value: null as string, disabled: true}],
     default_output_destination: [{value: null as string, disabled: false}, [Validators.pattern(OutputDestPattern)]],
     system_tags: [[]]

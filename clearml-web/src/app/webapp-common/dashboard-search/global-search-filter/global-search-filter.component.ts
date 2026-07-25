@@ -86,7 +86,7 @@ export class GlobalSearchFilterComponent {
       const usersValuesFromFilters = currentFilters['users']?.value;
 
       // Update statusFilter (which is now a FormControl)
-      if (currentFilters.hasOwnProperty('status')) { // Check if the key exists
+      if (Object.hasOwn(currentFilters, 'status')) { // Check if the key exists
         if (Array.isArray(statusValuesFromFilters)) {
           this.statusFilter.setValue(statusValuesFromFilters, {emitEvent: false});
         } else {
@@ -96,7 +96,7 @@ export class GlobalSearchFilterComponent {
       } else {
         this.statusFilter.setValue([], {emitEvent: false});
       }
-      if (currentFilters.hasOwnProperty('users')) { // Check if the key exists
+      if (Object.hasOwn(currentFilters, 'users')) { // Check if the key exists
         if (Array.isArray(usersValuesFromFilters)) {
           this.userFilter.setValue(usersValuesFromFilters, {emitEvent: false});
         } else {
@@ -107,7 +107,7 @@ export class GlobalSearchFilterComponent {
         this.userFilter.setValue([], {emitEvent: false});
       }
 
-      if (currentFilters.hasOwnProperty('type')) { // Check if the key exists
+      if (Object.hasOwn(currentFilters, 'type')) { // Check if the key exists
         if (Array.isArray(typeValuesFromFilters)) {
           this.typeFilter.setValue(typeValuesFromFilters, {emitEvent: false});
         } else {

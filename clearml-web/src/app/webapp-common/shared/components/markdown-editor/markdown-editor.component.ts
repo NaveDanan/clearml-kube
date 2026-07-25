@@ -250,7 +250,7 @@ export class MarkdownEditorComponent {
   }
 
   private getDuplicateIframes() {
-    const names = Array.from(this.getData().matchAll(/<iframe[^>]*?name=(["\'])?((?:.(?!\1|>))*.?)\1?/g)).map(a => a[2]);
+    const names = Array.from(this.getData().matchAll(/<iframe[^>]*?name=(["'])?((?:.(?!\1|>))*.?)\1?/g)).map(a => a[2]);
     const uniqueNames = new Set(names);
     let duplicatedNames = [];
     for (const name of uniqueNames) {

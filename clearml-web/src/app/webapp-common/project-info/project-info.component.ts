@@ -6,7 +6,6 @@ import {
 import {Store} from '@ngrx/store';
 import {combineLatest} from 'rxjs';
 import {debounceTime, filter, take} from 'rxjs/operators';
-import 'ngx-markdown-editor';
 import {
   selectBlockUserScript,
   selectIsDeepMode,

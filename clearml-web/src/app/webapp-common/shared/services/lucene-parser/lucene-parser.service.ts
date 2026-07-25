@@ -42,7 +42,7 @@ export class LuceneParserService {
   }
 
   private isFieldNode(node: ILuceneField | ILuceneNode): boolean {
-    return node.hasOwnProperty('left');
+    return Object.hasOwn(node, 'left');
   }
 
   private isLuceneFieldValid(field: ILuceneField): boolean {

@@ -312,18 +312,15 @@ export class ClearpipeFlowEditorComponent {
 
   protected stop(): void {
     const runId = this.store.runTaskId();
-    if (!runId) {
-      this.store.markRunStopped();
-      return;
-    }
-    if (this.busy()) return;
+    // Optimistically revert the toolbar the instant Stop is clicked: the
+    // "Running…" + "Stop" buttons disappear and "Run" returns immediately,
+    // while the backend stop request continues in the background.
+    this.stopPolling();
+    this.store.markRunStopped();
+    if (!runId || this.busy()) return;
     this.busy.set(true);
     this.api.stopRun(runId).pipe(finalize(() => this.busy.set(false))).subscribe({
-      next: () => {
-        this.stopPolling();
-        this.store.markRunStopped();
-        this.appStore.dispatch(addMessage('success', 'Pipeline run stopped'));
-      },
+      next: () => this.appStore.dispatch(addMessage('success', 'Pipeline run stopped')),
       error: () => this.appStore.dispatch(addMessage('error', 'Failed to stop pipeline run')),
     });
   }

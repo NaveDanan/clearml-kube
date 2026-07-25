@@ -12,6 +12,8 @@ export const convertToReverseProxy = (url: string) => {
       u.pathname = 'files' + u.pathname;
       return u.toString();
     }
-  } catch {}
+  } catch {
+    // Invalid URLs are returned unchanged.
+  }
   return url;
 };

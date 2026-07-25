@@ -1,6 +1,7 @@
 import {ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, output, signal, viewChild} from '@angular/core';
 import {MatButtonModule} from '@angular/material/button';
 import {MatIconModule} from '@angular/material/icon';
+import {MatMenuModule} from '@angular/material/menu';
 import {ClearpipeLifecycleService} from './clearpipe-lifecycle.service';
 import {ClearpipeDocumentTransferService} from './clearpipe-document-transfer.service';
 import {clearpipeToolbarActions, ClearpipeToolbarAction, ClearpipeToolbarActionId} from './clearpipe-toolbar.model';
@@ -11,7 +12,7 @@ import {ClearpipeExecutionAction} from './execution/clearpipe-execution.models';
   templateUrl: './clearpipe-toolbar.component.html',
   styleUrl: './clearpipe-toolbar.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButtonModule, MatIconModule],
+  imports: [MatButtonModule, MatIconModule, MatMenuModule],
 })
 export class ClearpipeToolbarComponent {
   protected readonly lifecycle = inject(ClearpipeLifecycleService);

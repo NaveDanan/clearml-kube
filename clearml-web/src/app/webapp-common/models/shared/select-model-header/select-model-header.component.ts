@@ -70,6 +70,8 @@ export class SelectModelHeaderComponent {
   }
 
   onSearchFocusOut() {
-    if (!this.searchElem().nativeElement.value) {}
+    if (!this.searchElem().nativeElement.value) {
+      // The focus-out hook is retained for consumers that extend this component.
+    }
   }
 }
