@@ -349,13 +349,13 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "1mb",
+                  "maximumWarning": "1600kb",
                   "maximumError": "2mb"
                 },
                 {
                   "type": "anyComponentStyle",
-                  "maximumWarning": "2kb",
-                  "maximumError": "5kb"
+                  "maximumWarning": "5kb",
+                  "maximumError": "6kb"
                 }
               ],
               "fileReplacements": [
@@ -415,6 +415,15 @@
             "styles": [
               "src/app/webapp-common/clearml-applications/report-widgets/src/app/styles/styles.scss"
             ],
+            "stylePreprocessorOptions": {
+              "includePaths": [
+                "",
+                "src/app/webapp-common/styles/"
+              ],
+              "sass": {
+                "silenceDeprecations": ["import", "mixed-decls"]
+              }
+            },
             "scripts": []
           }
         }

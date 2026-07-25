@@ -9,7 +9,7 @@ module.exports = function (config) {
       require('karma-jasmine'),
       require('karma-chrome-launcher'),
       require('karma-jasmine-html-reporter'),
-      require('karma-coverage'),
+      require('karma-coverage-istanbul-reporter'),
       
     ],
     client: {
@@ -24,13 +24,10 @@ module.exports = function (config) {
     jasmineHtmlReporter: {
       suppressAll: true // removes the duplicated traces
     },
-    coverageReporter: {
+    coverageIstanbulReporter: {
       dir: require('path').join(__dirname, '../../coverage/report-widgets'),
-      subdir: '.',
-      reporters: [
-        { type: 'html' },
-        { type: 'text-summary' }
-      ]
+      reports: ['html', 'text-summary'],
+      fixWebpackSourcePaths: true,
     },
     reporters: ['progress', 'kjhtml'],
     port: 9876,

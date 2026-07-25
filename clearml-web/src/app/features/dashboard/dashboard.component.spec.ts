@@ -45,7 +45,8 @@ describe('DashboardComponent', () => {
     firstLogin$ = new Subject<boolean>();
     recentTasks$ = new Subject<any[]>();
 
-    store = jasmine.createSpyObj<Store<any>>('Store', ['select', 'dispatch']);
+    store = jasmine.createSpyObj<Store<any>>('Store', ['select', 'selectSignal', 'dispatch']);
+    (store.selectSignal as jasmine.Spy).and.returnValue(() => []);
     (store.select as jasmine.Spy).and.callFake((selector: any) => {
       switch (selector) {
         case selectActiveSearch:
@@ -80,7 +81,9 @@ describe('DashboardComponent', () => {
         { provide: MatDialog, useValue: dialog }
       ],
       schemas: [NO_ERRORS_SCHEMA]
-    }).compileComponents();
+    })
+      .overrideComponent(DashboardComponent, {set: {imports: [], schemas: [NO_ERRORS_SCHEMA]}})
+      .compileComponents();
 
     fixture = TestBed.createComponent(DashboardComponent);
     component = fixture.componentInstance;
