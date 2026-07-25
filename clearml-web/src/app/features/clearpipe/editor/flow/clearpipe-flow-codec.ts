@@ -23,6 +23,7 @@ import {
   CLEARPIPE_FLOW_NODE_TYPES,
   emptyClearpipeFlowGraph,
 } from './clearpipe-flow.models';
+import {migrateFlowGraph} from './clearpipe-flow-migration';
 
 const NODE_META_TAG = '# clearpipe-flow-node:';
 const GRAPH_META_TAG = '# clearpipe-flow-graph:';
@@ -210,7 +211,7 @@ export const graphV2ToFlow = (graph: GraphV2): ClearpipeFlowGraph => {
   });
 
   const meta: FlowGraphMeta = graphMeta ?? {};
-  return {
+  const flow: ClearpipeFlowGraph = {
     ...base,
     ...(graph.document.id ? {id: graph.document.id} : {}),
     name: meta.name ?? graph.document.name ?? base.name,
@@ -221,4 +222,6 @@ export const graphV2ToFlow = (graph: GraphV2): ClearpipeFlowGraph => {
     boundaries: meta.boundaries ?? [],
     viewport: meta.viewport ?? base.viewport,
   };
+  // Additively upgrade legacy Task/Report contracts to graph-aware bindings.
+  return migrateFlowGraph(flow).graph;
 };

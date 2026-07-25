@@ -49,6 +49,47 @@ export const DATASET_SOURCE_TYPE_LABELS: Record<ClearpipeDatasetSourceType, stri
 };
 
 /**
+ * The kinds of telemetry a Task node's predefined base task is expected to emit.
+ * These form the design-time "expected outputs" contract that Report nodes bind
+ * to; at runtime the newly cloned task substitutes for the base task.
+ */
+export type TaskExpectedOutputKind =
+  | 'scalar'        // a single scalar value (metric/variant last value)
+  | 'scalar_graph'  // a whole scalar metric graph (all variants)
+  | 'plot'          // a plot (metric/variant)
+  | 'debug_image'   // a debug image sample (metric/variant)
+  | 'artifact';     // an output artifact (key)
+
+export const TASK_EXPECTED_OUTPUT_KIND_LABELS: Record<TaskExpectedOutputKind, string> = {
+  scalar: 'Scalar value',
+  scalar_graph: 'Scalar graph',
+  plot: 'Plot',
+  debug_image: 'Debug image',
+  artifact: 'Output artifact',
+};
+
+/**
+ * One expected output of a Task node's base task. `metric`/`variant` apply to
+ * scalar/scalar_graph/plot/debug_image; `artifactKey` applies to artifact.
+ * `manual` marks outputs an author declared for a base task that has never
+ * emitted the corresponding telemetry.
+ */
+export interface TaskExpectedOutput {
+  kind: TaskExpectedOutputKind;
+  metric?: string;
+  variant?: string;
+  artifactKey?: string;
+  /** Author-declared (base task never observed emitting it). */
+  manual?: boolean;
+}
+
+/** Stable identity for an expected output within a single Task node. */
+export const expectedOutputId = (output: TaskExpectedOutput): string =>
+  output.kind === 'artifact'
+    ? `${output.kind}\u0000${output.artifactKey ?? ''}`
+    : `${output.kind}\u0000${output.metric ?? ''}\u0000${output.variant ?? ''}`;
+
+/**
  * ClearPipe's "normal increment" for dataset Sync: bumps the major segment and
  * resets minor/patch to 0 (e.g. 1.0.2 -> 2.0.0). This is intentionally different
  * from the ClearML SDK's own Dataset auto-increment (which only bumps the patch
@@ -221,7 +262,12 @@ export const CLEARPIPE_FLOW_NODE_TYPES: readonly ClearpipeFlowNodeTypeMeta[] = [
     accent: '#a855f7',
     defaults: {
       project: '',
-      taskIds: [] as string[],
+      // Exactly ONE predefined base task per Task node. Multiple tasks require
+      // multiple Task nodes so runtime ids/statuses/report mappings stay unambiguous.
+      baseTaskId: '',
+      // Design-time expected-output contract, seeded from the base task's observed
+      // telemetry (TaskExpectedOutput[]); authors may add/amend manual entries.
+      expectedOutputs: [] as TaskExpectedOutput[],
       queue: '',
     },
   },
@@ -248,6 +294,14 @@ export const CLEARPIPE_FLOW_NODE_TYPES: readonly ClearpipeFlowNodeTypeMeta[] = [
     accent: '#ec4899',
     defaults: {
       templateReportId: '',
+      // Persisted template slot manifest + Markdown fingerprint captured when the
+      // template was selected, so drift can be detected at save/run time.
+      templateSlots: [] as unknown[],
+      templateFingerprint: '',
+      // Graph-aware slot -> source bindings (see ReportMapping in
+      // clearpipe-report-mapping.ts). Replaces the legacy taskId-keyed `mappings`.
+      reportMappings: [] as unknown[],
+      // Legacy fields kept for backward-compatible load + migration only.
       artifactSources: [] as string[],
     },
   },
