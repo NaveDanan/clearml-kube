@@ -3,6 +3,7 @@ import {forkJoin, Observable, of, timer} from 'rxjs';
 import {catchError, filter, map, switchMap, take, takeWhile, timeout} from 'rxjs/operators';
 import {HTTP} from '~/app.constants';
 import {SmApiRequestsService} from '~/business-logic/api-services/api-requests.service';
+import {TaskExpectedOutput} from './clearpipe-flow.models';
 import {
   AutoscalerComputeResource,
   AutoscalerDataSourceResource,
@@ -44,6 +45,55 @@ export interface FlowArtifact {
   taskName?: string;
   type?: string;
   uri?: string;
+}
+
+/** Shape of the `clearpipe.task_report_outputs` response (names only). */
+interface ReportOutputsPayload {
+  scalars?: {metric: string; variant: string}[];
+  scalar_graphs?: {metric: string}[];
+  plots?: {metric: string; variant: string}[];
+  debug_images?: {metric: string; variant: string}[];
+  artifacts?: {key: string}[];
+}
+
+/** Map the names-only endpoint payload into the TaskExpectedOutput contract. */
+const reportOutputsToExpected = (outputs?: ReportOutputsPayload): TaskExpectedOutput[] => {
+  if (!outputs) return [];
+  const result: TaskExpectedOutput[] = [];
+  for (const item of outputs.scalars ?? []) result.push({kind: 'scalar', metric: item.metric, variant: item.variant});
+  for (const item of outputs.scalar_graphs ?? []) result.push({kind: 'scalar_graph', metric: item.metric});
+  for (const item of outputs.plots ?? []) result.push({kind: 'plot', metric: item.metric, variant: item.variant});
+  for (const item of outputs.debug_images ?? []) result.push({kind: 'debug_image', metric: item.metric, variant: item.variant});
+  for (const item of outputs.artifacts ?? []) result.push({kind: 'artifact', artifactKey: item.key});
+  return result;
+};
+
+/** A single mappable item discovered on a Report node's source task: a task
+ *  field, a hyperparameter, a scalar metric, an artifact, or a plot. Used to
+ *  fill a report template's placeholders / embed slots. */
+export interface FlowReportSource {
+  taskId: string;
+  taskName: string;
+  kind: 'field' | 'hyperparam' | 'scalar' | 'artifact' | 'plot';
+  ref: string;
+  label: string;
+  value?: string;
+  metric?: string;
+  variant?: string;
+}
+
+/** Shape of a source task as fetched for report mapping (internal). */
+interface ReportSourceTask {
+  id: string;
+  name?: string;
+  status?: string;
+  project?: {id: string; name: string} | string;
+  started?: string;
+  completed?: string;
+  last_iteration?: number;
+  last_metrics?: Record<string, Record<string, {metric?: string; variant?: string; value?: number; max_value?: number; min_value?: number}>>;
+  hyperparams?: Record<string, Record<string, {name?: string; value?: string}>>;
+  execution?: {artifacts?: {key: string; type?: string; uri?: string}[]};
 }
 
 export interface FlowDatasetVersion {
@@ -335,6 +385,139 @@ export class ClearpipeFlowResourcesService {
         },
       )
       .pipe(map((response) => this.mapTasks(response?.tasks)), catchError(() => of([])));
+  }
+
+  /** The raw Markdown body of a report (used as a fill template). */
+  getReportMarkdown(reportId: string): Observable<string> {
+    if (!reportId) return of('');
+    return this.requests
+      .post<{tasks?: {report?: string}[]}>(
+        this.url('reports.get_all_ex'),
+        {id: [reportId], only_fields: ['report'], page: 0, page_size: 1},
+      )
+      .pipe(map((response) => response?.tasks?.[0]?.report ?? ''), catchError(() => of('')));
+  }
+
+  /** Fetch names-only expected-output descriptors for a Task node's base task
+   *  via the authorized `clearpipe.task_report_outputs` endpoint, mapped into
+   *  the design-time TaskExpectedOutput contract. */
+  getTaskReportOutputs(baseTaskId: string): Observable<TaskExpectedOutput[]> {
+    if (!baseTaskId) return of([]);
+    return this.requests
+      .post<{status?: string; outputs?: ReportOutputsPayload}>(
+        this.url('clearpipe.task_report_outputs'),
+        {task: baseTaskId},
+      )
+      .pipe(
+        map((response) => reportOutputsToExpected(response?.outputs)),
+        catchError(() => of([])),
+      );
+  }
+
+  /** Discover every mappable item (fields, hyperparameters, scalars, artifacts,
+   *  plots) across the given source tasks, for filling a report template. */
+  getReportSources(taskIds: string[]): Observable<FlowReportSource[]> {
+    if (!taskIds.length) return of([]);
+    const details$ = this.requests
+      .post<{tasks?: ReportSourceTask[]}>(this.url('tasks.get_all_ex'), {
+        id: taskIds,
+        page: 0,
+        page_size: 100,
+        only_fields: [
+          'id', 'name', 'status', 'project.name', 'started', 'completed',
+          'last_iteration', 'last_metrics', 'hyperparams', 'execution.artifacts',
+        ],
+      })
+      .pipe(catchError(() => of({tasks: []})));
+    // events.get_task_plots takes a SINGLE `task` and returns a flat array of
+    // plot events; fetch per task and key the results by task id.
+    const plots$ = forkJoin(
+      taskIds.map((taskId) =>
+        this.requests
+          .post<{plots?: {metric?: string; variant?: string}[]}>(
+            this.url('events.get_task_plots'),
+            {task: taskId, iters: 1},
+          )
+          .pipe(
+            map((response) => ({taskId, plots: response?.plots ?? []})),
+            catchError(() => of({taskId, plots: [] as {metric?: string; variant?: string}[]})),
+          ),
+      ),
+    );
+    return forkJoin({details: details$, plots: plots$}).pipe(
+      map(({details, plots}) => {
+        const plotsByTask: Record<string, {metric?: string; variant?: string}[]> = {};
+        for (const entry of plots) plotsByTask[entry.taskId] = entry.plots;
+        return this.buildReportSources(details?.tasks ?? [], plotsByTask);
+      }),
+      catchError(() => of([])),
+    );
+  }
+
+  private buildReportSources(
+    tasks: ReportSourceTask[],
+    plotsByTask: Record<string, {metric?: string; variant?: string}[]>,
+  ): FlowReportSource[] {
+    const items: FlowReportSource[] = [];
+    for (const task of tasks) {
+      const taskId = task.id;
+      const taskName = task.name ?? taskId;
+      const push = (kind: FlowReportSource['kind'], ref: string, label: string, extra: Partial<FlowReportSource> = {}) =>
+        items.push({taskId, taskName, kind, ref, label, ...extra});
+      // Task fields
+      push('field', 'name', 'Task name', {value: task.name});
+      push('field', 'id', 'Task ID', {value: task.id});
+      push('field', 'status', 'Status', {value: task.status});
+      const projectName = typeof task.project === 'object' ? task.project?.name : task.project;
+      push('field', 'project', 'Project', {value: projectName});
+      if (task.started) push('field', 'started', 'Started', {value: task.started});
+      if (task.completed) push('field', 'completed', 'Completed', {value: task.completed});
+      if (task.last_iteration != null) push('field', 'iteration', 'Iterations', {value: String(task.last_iteration)});
+      // Hyperparameters
+      for (const [section, params] of Object.entries(task.hyperparams ?? {})) {
+        for (const [name, entry] of Object.entries(params ?? {})) {
+          push('hyperparam', `${section}/${name}`, `${section}/${name}`, {value: entry?.value});
+        }
+      }
+      // Scalars. Each `last_metrics` group is one metric (as shown as a single
+      // graph in the task's SCALARS tab). Offer the whole-metric graph (all
+      // variants) AND each individual variant's last value.
+      for (const metricEntry of Object.values(task.last_metrics ?? {})) {
+        const variants = Object.values(metricEntry ?? {});
+        const metricName = variants.find((v) => v?.metric)?.metric;
+        if (metricName) {
+          push('scalar', `scalar\u0000${metricName}\u0000`, `${metricName} (scalar graph)`, {
+            metric: metricName, variant: '',
+          });
+        }
+        for (const variantEntry of variants) {
+          const metric = variantEntry?.metric;
+          const variant = variantEntry?.variant;
+          if (!metric) continue;
+          const value = variantEntry?.value ?? variantEntry?.max_value ?? variantEntry?.min_value;
+          push('scalar', `scalar\u0000${metric}\u0000${variant ?? ''}`, `${metric} / ${variant ?? ''}`.trim(), {
+            metric, variant, value: value != null ? String(value) : undefined,
+          });
+        }
+      }
+      // Artifacts
+      for (const artifact of task.execution?.artifacts ?? []) {
+        if (artifact?.key) push('artifact', `artifact\u0000${artifact.key}`, artifact.key);
+      }
+      // Plots: events.get_task_plots returns a flat array of plot events;
+      // dedupe by metric+variant so each curve/plot appears once.
+      const seenPlots = new Set<string>();
+      for (const plot of plotsByTask[taskId] ?? []) {
+        const metric = plot?.metric;
+        const variant = plot?.variant ?? '';
+        if (!metric) continue;
+        const dedupe = `${metric}\u0000${variant}`;
+        if (seenPlots.has(dedupe)) continue;
+        seenPlots.add(dedupe);
+        push('plot', `plot\u0000${metric}\u0000${variant}`, `${metric} / ${variant}`.trim(), {metric, variant});
+      }
+    }
+    return items;
   }
 
   // --- task artifacts ------------------------------------------------------

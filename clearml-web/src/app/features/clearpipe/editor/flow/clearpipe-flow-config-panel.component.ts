@@ -13,6 +13,9 @@ import {
   DATASET_MODE_LABELS,
   DATASET_SOURCE_TYPE_LABELS,
   incrementDatasetVersion,
+  TaskExpectedOutput,
+  TASK_EXPECTED_OUTPUT_KIND_LABELS,
+  expectedOutputId,
 } from './clearpipe-flow.models';
 import {ClearpipeFlowStoreService} from './clearpipe-flow-store.service';
 import {
@@ -24,8 +27,25 @@ import {
   FlowAutoscaler,
   FlowDatasetInfo,
   FlowDatasetVersion,
+  FlowReportSource,
   FlowResourceOption,
 } from './clearpipe-flow-resources.service';
+import {
+  computeTemplateFingerprint,
+  parseReportTemplate,
+  ReportMapping,
+  ReportTemplateSlot,
+} from './clearpipe-report-template';
+import {
+  expectedOutputsToSources,
+  mappingFromOutput,
+  mappingIdentity,
+  ReportSlotMapping,
+  ReportSourceOutput,
+  slotAcceptsOutput,
+  suggestReportMatches,
+  validateReportMappings,
+} from './clearpipe-report-mapping';
 
 /**
  * Backend-connected node inspector. Mirrors the reference `node-config-panel`
@@ -98,6 +118,26 @@ export class ClearpipeFlowConfigPanelComponent {
   protected readonly trainingTasks = signal<FlowResourceOption[]>([]);
   protected readonly reports = signal<FlowResourceOption[]>([]);
   protected readonly artifacts = signal<FlowArtifact[]>([]);
+  // Report node: template placeholders/embeds + mappable source-task items.
+  protected readonly templateSlots = signal<ReportTemplateSlot[]>([]);
+  protected readonly reportSources = signal<FlowReportSource[]>([]);
+
+  // Graph-aware Report authoring state.
+  protected readonly TASK_OUTPUT_LABELS = TASK_EXPECTED_OUTPUT_KIND_LABELS;
+  /** Full markdown of the currently selected template (for preview + fingerprint). */
+  protected readonly templateMarkdown = signal('');
+  protected readonly templateParseErrors = signal<string[]>([]);
+  /** Whether the wide mapping workspace overlay is open. */
+  protected readonly mappingOpen = signal(false);
+  /** Searchable template selector filter. */
+  protected readonly templateFilter = signal('');
+  /** Mapping workspace search + type filters. */
+  protected readonly mappingSearch = signal('');
+  protected readonly mappingTypeFilter = signal<'all' | 'text' | 'scalar' | 'plot' | 'sample'>('all');
+  /** Mapping workspace tab: mapping table or sanitized preview. */
+  protected readonly mappingTab = signal<'map' | 'preview'>('map');
+  /** Discovering expected outputs for the Task node's base task. */
+  protected readonly outputsLoading = signal(false);
 
   protected readonly listLoading = signal(false);
   protected readonly actionBusy = signal(false);
@@ -197,8 +237,9 @@ export class ClearpipeFlowConfigPanelComponent {
       this.resources.listTrainingTasks(project).subscribe((items) => {
         this.trainingTasks.set(items);
         this.listLoading.set(false);
-        this.refreshArtifacts();
+        this.refreshReportSources();
       });
+      this.loadReportTemplate(this.cfg('templateReportId'));
     }
   }
 
@@ -391,7 +432,7 @@ export class ClearpipeFlowConfigPanelComponent {
     const current = this.selected(key);
     const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
     this.store.updateNodeConfig(node.id, key, next);
-    if (key === 'artifactSources') this.refreshArtifacts();
+    if (key === 'artifactSources') this.refreshReportSources();
   }
 
   // --- autoscaler selection ------------------------------------------------
@@ -650,13 +691,338 @@ export class ClearpipeFlowConfigPanelComponent {
       });
   }
 
-  private refreshArtifacts(): void {
+  private refreshReportSources(): void {
     const taskIds = this.selected('artifactSources');
     if (!taskIds.length) {
       this.artifacts.set([]);
+      this.reportSources.set([]);
       return;
     }
     this.resources.listTaskArtifacts(taskIds).subscribe((items) => this.artifacts.set(items));
+    this.resources.getReportSources(taskIds).subscribe((items) => {
+      this.reportSources.set(items);
+      this.autoMapReport();
+    });
+  }
+
+  // --- Report node: template slots + source mapping ------------------------
+  protected setReportTemplate(reportId: string): void {
+    this.setCfg('templateReportId', reportId);
+    this.loadReportTemplate(reportId);
+  }
+
+  private loadReportTemplate(reportId: string): void {
+    this.templateSlots.set([]);
+    this.templateMarkdown.set('');
+    this.templateParseErrors.set([]);
+    if (!reportId) return;
+    this.resources.getReportMarkdown(reportId).subscribe((markdown) => {
+      const parsed = parseReportTemplate(markdown);
+      this.templateMarkdown.set(markdown);
+      this.templateSlots.set(parsed.slots);
+      this.templateParseErrors.set(parsed.errors);
+      this.autoMapReport();
+    });
+  }
+
+  protected reportMappings(): Record<string, ReportMapping> {
+    const value = this.node()?.config['mappings'];
+    return value && typeof value === 'object' ? (value as Record<string, ReportMapping>) : {};
+  }
+
+  protected mappingRef(slotKey: string): string {
+    return this.reportMappings()[slotKey]?.ref ?? '';
+  }
+
+  /** Source items offered for a slot. Media slots are filtered by the embed's
+   *  `type=` (scalar -> scalar curves, plot -> plots, sample/other -> both),
+   *  falling back to all scalar+plot items when the typed subset is empty. Text
+   *  slots accept any single-valued item. */
+  protected sourceOptionsFor(slot: ReportTemplateSlot): FlowReportSource[] {
+    const all = this.reportSources();
+    if (slot.kind !== 'media') return all;
+    const media = all.filter((s) => s.kind === 'scalar' || s.kind === 'plot');
+    const typed =
+      slot.mediaType === 'scalar'
+        ? media.filter((s) => s.kind === 'scalar')
+        : slot.mediaType === 'plot'
+          ? media.filter((s) => s.kind === 'plot')
+          : media;
+    return typed.length ? typed : media;
+  }
+
+  protected setMapping(slotKey: string, sourceRef: string): void {
+    const node = this.node();
+    if (!node) return;
+    const next: Record<string, ReportMapping> = {...this.reportMappings()};
+    if (!sourceRef) {
+      delete next[slotKey];
+    } else {
+      const src = this.reportSources().find((s) => s.ref === sourceRef);
+      if (!src) return;
+      next[slotKey] = {
+        taskId: src.taskId,
+        kind: src.kind,
+        ref: src.ref,
+        ...(src.metric ? {metric: src.metric} : {}),
+        ...(src.variant !== undefined ? {variant: src.variant} : {}),
+      };
+    }
+    this.store.updateNodeConfig(node.id, 'mappings', next);
+  }
+
+  /** Auto-fill common task-field slots when exactly one source task is selected. */
+  private autoMapReport(): void {
+    const node = this.node();
+    if (!node || node.type !== 'report') return;
+    const slots = this.templateSlots();
+    const sources = this.reportSources();
+    if (!slots.length || !sources.length) return;
+    if (new Set(sources.map((s) => s.taskId)).size !== 1) return;
+    const fieldForToken: Record<string, string> = {
+      TASK_NAME: 'name', TASK_ID: 'id', PROJECT: 'project', STATUS: 'status',
+    };
+    const next: Record<string, ReportMapping> = {...this.reportMappings()};
+    let changed = false;
+    for (const slot of slots) {
+      if (next[slot.key] || slot.kind !== 'text' || !slot.token) continue;
+      const ref = fieldForToken[slot.token];
+      const src = ref ? sources.find((s) => s.ref === ref) : undefined;
+      if (src) {
+        next[slot.key] = {taskId: src.taskId, kind: src.kind, ref: src.ref};
+        changed = true;
+      }
+    }
+    if (changed) this.store.updateNodeConfig(node.id, 'mappings', next);
+  }
+
+  // --- Graph-aware Task + Report authoring --------------------------------
+
+  private taskExpectedOutputs(config: Record<string, unknown>): TaskExpectedOutput[] {
+    const value = config['expectedOutputs'];
+    return Array.isArray(value) ? (value as TaskExpectedOutput[]) : [];
+  }
+
+  /** The selected Task node's declared expected outputs. */
+  protected expectedOutputs(): TaskExpectedOutput[] {
+    return this.taskExpectedOutputs(this.node()?.config ?? {});
+  }
+
+  /** Task node: pick the single base task and discover its expected outputs. */
+  protected setBaseTask(taskId: string): void {
+    const node = this.node();
+    if (!node) return;
+    this.store.updateNodeConfig(node.id, 'baseTaskId', taskId);
+    if (taskId) this.discoverExpectedOutputs(taskId);
+  }
+
+  protected discoverExpectedOutputs(taskId?: string): void {
+    const node = this.node();
+    const baseId = taskId ?? String(node?.config['baseTaskId'] ?? '');
+    if (!node || !baseId) return;
+    this.outputsLoading.set(true);
+    this.resources.getTaskReportOutputs(baseId).subscribe((outputs) => {
+      this.outputsLoading.set(false);
+      // Keep any manual outputs the author added for never-observed telemetry.
+      const merged = this.taskExpectedOutputs(node.config).filter((o) => o.manual);
+      const seen = new Set(merged.map(expectedOutputId));
+      for (const output of outputs) {
+        const id = expectedOutputId(output);
+        if (!seen.has(id)) {
+          seen.add(id);
+          merged.push(output);
+        }
+      }
+      this.store.updateNodeConfig(node.id, 'expectedOutputs', merged);
+    });
+  }
+
+  /** Task nodes directly connected as sources of the selected Report node. */
+  protected readonly connectedTaskNodes = computed(() => {
+    const report = this.node();
+    if (!report || report.type !== 'report') return [];
+    const nodes = this.store.nodes();
+    return this.store
+      .edges()
+      .filter((edge) => edge.target === report.id)
+      .map((edge) => nodes.find((n) => n.id === edge.source))
+      .filter((n): n is NonNullable<typeof n> => !!n && n.type === 'task');
+  });
+
+  /** Selectable source outputs derived from each connected Task node's contract. */
+  protected readonly reportSourceOutputs = computed<ReportSourceOutput[]>(() =>
+    this.connectedTaskNodes().flatMap((node) =>
+      expectedOutputsToSources(node.id, node.label, this.taskExpectedOutputs(node.config)),
+    ),
+  );
+
+  /** The Report node's persisted graph-aware mappings. */
+  protected graphMappings(): ReportSlotMapping[] {
+    const value = this.node()?.config['reportMappings'];
+    return Array.isArray(value) ? (value as ReportSlotMapping[]) : [];
+  }
+
+  protected readonly reportValidation = computed(() => {
+    const report = this.node();
+    if (!report || report.type !== 'report') return null;
+    const connected = new Set(this.connectedTaskNodes().map((n) => n.id));
+    const available = new Set(this.reportSourceOutputs().map((o) => o.identity));
+    const fingerprint = String(report.config['templateFingerprint'] ?? '');
+    const markdown = this.templateMarkdown();
+    const drifted = !!fingerprint && !!markdown && computeTemplateFingerprint(markdown) !== fingerprint;
+    return validateReportMappings({
+      slots: this.templateSlots(),
+      mappings: this.graphMappings(),
+      connectedSourceNodeIds: connected,
+      availableIdentities: available,
+      templateSelected: !!report.config['templateReportId'],
+      templateDrifted: drifted,
+    });
+  });
+
+  protected readonly mappingProgress = computed(() => {
+    const validation = this.reportValidation();
+    return validation ? `${validation.mappedCount} / ${validation.totalRequired} mapped` : '';
+  });
+
+  protected readonly reportSuggestions = computed(() =>
+    suggestReportMatches(this.templateSlots(), this.reportSourceOutputs()),
+  );
+
+  protected filteredReports(): FlowResourceOption[] {
+    const term = this.templateFilter().trim().toLowerCase();
+    const all = this.reports();
+    return term ? all.filter((report) => report.name.toLowerCase().includes(term)) : all;
+  }
+
+  protected openMappings(): void {
+    this.mappingOpen.set(true);
+    this.mappingTab.set('map');
+    const reportId = String(this.node()?.config['templateReportId'] ?? '');
+    if (reportId && !this.templateSlots().length) this.loadReportTemplate(reportId);
+  }
+
+  protected closeMappings(): void {
+    this.mappingOpen.set(false);
+  }
+
+  protected slotGroup(slot: ReportTemplateSlot): string {
+    if (slot.kind === 'text') return 'Text';
+    const type = (slot.mediaType ?? 'scalar').toLowerCase();
+    return type === 'plot' ? 'Plots' : type === 'sample' ? 'Images' : 'Scalars';
+  }
+
+  protected groupedSlots(): {group: string; slots: ReportTemplateSlot[]}[] {
+    const search = this.mappingSearch().trim().toLowerCase();
+    const typeFilter = this.mappingTypeFilter();
+    const order = ['Text', 'Scalars', 'Plots', 'Images'];
+    const groups = new Map<string, ReportTemplateSlot[]>();
+    for (const slot of this.templateSlots()) {
+      if (search && !slot.label.toLowerCase().includes(search)) continue;
+      if (typeFilter === 'text' && slot.kind !== 'text') continue;
+      if (typeFilter !== 'all' && typeFilter !== 'text' && (slot.mediaType ?? 'scalar') !== typeFilter) continue;
+      const group = this.slotGroup(slot);
+      const bucket = groups.get(group);
+      if (bucket) bucket.push(slot);
+      else groups.set(group, [slot]);
+    }
+    return order.filter((group) => groups.has(group)).map((group) => ({group, slots: groups.get(group)!}));
+  }
+
+  protected mappingFor(slotKey: string): ReportSlotMapping | undefined {
+    return this.graphMappings().find((mapping) => mapping.slotKey === slotKey);
+  }
+
+  /** Source outputs compatible with a slot (per-row dropdown options). */
+  protected sourceOptionsForSlot(slot: ReportTemplateSlot): ReportSourceOutput[] {
+    return this.reportSourceOutputs().filter((output) => slotAcceptsOutput(slot, output.outputKind));
+  }
+
+  protected currentIdentity(slotKey: string): string {
+    const mapping = this.mappingFor(slotKey);
+    return mapping ? mappingIdentity(mapping) : '';
+  }
+
+  protected slotSuggestion(slotKey: string): ReportSourceOutput | undefined {
+    return this.reportSuggestions().find((suggestion) => suggestion.slotKey === slotKey)?.output;
+  }
+
+  protected setSlotSource(slot: ReportTemplateSlot, identity: string): void {
+    const node = this.node();
+    if (!node) return;
+    const next = this.graphMappings().filter((mapping) => mapping.slotKey !== slot.key);
+    if (identity) {
+      const output = this.reportSourceOutputs().find((item) => item.identity === identity);
+      if (output) {
+        next.push(mappingFromOutput(slot, output, {required: this.mappingFor(slot.key)?.required ?? true, confirmed: true}));
+      }
+    }
+    this.store.updateNodeConfig(node.id, 'reportMappings', next);
+  }
+
+  protected toggleSlotRequired(slotKey: string): void {
+    const node = this.node();
+    if (!node) return;
+    const next = this.graphMappings().map((mapping) =>
+      mapping.slotKey === slotKey ? {...mapping, required: !mapping.required, ignored: false} : mapping,
+    );
+    this.store.updateNodeConfig(node.id, 'reportMappings', next);
+  }
+
+  protected ignoreSlot(slot: ReportTemplateSlot): void {
+    const node = this.node();
+    if (!node) return;
+    const existing = this.mappingFor(slot.key);
+    const next = this.graphMappings().filter((mapping) => mapping.slotKey !== slot.key);
+    next.push({
+      slotKey: slot.key,
+      source: existing?.source ?? {},
+      outputKind: existing?.outputKind ?? 'field',
+      selector: existing?.selector ?? {},
+      required: false,
+      confirmed: true,
+      ignored: true,
+    });
+    this.store.updateNodeConfig(node.id, 'reportMappings', next);
+  }
+
+  protected acceptSuggestions(): void {
+    const node = this.node();
+    if (!node) return;
+    const slotByKey = new Map(this.templateSlots().map((slot) => [slot.key, slot]));
+    const mapped = new Set(this.graphMappings().map((mapping) => mapping.slotKey));
+    const next = [...this.graphMappings()];
+    for (const suggestion of this.reportSuggestions()) {
+      const slot = slotByKey.get(suggestion.slotKey);
+      if (!slot || mapped.has(suggestion.slotKey)) continue;
+      next.push(mappingFromOutput(slot, suggestion.output, {required: true, confirmed: true}));
+    }
+    this.store.updateNodeConfig(node.id, 'reportMappings', next);
+  }
+
+  protected applyMappings(): void {
+    const node = this.node();
+    if (!node) return;
+    // Persist the template slot manifest + fingerprint alongside the mappings.
+    this.store.updateNodeConfig(node.id, 'templateSlots', this.templateSlots());
+    this.store.updateNodeConfig(node.id, 'templateFingerprint', computeTemplateFingerprint(this.templateMarkdown()));
+    this.mappingOpen.set(false);
+  }
+
+  /** Sanitized template preview: text tokens replaced by their mapped label,
+   *  iframes collapsed to a compact chip (no external widget loads). */
+  protected previewText(): string {
+    let markdown = this.templateMarkdown();
+    for (const slot of this.templateSlots()) {
+      if (slot.kind === 'text' && slot.token) {
+        const mapping = this.mappingFor(slot.key);
+        const label = mapping && !mapping.ignored
+          ? (mapping.selector.field ?? mapping.selector.metric ?? mapping.selector.artifactKey ?? 'mapped')
+          : '(unmapped)';
+        markdown = markdown.split(`<${slot.token}>`).join(`[${label}]`);
+      }
+    }
+    return markdown.replace(/<iframe\b[\s\S]*?<\/iframe>/gi, '⟦ embed ⟧');
   }
 
   private summarize(result: Record<string, unknown>, fallback: string): string {

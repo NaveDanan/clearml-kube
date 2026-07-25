@@ -164,6 +164,21 @@ export class ClearpipeFlowCanvasComponent {
     return clearpipeFlowNodeMeta(node.type).categoryLabel;
   }
 
+  /** Report canvas card summary: template presence + mapping progress + state,
+   *  derived from the node's persisted slot manifest and graph-aware mappings. */
+  protected reportSummary(node: ClearpipeFlowNode): {progress: string; state: 'ok' | 'warn'} | null {
+    if (node.type !== 'report') return null;
+    if (!String(node.config['templateReportId'] ?? '')) return {progress: 'no template', state: 'warn'};
+    const slots = Array.isArray(node.config['templateSlots']) ? (node.config['templateSlots'] as unknown[]) : [];
+    const mappings = Array.isArray(node.config['reportMappings'])
+      ? (node.config['reportMappings'] as {ignored?: boolean}[])
+      : [];
+    const total = slots.length;
+    const mapped = mappings.filter((mapping) => !mapping.ignored).length;
+    const state: 'ok' | 'warn' = total > 0 && mapped >= total ? 'ok' : 'warn';
+    return {progress: `${mapped}/${total || '?'} mapped`, state};
+  }
+
   protected trackNode = (_: number, node: ClearpipeFlowNode) => node.id;
   protected trackEdge = (_: number, edge: EdgeView) => edge.id;
   protected trackBoundary = (_: number, boundary: ClearpipeFlowBoundary) => boundary.id;

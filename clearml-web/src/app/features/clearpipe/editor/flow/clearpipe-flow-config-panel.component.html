@@ -493,18 +493,16 @@
               </select>
             </div>
             <div class="field">
-              <label class="field-label">Tasks @if (listLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
-              <div class="option-list">
+              <label class="field-label">Base task @if (listLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+              <select [ngModel]="cfg('baseTaskId')" (ngModelChange)="setBaseTask($event)">
+                <option value="">Select one task…</option>
                 @for (task of trainingTasks(); track task.id) {
-                  <label class="option-row">
-                    <input type="checkbox" [checked]="isSelected('taskIds', task.id)" (change)="toggle('taskIds', task.id)" />
-                    <span class="option-name">{{ task.name }}</span>
-                    @if (task.status) { <span class="option-status">{{ task.status }}</span> }
-                  </label>
+                  <option [value]="task.id">{{ task.name }}</option>
                 } @empty {
-                  <p class="note">No tasks found.</p>
+                  <option value="" disabled>No tasks found.</option>
                 }
-              </div>
+              </select>
+              <p class="note">One predefined task per Task node — add another Task node to clone more.</p>
             </div>
             <div class="field">
               <label class="field-label">Queue</label>
@@ -515,7 +513,32 @@
                 }
               </select>
             </div>
-            <p class="note">Connects to real ClearML training tasks.</p>
+            @if (cfg('baseTaskId')) {
+              <div class="field">
+                <label class="field-label">
+                  Expected outputs
+                  <button class="link-btn" type="button" (click)="discoverExpectedOutputs()" [disabled]="outputsLoading()">
+                    @if (outputsLoading()) { <mat-spinner diameter="12"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-refresh"></mat-icon> }
+                    Discover
+                  </button>
+                </label>
+                @if (expectedOutputs().length) {
+                  <ul class="mapping-list">
+                    @for (output of expectedOutputs(); track $index) {
+                      <li class="mapping-row">
+                        <span class="mapping-slot">
+                          <strong>{{ output.artifactKey || output.metric }}{{ output.variant ? ' / ' + output.variant : '' }}</strong>
+                          <em class="mapping-kind">{{ TASK_OUTPUT_LABELS[output.kind] }}{{ output.manual ? ' (manual)' : '' }}</em>
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="note">No telemetry observed yet. Run the base task, then Discover.</p>
+                }
+              </div>
+            }
+            <p class="note">Clones this base task at runtime; Report nodes bind to its outputs.</p>
           </section>
         }
         @case ('execute') {
@@ -567,37 +590,58 @@
             <h3 class="section-heading">Report</h3>
             <div class="field">
               <label class="field-label">Template report</label>
-              <select [ngModel]="cfg('templateReportId')" (ngModelChange)="setCfg('templateReportId', $event)">
+              <input type="text" [ngModel]="templateFilter()" (ngModelChange)="templateFilter.set($event)" placeholder="Search templates…" />
+              <select [ngModel]="cfg('templateReportId')" (ngModelChange)="setReportTemplate($event)">
                 <option value="">Select a report…</option>
-                @for (report of reports(); track report.id) {
+                @for (report of filteredReports(); track report.id) {
                   <option [value]="report.id">{{ report.name }}</option>
                 }
               </select>
             </div>
+
             <div class="field">
-              <label class="field-label">Source tasks (artifacts) @if (listLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
-              <div class="option-list">
-                @for (task of trainingTasks(); track task.id) {
-                  <label class="option-row">
-                    <input type="checkbox" [checked]="isSelected('artifactSources', task.id)" (change)="toggle('artifactSources', task.id)" />
-                    <span class="option-name">{{ task.name }}</span>
-                  </label>
-                } @empty {
-                  <p class="note">No tasks found.</p>
-                }
-              </div>
-            </div>
-            @if (artifacts().length) {
-              <div class="field">
-                <label class="field-label">Artifacts</label>
-                <ul class="artifact-list">
-                  @for (artifact of artifacts(); track artifact.taskId + artifact.key) {
-                    <li><strong>{{ artifact.key }}</strong> <span class="option-status">{{ artifact.taskName }}</span></li>
+              <label class="field-label">Connected task sources</label>
+              @if (connectedTaskNodes().length) {
+                <div class="option-list">
+                  @for (task of connectedTaskNodes(); track task.id) {
+                    <div class="option-row">
+                      <mat-icon fontSet="al" fontIcon="al-ico-type-training"></mat-icon>
+                      <span class="option-name">{{ task.label }}</span>
+                      <span class="option-status">{{ task.config['baseTaskId'] ? 'base set' : 'no base' }}</span>
+                    </div>
                   }
-                </ul>
+                </div>
+              } @else {
+                <p class="note">Draw an edge from a Task node into this Report to add a data source.</p>
+              }
+            </div>
+
+            @if (cfg('templateReportId')) {
+              <div class="field">
+                <div class="report-progress">
+                  <span class="report-progress__count">{{ mappingProgress() }}</span>
+                  @if (reportValidation()?.valid) {
+                    <span class="status-pill status-pill--on"><span class="status-dot"></span>Ready</span>
+                  } @else {
+                    <span class="status-pill status-pill--off"><span class="status-dot"></span>Incomplete</span>
+                  }
+                </div>
+                @if (reportValidation(); as validation) {
+                  @if (validation.errors.length) {
+                    <ul class="validation-list">
+                      @for (error of validation.errors; track error) {
+                        <li class="validation-item"><mat-icon fontSet="al" fontIcon="al-ico-alert"></mat-icon>{{ error }}</li>
+                      }
+                    </ul>
+                  }
+                }
+                <button mat-flat-button class="action-btn" (click)="openMappings()">
+                  <mat-icon fontSet="al" fontIcon="al-ico-settings"></mat-icon>
+                  Configure mappings
+                </button>
               </div>
             }
-            <p class="note">Builds a report from a template + real task artifacts.</p>
+            <p class="note">Bind template slots to upstream Task-node outputs; runtime substitutes each cloned task.</p>
           </section>
         }
       }
@@ -614,5 +658,84 @@
   <div class="empty-state">
     <mat-icon fontSet="al" fontIcon="al-ico-settings"></mat-icon>
     <p>Select a node to configure it</p>
+  </div>
+}
+
+@if (mappingOpen() && node()?.type === 'report') {
+  <div class="mapping-overlay" role="dialog" aria-label="Report mapping workspace">
+    <header class="mapping-overlay__header">
+      <div>
+        <h2>Map report template</h2>
+        <p class="note">{{ node()?.label }} · {{ mappingProgress() }}</p>
+      </div>
+      <button class="link-btn" type="button" (click)="closeMappings()" aria-label="Close">
+        <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+      </button>
+    </header>
+
+    <div class="mapping-overlay__toolbar">
+      <input type="search" [ngModel]="mappingSearch()" (ngModelChange)="mappingSearch.set($event)" placeholder="Search slots…" />
+      <div class="type-filters">
+        @for (filter of ['all', 'text', 'scalar', 'plot', 'sample']; track filter) {
+          <button type="button" class="chip" [class.chip--on]="mappingTypeFilter() === filter" (click)="mappingTypeFilter.set($any(filter))">{{ filter }}</button>
+        }
+      </div>
+      <button mat-stroked-button type="button" (click)="acceptSuggestions()" [disabled]="!reportSuggestions().length">
+        <mat-icon fontSet="al" fontIcon="al-ico-wand"></mat-icon>
+        Accept suggestions ({{ reportSuggestions().length }})
+      </button>
+      <div class="tab-toggle">
+        <button type="button" [class.tab--on]="mappingTab() === 'map'" (click)="mappingTab.set('map')">Mapping</button>
+        <button type="button" [class.tab--on]="mappingTab() === 'preview'" (click)="mappingTab.set('preview')">Preview</button>
+      </div>
+    </div>
+
+    <div class="mapping-overlay__body">
+      @if (mappingTab() === 'map') {
+        @if (!connectedTaskNodes().length) {
+          <p class="note">No connected Task sources. Draw an edge from a Task node into this Report.</p>
+        }
+        @for (group of groupedSlots(); track group.group) {
+          <section class="slot-group">
+            <h3 class="slot-group__title">{{ group.group }}</h3>
+            @for (slot of group.slots; track slot.key) {
+              <div class="slot-row" [class.slot-row--ignored]="mappingFor(slot.key)?.ignored">
+                <div class="slot-row__label">
+                  <strong>{{ slot.label }}</strong>
+                  @if (slotSuggestion(slot.key) && !mappingFor(slot.key)) {
+                    <em class="slot-row__suggest">suggested: {{ slotSuggestion(slot.key)?.sourceLabel }} · {{ slotSuggestion(slot.key)?.label }}</em>
+                  }
+                </div>
+                <select [ngModel]="currentIdentity(slot.key)" (ngModelChange)="setSlotSource(slot, $event)">
+                  <option value="">— unmapped —</option>
+                  @for (option of sourceOptionsForSlot(slot); track option.identity) {
+                    <option [value]="option.identity">{{ option.sourceLabel }} · {{ option.label }}</option>
+                  }
+                </select>
+                <div class="slot-row__controls">
+                  <label class="mini-toggle">
+                    <input type="checkbox" [checked]="mappingFor(slot.key)?.required !== false" (change)="toggleSlotRequired(slot.key)" [disabled]="!mappingFor(slot.key)" />
+                    Required
+                  </label>
+                  <button type="button" class="link-btn" (click)="ignoreSlot(slot)">Ignore</button>
+                </div>
+              </div>
+            }
+          </section>
+        }
+      } @else {
+        <pre class="mapping-preview">{{ previewText() }}</pre>
+      }
+    </div>
+
+    <footer class="mapping-overlay__footer">
+      <span class="footer-summary">
+        {{ mappingProgress() }}
+        @if (reportValidation(); as validation) {
+          @if (!validation.valid) { · {{ validation.errors.length }} issue(s) }
+        }
+      </span>
+      <button mat-flat-button class="action-btn" (click)="applyMappings()">Apply</button>
+    </footer>
   </div>
 }

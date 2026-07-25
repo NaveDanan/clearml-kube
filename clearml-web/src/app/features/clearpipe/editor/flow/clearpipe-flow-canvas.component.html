@@ -118,6 +118,11 @@
 
         <div class="cp-flow-node__footer">
           <span class="cp-flow-node__badge">{{ badgeLabel(node) }}</span>
+          @if (reportSummary(node); as summary) {
+            <span class="cp-flow-node__report-badge" [class.cp-flow-node__report-badge--warn]="summary.state === 'warn'">
+              <span class="cp-flow-node__report-dot"></span>{{ summary.progress }}
+            </span>
+          }
           <div class="cp-flow-node__actions">
             <button mat-icon-button type="button" class="cp-flow-node__action"
                     title="Configure" (pointerdown)="$event.stopPropagation()" (click)="configure($event, node)">
