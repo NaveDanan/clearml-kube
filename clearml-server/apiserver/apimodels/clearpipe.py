@@ -104,6 +104,12 @@ class TaskInventoryRequest(PagedRequest):
     cursor = StringField()
 
 
+class TaskReportOutputsRequest(models.Base):
+    """Request names-only telemetry descriptors from a base task for Report mapping."""
+
+    task = StringField(required=True)
+
+
 class ExecutionSnapshotRequest(models.Base):
     """Request a safe live snapshot for one submitted ClearPipe v2 run."""
 
@@ -194,6 +200,16 @@ class TaskInventoryResponse(models.Base):
     tasks = ListField([dict], required=True)
     total = IntField(required=True)
     next_cursor = StringField()
+
+
+class TaskReportOutputsResponse(models.Base):
+    """
+    Names-only telemetry descriptors for a base task. Metric/variant names and
+    artifact keys only; no values, URIs, image data, hyperparameters, or secrets.
+    """
+
+    status = StringField(required=True)
+    outputs = DictField()
 
 
 class ExecutionSnapshotResponse(models.Base):

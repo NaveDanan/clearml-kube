@@ -67,6 +67,16 @@ def task(company, origin=None):
     )
 
 
+class DefinitionQueryTests(unittest.TestCase):
+    def test_definition_query_excludes_cloned_pipeline_runs(self):
+        query = clearpipe._definition_query().to_query(clearpipe.Task)
+
+        self.assertEqual(
+            query["runtime.clearpipe_definition_id"],
+            {"$exists": False},
+        )
+
+
 class TaskCloneInsertSemanticsTests(unittest.TestCase):
     @staticmethod
     def _source_task():
@@ -192,6 +202,7 @@ class ServiceFailurePolicyTests(unittest.TestCase):
             project="project-a",
             name="Pipeline A",
             system_tags=[],
+            runtime={"clearpipe_activated": True},
         )
         run = SimpleNamespace(id="run-1")
         compiled = {"script": "# controller", "configuration": {}}
@@ -247,7 +258,11 @@ class ServiceFailurePolicyTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "enqueue failed"):
                     clearpipe.start(call, "company-a", request)
         runtime_update.update_one.assert_called_once_with(
-            set__runtime={"clearpipe_revision": 1, "_pipeline_hash": "clearpipe-v1"}
+            set__runtime={
+                "clearpipe_revision": 1,
+                "_pipeline_hash": "clearpipe-v1",
+                "clearpipe_definition_id": "definition",
+            }
         )
         self.assertEqual(
             task_model.objects.call_args_list[1].kwargs,
@@ -319,7 +334,10 @@ class V2StartTests(unittest.TestCase):
             name="Pipeline A",
             comment="",
             system_tags=[],
-            runtime={"clearpipe_revision": revision},
+            runtime={
+                "clearpipe_revision": revision,
+                "clearpipe_activated": True,
+            },
             configuration={"ClearPipe": SimpleNamespace(value=json.dumps(graph))},
         )
 
@@ -398,6 +416,11 @@ class V2StartTests(unittest.TestCase):
         run_runtime = clone_kwargs["runtime"]
         self.assertEqual(run_runtime["clearpipe_revision"], 7)
         self.assertEqual(run_runtime["_pipeline_hash"], runtime["graph_digest"])
+        self.assertEqual(
+            run_runtime["clearpipe_definition_id"],
+            definition.id,
+        )
+        self.assertEqual(clone_kwargs["system_tags"], [clearpipe.PIPELINE_TAG])
         provenance = run_runtime["clearpipe_runtime_provenance"]
         key_id, signing_secret, _ = self._provenance_key_ring()
         self.assertEqual(
@@ -958,7 +981,11 @@ class V2StartTests(unittest.TestCase):
         self.assertNotIn("00000000-0000-4000-8000-000000000100", str(error.exception))
 
     def test_start_rejects_stale_v2_revision_before_creating_a_clone(self):
-        definition = SimpleNamespace(id="definition", system_tags=[])
+        definition = SimpleNamespace(
+            id="definition",
+            system_tags=[],
+            runtime={"clearpipe_activated": True},
+        )
         call = SimpleNamespace(
             identity=SimpleNamespace(user="user-a"),
             result=SimpleNamespace(data=None),
@@ -1008,6 +1035,95 @@ class V2StartTests(unittest.TestCase):
 
         clone.assert_not_called()
         self.assertIsNone(call.result.data)
+
+
+class TaskReportOutputsTests(unittest.TestCase):
+    def test_metric_variant_pairs_are_sorted_names_only(self):
+        pairs = clearpipe._metric_variant_pairs(
+            {"loss": ["val", "train"], "acc": ["top1"]}
+        )
+        self.assertEqual(
+            pairs,
+            [
+                {"metric": "acc", "variant": "top1"},
+                {"metric": "loss", "variant": "train"},
+                {"metric": "loss", "variant": "val"},
+            ],
+        )
+
+    def test_payload_shape_and_data_minimization(self):
+        payload = clearpipe._report_outputs_payload(
+            {"loss": ["train"]},
+            {"ROC": ["curve"]},
+            {"samples": ["img0"]},
+            ["model", "model", "weights"],
+        )
+        self.assertEqual(payload["scalars"], [{"metric": "loss", "variant": "train"}])
+        self.assertEqual(payload["scalar_graphs"], [{"metric": "loss"}])
+        self.assertEqual(payload["plots"], [{"metric": "ROC", "variant": "curve"}])
+        self.assertEqual(
+            payload["debug_images"], [{"metric": "samples", "variant": "img0"}]
+        )
+        # Deduped + sorted keys, no values/uris anywhere in the payload.
+        self.assertEqual(payload["artifacts"], [{"key": "model"}, {"key": "weights"}])
+        serialized = json.dumps(payload)
+        self.assertNotIn("value", serialized)
+        self.assertNotIn("uri", serialized)
+
+    def _call(self):
+        return SimpleNamespace(result=SimpleNamespace(data=None))
+
+    def test_endpoint_returns_names_only_outputs_for_eligible_task(self):
+        call = self._call()
+        request = SimpleNamespace(task="t1")
+        task = SimpleNamespace(id="t1")
+
+        class _FakeEventBLL:
+            def get_metrics_and_variants(self, company_id, task_id, event_type):
+                name = getattr(event_type, "name", "")
+                if name == "metrics_scalar":
+                    return {"loss": ["train"]}
+                if name == "metrics_plot":
+                    return {"ROC": ["curve"]}
+                if name == "metrics_image":
+                    return {"samples": ["img0"]}
+                return {}
+
+        with patch.object(clearpipe, "_visible_task", return_value=task), patch.object(
+            clearpipe, "_base_task_eligible", return_value=True
+        ), patch.object(
+            clearpipe, "_get_event_bll", return_value=_FakeEventBLL()
+        ), patch.object(
+            clearpipe, "_descriptor_ports", return_value=([], [{"id": "model"}])
+        ):
+            clearpipe.task_report_outputs(call, "company-a", request)
+
+        self.assertEqual(call.result.data["status"], "available")
+        outputs = call.result.data["outputs"]
+        self.assertEqual(outputs["scalars"], [{"metric": "loss", "variant": "train"}])
+        self.assertEqual(outputs["plots"], [{"metric": "ROC", "variant": "curve"}])
+        self.assertEqual(outputs["debug_images"], [{"metric": "samples", "variant": "img0"}])
+        self.assertEqual(outputs["artifacts"], [{"key": "model"}])
+
+    def test_endpoint_unavailable_when_task_not_visible(self):
+        call = self._call()
+        with patch.object(clearpipe, "_visible_task", return_value=None):
+            clearpipe.task_report_outputs(
+                call, "company-a", SimpleNamespace(task="missing")
+            )
+        self.assertEqual(call.result.data, {"status": "unavailable"})
+
+    def test_endpoint_ineligible_task_returns_empty_outputs(self):
+        call = self._call()
+        task = SimpleNamespace(id="t1")
+        with patch.object(clearpipe, "_visible_task", return_value=task), patch.object(
+            clearpipe, "_base_task_eligible", return_value=False
+        ):
+            clearpipe.task_report_outputs(
+                call, "company-a", SimpleNamespace(task="t1")
+            )
+        self.assertEqual(call.result.data["status"], "ineligible")
+        self.assertEqual(call.result.data["outputs"]["scalars"], [])
 
 
 if __name__ == "__main__":

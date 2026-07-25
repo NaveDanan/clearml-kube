@@ -37,6 +37,8 @@ from apiserver.apimodels.clearpipe import (
     TaskDescriptorResponse,
     TaskInventoryRequest,
     TaskInventoryResponse,
+    TaskReportOutputsRequest,
+    TaskReportOutputsResponse,
     UpdateRequest,
     UpdateResponse,
     ValidateRequest,
@@ -156,7 +158,10 @@ def _owned_query(company_id: str) -> Q:
 
 
 def _definition_query() -> Q:
-    return Q(system_tags__all=[PIPELINE_TAG, CLEARPIPE_TAG], type=TaskType.controller)
+    return Q(
+        system_tags__all=[PIPELINE_TAG, CLEARPIPE_TAG],
+        type=TaskType.controller,
+    ) & Q(runtime__clearpipe_definition_id__exists=False)
 
 
 def _get_task(company_id: str, task_id: str, allow_public: bool = True, owned: bool = False) -> Task:
@@ -2037,6 +2042,12 @@ def start(
                     project=run_project,
                     hyperparams=hyperparams,
                     configuration=configurations,
+                    # A run is a pipeline execution, not a ClearPipe definition.
+                    # Keep only PIPELINE_TAG so it shows up as a normal pipeline
+                    # run, but drop CLEARPIPE_TAG so it is NOT matched by
+                    # _definition_query() and does not leak into the /clearpipe
+                    # library as a new pipeline (e.g. on every scheduled fire).
+                    system_tags=[PIPELINE_TAG],
                     script_overrides={
                         "diff": controller_script,
                         "entry_point": "clearpipe_controller.py",
@@ -2297,6 +2308,119 @@ def task_descriptor(
     else:
         status = "available"
     call.result.data = {"status": status, "descriptor": descriptor}
+
+
+MAX_REPORT_OUTPUT_ITEMS = 1000
+_event_bll = None
+
+
+def _get_event_bll():
+    """Lazily construct the EventBLL so importing this service never requires ES."""
+
+    global _event_bll
+    if _event_bll is None:
+        from apiserver.bll.event import EventBLL
+
+        _event_bll = EventBLL()
+    return _event_bll
+
+
+def _metric_variant_pairs(metrics: Mapping) -> list:
+    """Flatten a {metric: [variants]} map to sorted {metric, variant} name pairs."""
+
+    pairs = []
+    for metric in sorted(metrics or {}):
+        if not isinstance(metric, str):
+            continue
+        for variant in sorted(metrics.get(metric) or []):
+            if not isinstance(variant, str):
+                continue
+            pairs.append({"metric": metric, "variant": variant})
+            if len(pairs) >= MAX_REPORT_OUTPUT_ITEMS:
+                return pairs
+    return pairs
+
+
+def _report_outputs_payload(
+    scalar_metrics: Mapping,
+    plot_metrics: Mapping,
+    image_metrics: Mapping,
+    artifact_keys,
+) -> dict:
+    """Shape names-only telemetry descriptors for the Report mapping workspace.
+
+    Contains metric/variant names, whole-metric scalar graphs, and artifact keys
+    only. Never includes values, URIs, image data, hyperparameters, or secrets.
+    """
+
+    scalar_graphs = [
+        {"metric": metric}
+        for metric in sorted(scalar_metrics or {})
+        if isinstance(metric, str)
+    ][:MAX_REPORT_OUTPUT_ITEMS]
+    artifacts = [
+        {"key": key}
+        for key in sorted({k for k in (artifact_keys or []) if isinstance(k, str) and k})
+    ][:MAX_REPORT_OUTPUT_ITEMS]
+    return {
+        "scalars": _metric_variant_pairs(scalar_metrics),
+        "scalar_graphs": scalar_graphs,
+        "plots": _metric_variant_pairs(plot_metrics),
+        "debug_images": _metric_variant_pairs(image_metrics),
+        "artifacts": artifacts,
+    }
+
+
+@endpoint(
+    "clearpipe.task_report_outputs",
+    min_version="2.35",
+    request_data_model=TaskReportOutputsRequest,
+    response_data_model=TaskReportOutputsResponse,
+)
+def task_report_outputs(
+    call: APICall, company_id: str, request: TaskReportOutputsRequest
+):
+    """Return authorized, bounded, names-only telemetry descriptors for a base task.
+
+    Powers the Report node's expected-output contract without leaking any values:
+    scalar/plot/debug-image metric-variant names, whole scalar graphs, and output
+    artifact keys. Hyperparameter values, artifact URIs, image data, and
+    credentials are never returned.
+    """
+
+    task = _visible_task(company_id, request.task, DESCRIPTOR_TASK_FIELDS)
+    if task is None:
+        call.result.data = {"status": "unavailable"}
+        return
+    if not _base_task_eligible(task):
+        call.result.data = {
+            "status": "ineligible",
+            "outputs": _report_outputs_payload({}, {}, {}, []),
+        }
+        return
+
+    from apiserver.bll.event.event_common import EventType
+
+    def _metrics(event_type) -> dict:
+        try:
+            return _get_event_bll().get_metrics_and_variants(
+                company_id, task.id, event_type
+            ) or {}
+        except Exception:
+            return {}
+
+    scalar_metrics = _metrics(EventType.metrics_scalar)
+    plot_metrics = _metrics(EventType.metrics_plot)
+    image_metrics = _metrics(EventType.metrics_image)
+    _, artifacts = _descriptor_ports(company_id, task.id)
+    artifact_keys = [item.get("id") for item in artifacts if item.get("id")]
+
+    call.result.data = {
+        "status": "available",
+        "outputs": _report_outputs_payload(
+            scalar_metrics, plot_metrics, image_metrics, artifact_keys
+        ),
+    }
 
 
 @endpoint(

@@ -19,13 +19,16 @@ from types import SimpleNamespace
 from apiserver.bll.clearpipe.generation.compiler import compile_graph
 from apiserver.bll.clearpipe.generation.flow_nodes import (
     _render_report_function,
+    _render_report_function_v2,
+    _resolve_base_task_id,
+    _sanitize_report_mappings,
     flow_node_meta,
     lower_flow_function_node,
 )
 from apiserver.bll.clearpipe.generation.function import lower_function_node
 from apiserver.bll.clearpipe.graph_v2 import derive_graph_dependencies, read_graph_v2
 from apiserver.bll.clearpipe.generation.contracts import FunctionLoweringInput
-from apiserver.tests.clearpipe.factories import function_node, graph_document, port
+from apiserver.tests.clearpipe.factories import binding, function_node, graph_document, port
 
 
 def _output_only_ports():
@@ -158,6 +161,7 @@ def _run_report_body(
     session,
     current_task,
     tasks_by_id=None,
+    mappings=None,
 ):
     tasks_by_id = tasks_by_id or {}
 
@@ -180,7 +184,7 @@ def _run_report_body(
     fake_clearml.Task = _Task
 
     source = _render_report_function(
-        name, title, template_report_id, artifact_sources
+        name, title, template_report_id, artifact_sources, mappings
     )
     namespace = {}
     saved = sys.modules.get("clearml")
@@ -500,6 +504,572 @@ class ReportRuntimeTests(unittest.TestCase):
         report_md = session.calls[-1]["json"]["report"]
         self.assertIn("***REDACTED***", report_md)
         self.assertNotIn("supersecrettoken123", report_md)
+
+
+# --------------------------------------------------------------------------- #
+# 8. Template-fill mappings (text placeholders + media iframe rewrite).
+# --------------------------------------------------------------------------- #
+
+
+class ReportTemplateFillTests(unittest.TestCase):
+    def _session(self, template_md, tasks, **kwargs):
+        responses = {
+            ("reports", "create"): {"id": "report-1"},
+            ("reports", "get_all_ex"): {"tasks": [{"report": template_md}]},
+            ("tasks", "get_all_ex"): {"tasks": tasks},
+        }
+        responses.update(kwargs.pop("responses", {}))
+        return _FakeSession(responses=responses, **kwargs)
+
+    def _fill(self, template_md, tasks, mappings):
+        session = self._session(template_md, tasks)
+        _run_report_body(
+            "report_step",
+            "R",
+            "tmpl-1",
+            [],
+            session=session,
+            current_task=_FakeCurrentTask(),
+            mappings=mappings,
+        )
+        return session.calls[-1]["json"]["report"], session
+
+    def test_text_field_tokens_are_filled(self):
+        md = "Run <TASK_NAME> (<TASK_ID>) status <STATUS>."
+        tasks = [{"id": "t1", "name": "resnet-run", "status": "completed"}]
+        report, _ = self._fill(
+            md,
+            tasks,
+            {
+                "text:TASK_NAME": {"taskId": "t1", "kind": "field", "ref": "name"},
+                "text:TASK_ID": {"taskId": "t1", "kind": "field", "ref": "id"},
+                "text:STATUS": {"taskId": "t1", "kind": "field", "ref": "status"},
+            },
+        )
+        self.assertIn("Run resnet-run (t1) status completed.", report)
+
+    def test_project_field_reads_nested_name(self):
+        md = "Project: <PROJECT>"
+        tasks = [{"id": "t1", "project": {"name": "vision/prod"}}]
+        report, _ = self._fill(
+            md, tasks, {"text:PROJECT": {"taskId": "t1", "kind": "field", "ref": "project"}}
+        )
+        self.assertIn("Project: vision/prod", report)
+
+    def test_scalar_mapping_fills_token_with_value(self):
+        md = "Accuracy = <ACCURACY>"
+        tasks = [
+            {
+                "id": "t1",
+                "last_metrics": {
+                    "h1": {"h2": {"metric": "accuracy", "variant": "top1", "value": 0.97}}
+                },
+            }
+        ]
+        report, _ = self._fill(
+            md,
+            tasks,
+            {
+                "text:ACCURACY": {
+                    "taskId": "t1",
+                    "kind": "scalar",
+                    "ref": "scalar\x00accuracy\x00top1",
+                    "metric": "accuracy",
+                    "variant": "top1",
+                }
+            },
+        )
+        self.assertIn("Accuracy = 0.97", report)
+
+    def test_hyperparam_mapping_fills_token(self):
+        md = "LR = <LR>"
+        tasks = [{"id": "t1", "hyperparams": {"General": {"lr": {"value": "0.001"}}}}]
+        report, _ = self._fill(
+            md, tasks, {"text:LR": {"taskId": "t1", "kind": "hyperparam", "ref": "General/lr"}}
+        )
+        self.assertIn("LR = 0.001", report)
+
+    def test_media_iframe_tokens_rewritten_by_name(self):
+        md = (
+            '<iframe name="loss" '
+            'src="/plots?task=<TASK_ID>&metric=<METRIC>&variant=<VARIANT>&company=<COMPANY_ID>">'
+            "</iframe>"
+        )
+        tasks = [{"id": "t1", "company": {"id": "co-9"}}]
+        report, _ = self._fill(
+            md,
+            tasks,
+            {
+                "media:loss": {
+                    "taskId": "t1",
+                    "kind": "plot",
+                    "ref": "plot\x00loss\x00valid",
+                    "metric": "loss",
+                    "variant": "valid",
+                }
+            },
+        )
+        self.assertIn("task=t1", report)
+        self.assertIn("metric=loss", report)
+        self.assertIn("variant=valid", report)
+        self.assertIn("company=co-9", report)
+
+    def test_widget_embed_metric_variant_aliases_are_filled(self):
+        # Real ClearML embeds use type-specific tokens: <PLOT_METRIC>/<PLOT_VARIANT>
+        # (plot), <IMAGE_METRIC>/<IMAGE_VARIANT> (sample), <SCALAR_METRIC>/...
+        md = (
+            '<iframe src="/widgets?type=plot&objectType=task&objects=<TASK_ID>'
+            '&metrics=<PLOT_METRIC>&variants=<PLOT_VARIANT>&company=<COMPANY_ID>" '
+            'name="pr-roc-curve"></iframe>\n'
+            '<iframe src="/widgets?type=sample&objects=<TASK_ID>'
+            '&metrics=<IMAGE_METRIC>&variants=<IMAGE_VARIANT>" name="sample-image"></iframe>'
+        )
+        tasks = [{"id": "t1", "company": {"id": "co-9"}}]
+        report, _ = self._fill(
+            md,
+            tasks,
+            {
+                "media:pr-roc-curve": {
+                    "taskId": "t1",
+                    "kind": "plot",
+                    "ref": "plot\x00Validation ROC AUC\x00plot image",
+                    "metric": "Validation ROC AUC",
+                    "variant": "plot image",
+                },
+                "media:sample-image": {
+                    "taskId": "t1",
+                    "kind": "plot",
+                    "ref": "plot\x00augmentation_preview\x00",
+                    "metric": "augmentation_preview",
+                    "variant": "",
+                },
+            },
+        )
+        self.assertIn("metrics=Validation%20ROC%20AUC", report)
+        self.assertIn("variants=plot%20image", report)
+        self.assertIn("metrics=augmentation_preview", report)
+        self.assertIn("/widgets/?", report)
+        self.assertNotIn("<PLOT_METRIC>", report)
+        self.assertNotIn("<IMAGE_METRIC>", report)
+        self.assertNotIn("<TASK_ID>", report)
+
+    def test_unmapped_iframe_is_untouched(self):
+        md = '<iframe name="other" src="/plots?task=<TASK_ID>"></iframe>'
+        tasks = [{"id": "t1"}]
+        report, _ = self._fill(
+            md,
+            tasks,
+            {
+                "media:loss": {
+                    "taskId": "t1",
+                    "kind": "plot",
+                    "ref": "plot\x00l\x00v",
+                    "metric": "l",
+                    "variant": "v",
+                }
+            },
+        )
+        self.assertIn("task=<TASK_ID>", report)
+
+    def test_unmapped_text_token_left_intact(self):
+        md = "Hello <UNMAPPED> world"
+        report, _ = self._fill(
+            md,
+            [{"id": "t1", "name": "n"}],
+            {"text:OTHER": {"taskId": "t1", "kind": "field", "ref": "name"}},
+        )
+        self.assertIn("<UNMAPPED>", report)
+
+    def test_no_task_fetch_without_mappings(self):
+        session = self._session("no placeholders", [{"id": "t1"}])
+        _run_report_body(
+            "report_step",
+            "R",
+            "tmpl-1",
+            [],
+            session=session,
+            current_task=_FakeCurrentTask(),
+        )
+        actions = [(c["service"], c["action"]) for c in session.calls]
+        self.assertNotIn(("tasks", "get_all_ex"), actions)
+
+    def test_mapped_value_is_redacted(self):
+        md = "Note: <NOTE>"
+        tasks = [{"id": "t1", "name": "token=supersecrettoken123"}]
+        report, _ = self._fill(
+            md, tasks, {"text:NOTE": {"taskId": "t1", "kind": "field", "ref": "name"}}
+        )
+        self.assertIn("***REDACTED***", report)
+        self.assertNotIn("supersecrettoken123", report)
+
+
+# --------------------------------------------------------------------------- #
+# 9. Graph-aware Task-node lowering (real PipelineController.add_step).
+# --------------------------------------------------------------------------- #
+
+
+def _task_flow_node(config, name="train_step", node_id="task-node"):
+    meta = "# clearpipe-flow-node:" + json.dumps({"type": "task", "config": config})
+    source = "\n".join([meta, "def {}() -> object:".format(name), "    return None", ""])
+    return function_node(
+        node_id,
+        name=name,
+        signature="def {}() -> object".format(name),
+        source=source,
+        ports=_output_only_ports(),
+        configuration={"task_type": "application", "cache": False},
+    )
+
+
+def _compile_graph(nodes, bindings):
+    parsed = read_graph_v2(graph_document(nodes=nodes, bindings=bindings))
+    assert parsed.is_supported, parsed
+    return compile_graph(
+        parsed.graph, lowerers={"function": lower_flow_function_node}
+    ).source
+
+
+class TaskNodeLoweringTests(unittest.TestCase):
+    def test_resolve_base_task_id_rules(self):
+        self.assertEqual(_resolve_base_task_id({"baseTaskId": "base-1"}), "base-1")
+        self.assertEqual(_resolve_base_task_id({"taskIds": ["only-1"]}), "only-1")
+        # Multi-item legacy arrays are ambiguous and are not resolved.
+        self.assertIsNone(_resolve_base_task_id({"taskIds": ["a", "b"]}))
+        self.assertIsNone(_resolve_base_task_id({}))
+        # baseTaskId wins over legacy.
+        self.assertEqual(
+            _resolve_base_task_id({"baseTaskId": "x", "taskIds": ["y"]}), "x"
+        )
+
+    def test_configured_task_lowers_to_add_step(self):
+        source = _compile_graph([_task_flow_node({"baseTaskId": "base-abc"})], [])
+        self.assertIn("pipe.add_step(", source)
+        self.assertIn('base_task_id="base-abc"', source)
+        self.assertNotIn("add_function_step", source)
+
+    def test_unconfigured_task_keeps_backward_compatible_noop(self):
+        source = _compile_graph([_task_flow_node({})], [])
+        self.assertIn("add_function_step", source)
+        self.assertNotIn("pipe.add_step(", source)
+
+    def test_legacy_single_taskids_lowers_to_add_step(self):
+        source = _compile_graph([_task_flow_node({"taskIds": ["legacy-1"]})], [])
+        self.assertIn('base_task_id="legacy-1"', source)
+
+    def test_generated_program_is_valid_python(self):
+        import ast
+
+        ast.parse(_compile_graph([_task_flow_node({"baseTaskId": "base-abc"})], []))
+
+
+# --------------------------------------------------------------------------- #
+# 10. Graph-aware Report lowering: ${step.id} args + runtime resolution.
+# --------------------------------------------------------------------------- #
+
+
+def _fingerprint(md):
+    import re
+
+    md = md or ""
+    md = re.sub(r"<!--[\s\S]*?-->", " ", md)
+    md = re.sub(r"```[\s\S]*?```", " ", md)
+    md = re.sub(r"~~~[\s\S]*?~~~", " ", md)
+    md = re.sub(r"\s+", " ", md).strip()
+    h = 0x811C9DC5
+    for ch in md:
+        h ^= ord(ch)
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return format(h, "08x")
+
+
+def _run_report_v2(
+    report_mappings,
+    sources,
+    runtime_ids,
+    *,
+    session,
+    current_task=None,
+    title="R",
+    template_report_id="",
+    template_fingerprint="",
+    name="report_step",
+):
+    class _Task:
+        @staticmethod
+        def current_task():
+            return current_task or _FakeCurrentTask()
+
+        @staticmethod
+        def _get_default_session():
+            return session
+
+    fake_clearml = types.ModuleType("clearml")
+    fake_clearml.Task = _Task
+    source = _render_report_function_v2(
+        name, title, template_report_id, template_fingerprint, report_mappings, sources
+    )
+    namespace = {}
+    saved = sys.modules.get("clearml")
+    sys.modules["clearml"] = fake_clearml
+    try:
+        exec(compile(source, "<report_v2>", "exec"), namespace)  # noqa: S102
+        return namespace[name](*runtime_ids)
+    finally:
+        if saved is not None:
+            sys.modules["clearml"] = saved
+        else:
+            sys.modules.pop("clearml", None)
+
+
+class ReportGraphAwareCompileTests(unittest.TestCase):
+    def _source(self, mappings):
+        task = _task_flow_node({"baseTaskId": "base-abc"}, name="train_step", node_id="task-node")
+        report = _report_ga(mappings)
+        edge = binding(
+            "edge-1",
+            kind="execution-only",
+            source_node_id="task-node",
+            target_node_id="report-node",
+        )
+        return _compile_graph([task, report], [edge])
+
+    def test_report_receives_step_id_runtime_argument(self):
+        source = self._source(
+            [
+                {
+                    "slotKey": "text:TASK_NAME",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "field",
+                    "selector": {"field": "name"},
+                    "required": True,
+                    "confirmed": True,
+                }
+            ]
+        )
+        # Task node clones its base task; report binds to the runtime step id.
+        self.assertIn('base_task_id="base-abc"', source)
+        self.assertIn('"${train_step.id}"', source)
+        self.assertIn("def report_step(s0=None) -> object:", source)
+        self.assertIn('runtime_task_ids["task-node"] = s0', source)
+
+    def test_no_runtime_task_id_is_persisted_in_report(self):
+        source = self._source(
+            [
+                {
+                    "slotKey": "text:TASK_NAME",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "field",
+                    "selector": {"field": "name"},
+                    "required": True,
+                    "confirmed": True,
+                }
+            ]
+        )
+        # The report references the source only by node id + ${step.id}; the base
+        # task id belongs to the Task step, never baked into the report mapping.
+        report_def = source.split("pipe = PipelineController")[0]
+        report_fn = report_def.split("def report_step")[1]
+        self.assertNotIn("base-abc", report_fn)
+
+    def test_generated_program_is_valid_python(self):
+        import ast
+
+        ast.parse(
+            self._source(
+                [
+                    {
+                        "slotKey": "media:roc",
+                        "source": {"sourceNodeId": "task-node"},
+                        "outputKind": "plot",
+                        "selector": {"metric": "ROC", "variant": "v"},
+                        "required": True,
+                        "confirmed": True,
+                    }
+                ]
+            )
+        )
+
+    def test_sanitize_report_mappings_filters_invalid(self):
+        clean = _sanitize_report_mappings(
+            [
+                {"slotKey": "text:A", "source": {"sourceNodeId": "n1"}, "outputKind": "field", "selector": {"field": "name"}},
+                {"slotKey": "text:B", "outputKind": "bogus"},  # bad kind
+                {"no_slot": 1},  # missing slotKey
+                "not-a-dict",
+            ]
+        )
+        self.assertEqual(len(clean), 1)
+        self.assertEqual(clean[0]["slotKey"], "text:A")
+        self.assertTrue(clean[0]["required"])  # default required
+
+
+def _report_ga(mappings, name="report_step"):
+    return _report_node({"templateReportId": "tmpl", "reportMappings": mappings}, name=name)
+
+
+class ReportGraphAwareRuntimeTests(unittest.TestCase):
+    def _session(self, template_md, runtime_tasks, **kwargs):
+        responses = {
+            ("reports", "create"): {"id": "report-1"},
+            ("reports", "get_all_ex"): {"tasks": [{"report": template_md}]},
+            ("tasks", "get_all_ex"): {"tasks": runtime_tasks},
+        }
+        responses.update(kwargs.pop("responses", {}))
+        return _FakeSession(responses=responses, **kwargs)
+
+    def test_text_slot_resolves_from_runtime_task(self):
+        session = self._session(
+            "Run <TASK_NAME>", [{"id": "run-123", "name": "resnet-run"}]
+        )
+        _run_report_v2(
+            [
+                {
+                    "slotKey": "text:TASK_NAME",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "field",
+                    "selector": {"field": "name"},
+                    "required": True,
+                    "confirmed": True,
+                }
+            ],
+            [("task-node", "train_step", "s0")],
+            ("run-123",),
+            session=session,
+            template_report_id="tmpl",
+        )
+        report_md = session.calls[-1]["json"]["report"]
+        self.assertIn("Run resnet-run", report_md)
+
+    def test_required_missing_output_fails_before_report_creation(self):
+        session = self._session("Run <TASK_NAME>", [])
+        with self.assertRaises(RuntimeError):
+            _run_report_v2(
+                [
+                    {
+                        "slotKey": "text:TASK_NAME",
+                        "source": {"sourceNodeId": "task-node"},
+                        "outputKind": "field",
+                        "selector": {"field": "name"},
+                        "required": True,
+                        "confirmed": True,
+                    }
+                ],
+                [("task-node", "train_step", "s0")],
+                (None,),  # source task did not produce a runtime id
+                session=session,
+                template_report_id="tmpl",
+            )
+        actions = [(c["service"], c["action"]) for c in session.calls]
+        self.assertNotIn(("reports", "create"), actions)
+
+    def test_optional_missing_output_publishes_with_not_reported_note(self):
+        session = self._session("Run <TASK_NAME>", [])
+        _run_report_v2(
+            [
+                {
+                    "slotKey": "text:TASK_NAME",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "field",
+                    "selector": {"field": "name"},
+                    "required": False,
+                    "confirmed": True,
+                }
+            ],
+            [("task-node", "train_step", "s0")],
+            (None,),
+            session=session,
+            template_report_id="tmpl",
+        )
+        report_md = session.calls[-1]["json"]["report"]
+        self.assertIn("_(not reported)_", report_md)
+        self.assertIn("Not reported", report_md)
+
+    def test_media_iframe_rewritten_with_runtime_task(self):
+        template = (
+            '<iframe src="/widgets?type=plot&objects=<TASK_ID>&metrics=<PLOT_METRIC>'
+            '&variants=<PLOT_VARIANT>&company=<COMPANY_ID>" name="roc"></iframe>'
+        )
+        session = self._session(
+            template, [{"id": "run-123", "company": {"id": "co-1"}}]
+        )
+        _run_report_v2(
+            [
+                {
+                    "slotKey": "media:roc",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "plot",
+                    "selector": {"metric": "ROC", "variant": "plot image"},
+                    "required": True,
+                    "confirmed": True,
+                }
+            ],
+            [("task-node", "train_step", "s0")],
+            ("run-123",),
+            session=session,
+            template_report_id="tmpl",
+        )
+        report_md = session.calls[-1]["json"]["report"]
+        self.assertIn("objects=run-123", report_md)
+        self.assertIn("metrics=ROC", report_md)
+        self.assertIn("variants=plot%20image", report_md)
+        self.assertIn("company=co-1", report_md)
+        self.assertIn("/widgets/?", report_md)
+
+    def test_external_task_mapping_resolves_without_source_node(self):
+        session = self._session("Run <TASK_NAME>", [{"id": "ext-1", "name": "hist-run"}])
+        _run_report_v2(
+            [
+                {
+                    "slotKey": "text:TASK_NAME",
+                    "source": {"externalTaskId": "ext-1"},
+                    "outputKind": "field",
+                    "selector": {"field": "name"},
+                    "required": True,
+                    "confirmed": True,
+                }
+            ],
+            [],  # no pipeline sources
+            (),
+            session=session,
+            template_report_id="tmpl",
+        )
+        report_md = session.calls[-1]["json"]["report"]
+        self.assertIn("Run hist-run", report_md)
+
+    def test_template_fingerprint_drift_fails(self):
+        session = self._session("# Title changed", [{"id": "run-123", "name": "x"}])
+        with self.assertRaises(RuntimeError):
+            _run_report_v2(
+                [],
+                [("task-node", "train_step", "s0")],
+                ("run-123",),
+                session=session,
+                template_report_id="tmpl",
+                template_fingerprint="deadbeef",  # will not match
+            )
+
+    def test_matching_template_fingerprint_passes(self):
+        template = "# Title <TASK_NAME>"
+        session = self._session(template, [{"id": "run-123", "name": "ok-run"}])
+        _run_report_v2(
+            [
+                {
+                    "slotKey": "text:TASK_NAME",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "field",
+                    "selector": {"field": "name"},
+                    "required": True,
+                    "confirmed": True,
+                }
+            ],
+            [("task-node", "train_step", "s0")],
+            ("run-123",),
+            session=session,
+            template_report_id="tmpl",
+            template_fingerprint=_fingerprint(template),
+        )
+        report_md = session.calls[-1]["json"]["report"]
+        self.assertIn("ok-run", report_md)
 
 
 if __name__ == "__main__":
