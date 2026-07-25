@@ -125,7 +125,7 @@ apiserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-26"
+    tag: "2026-07-25-clearpipe-integration-75faddc"
     pullPolicy: Never
   service:
     type: NodePort
@@ -150,7 +150,7 @@ fileserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-26"
+    tag: "2026-07-25-clearpipe-integration-75faddc"
     pullPolicy: Never
   service:
     type: NodePort
@@ -183,7 +183,7 @@ clearpipeScheduler:
   image:
     registry: ""
     repository: "clearpipe-scheduler"
-    tag: "latest"
+    tag: "2026-07-25-clearpipe-integration-75faddc"
   pollSeconds: 30
   existingSecret: "clearpipe-scheduler-credentials"
   containerSecurityContext:
@@ -202,7 +202,7 @@ webserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-26"
+    tag: "2026-07-25-clearpipe-integration-75faddc"
     pullPolicy: Never
   service:
     type: NodePort
