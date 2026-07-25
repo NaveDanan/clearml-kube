@@ -182,7 +182,10 @@
               "includePaths": [
                 "",
                 "src/app/webapp-common/styles/"
-              ]
+              ],
+              "sass": {
+                "silenceDeprecations": ["import", "mixed-decls"]
+              }
             },
             "assets": [
               "src/assets",
@@ -219,7 +222,10 @@
               "includePaths": [
                 "",
                 "src/app/webapp-common/styles/"
-              ]
+              ],
+              "sass": {
+                "silenceDeprecations": ["import", "mixed-decls"]
+              }
             },
             "assets": [
               "src/assets",
@@ -251,7 +257,10 @@
               "includePaths": [
                 "",
                 "src/app/webapp-common/styles/"
-              ]
+              ],
+              "sass": {
+                "silenceDeprecations": ["import", "mixed-decls"]
+              }
             },
             "assets": [
               "src/assets",
@@ -404,7 +413,7 @@
               "src/app/webapp-common/clearml-applications/report-widgets/src/app/webapp-common/assets"
             ],
             "styles": [
-              "src/app/webapp-common/clearml-applications/report-widgets/src/styles.scss"
+              "src/app/webapp-common/clearml-applications/report-widgets/src/app/styles/styles.scss"
             ],
             "scripts": []
           }

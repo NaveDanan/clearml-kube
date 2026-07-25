@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NO_ERRORS_SCHEMA } from '@angular/core';
+import {By} from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
@@ -135,9 +136,12 @@ describe('DashboardComponent', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/workers-and-queues');
   });
 
-  it('should set width via setWidth', () => {
-    component.setWidth(1024);
-    expect(component.width).toBe(1024);
+  it('should size experiments from the projects width output', () => {
+    fixture.debugElement.query(By.css('sm-dashboard-projects')).triggerEventHandler('width', 1024);
+    fixture.detectChanges();
+
+    const experiments = fixture.nativeElement.querySelector('sm-dashboard-experiments') as HTMLElement;
+    expect(experiments.style.width).toBe('1024px');
   });
 });
 
