@@ -14,10 +14,13 @@ from apiserver.apimodels.clearpipe import (
     DefinitionResponse,
     ExecutionSnapshotResponse,
     GetAllResponse,
+    LatestRunResponse,
     ParseScriptResponse,
+    SetActivationResponse,
     StartResponse,
     TaskDescriptorResponse,
     TaskInventoryResponse,
+    TaskReportOutputsResponse,
     UpdateRequest,
     UpdateResponse,
     ValidationResponse,
@@ -101,8 +104,11 @@ class ClearPipeContractSchemaTests(unittest.TestCase):
             "clearpipe.update": UpdateResponse,
             "clearpipe.validate": ValidationResponse,
             "clearpipe.start": StartResponse,
+            "clearpipe.set_activation": SetActivationResponse,
+            "clearpipe.latest_run": LatestRunResponse,
             "clearpipe.task_descriptor": TaskDescriptorResponse,
             "clearpipe.task_inventory": TaskInventoryResponse,
+            "clearpipe.task_report_outputs": TaskReportOutputsResponse,
             "clearpipe.execution_snapshot": ExecutionSnapshotResponse,
             "clearpipe.archive": ArchiveResponse,
             "clearpipe.delete": DeleteResponse,
@@ -122,8 +128,11 @@ class ClearPipeContractSchemaTests(unittest.TestCase):
             "update",
             "validate",
             "start",
+            "set_activation",
+            "latest_run",
             "task_descriptor",
             "task_inventory",
+            "task_report_outputs",
             "execution_snapshot",
             "archive",
             "delete",
@@ -499,7 +508,7 @@ class ClearPipeV2ServiceIntegrationTests(unittest.TestCase):
 
 class ClearPipeStartParameterSafetyTests(unittest.TestCase):
     def test_secret_parameter_keys_and_values_are_rejected_before_clone(self):
-        definition = SimpleNamespace(id="definition", system_tags=[])
+        definition = SimpleNamespace(id="definition", system_tags=[], runtime={})
         for parameters, secret in (
             ({"api_key": "not-a-secret"}, "not-a-secret"),
             ({"label": "must-not-persist-secret"}, "must-not-persist-secret"),
