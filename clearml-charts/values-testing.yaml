@@ -189,6 +189,10 @@ clearpipeScheduler:
   containerSecurityContext:
     allowPrivilegeEscalation: false
     runAsNonRoot: true
+    # Image USER is the non-numeric name "scheduler" (uid 10001 in the
+    # Dockerfile). runAsNonRoot cannot verify a non-numeric user, so pin the
+    # numeric uid explicitly or the pod is rejected at admission.
+    runAsUser: 10001
   resources:
     requests:
       cpu: 25m
