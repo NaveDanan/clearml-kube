@@ -76,7 +76,6 @@
           type="text"
           [ngModel]="label()"
           (ngModelChange)="setLabel($event)"
-          [readonly]="store.layoutOnly()"
           placeholder="Node name"
         />
         <span class="badge">{{ headerBadge() }}</span>
@@ -91,11 +90,11 @@
         <h3 class="section-heading">General</h3>
         <div class="field">
           <label class="field-label">Name</label>
-          <input type="text" [ngModel]="label()" (ngModelChange)="setLabel($event)" [readonly]="store.layoutOnly()" />
+          <input type="text" [ngModel]="label()" (ngModelChange)="setLabel($event)" />
         </div>
         <div class="field">
           <label class="field-label">Description</label>
-          <textarea [ngModel]="desc()" (ngModelChange)="setDesc($event)" [readonly]="store.layoutOnly()"></textarea>
+          <textarea [ngModel]="desc()" (ngModelChange)="setDesc($event)"></textarea>
         </div>
       </section>
 
@@ -483,23 +482,40 @@
 
         @case ('task') {
           <section class="section">
-            <h3 class="section-heading">Canonical task</h3>
+            <h3 class="section-heading">Task</h3>
             <div class="field">
-              <label class="field-label">Immutable task ID</label>
-              <input type="text" class="mono" [value]="cfg('baseTaskId')" readonly />
+              <label class="field-label">Project</label>
+              <select [ngModel]="cfg('project')" (ngModelChange)="setCfg('project', $event)">
+                <option value="">All projects</option>
+                @for (project of projects(); track project.id) {
+                  <option [value]="project.id">{{ project.name }}</option>
+                }
+              </select>
             </div>
             <div class="field">
-              <label class="field-label">Queue resource</label>
-              <input type="text" class="mono" [value]="cfg('queueResourceId') || 'Graph default'" readonly />
+              <label class="field-label">Tasks @if (listLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+              <div class="option-list">
+                @for (task of trainingTasks(); track task.id) {
+                  <label class="option-row">
+                    <input type="checkbox" [checked]="isSelected('taskIds', task.id)" (change)="toggle('taskIds', task.id)" />
+                    <span class="option-name">{{ task.name }}</span>
+                    @if (task.status) { <span class="option-status">{{ task.status }}</span> }
+                  </label>
+                } @empty {
+                  <p class="note">No tasks found.</p>
+                }
+              </div>
             </div>
             <div class="field">
-              <label class="field-label">Execution options</label>
-              <p class="note">
-                Clone: {{ cfg('cloneBaseTask') === 'true' ? 'enabled' : 'disabled' }};
-                cache: {{ cfg('cache') === 'true' ? 'enabled' : 'disabled' }}.
-              </p>
+              <label class="field-label">Queue</label>
+              <select [ngModel]="cfg('queue')" (ngModelChange)="setCfg('queue', $event)">
+                <option value="">Default queue</option>
+                @for (queue of queues(); track queue.id) {
+                  <option [value]="queue.id">{{ queue.name }}</option>
+                }
+              </select>
             </div>
-            <p class="note">Task selection, ports, and execution configuration are preserved from the canonical graph and are edited in the typed task editor.</p>
+            <p class="note">Connects to real ClearML training tasks.</p>
           </section>
         }
         @case ('execute') {

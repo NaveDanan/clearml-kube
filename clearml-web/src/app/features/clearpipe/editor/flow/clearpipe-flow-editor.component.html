@@ -10,7 +10,6 @@
       <input class="cp-flow-toolbar__name"
              [ngModel]="name()"
              (ngModelChange)="setName($event)"
-             [readonly]="flowBlockedReason() !== null"
              aria-label="Pipeline name"
              placeholder="Untitled ClearPipe" />
       @if (dirty()) {
@@ -23,7 +22,7 @@
         <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon>
         New
       </button>
-      <button mat-stroked-button type="button" (click)="triggerImport()" [disabled]="flowBlockedReason() !== null">
+      <button mat-stroked-button type="button" (click)="triggerImport()">
         <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
         Import
       </button>
@@ -31,14 +30,10 @@
         <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
         Export
       </button>
-      <button mat-flat-button type="button" class="cp-flow-toolbar__save" (click)="save()" [disabled]="saving() || flowBlockedReason() !== null">
+      <button mat-flat-button type="button" class="cp-flow-toolbar__save" (click)="save()" [disabled]="saving()">
         <mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>
         Save
       </button>
-
-      @if (flowBlockedReason(); as reason) {
-        <span class="cp-flow-toolbar__dirty" [title]="reason" aria-label="Read-only graph">Read-only</span>
-      }
 
       <span class="cp-flow-toolbar__divider"></span>
 
@@ -46,7 +41,7 @@
               class="cp-flow-toolbar__activate"
               [class.cp-flow-toolbar__activate--on]="activated()"
               [class.cp-flow-toolbar__activate--off]="!activated()"
-              [disabled]="busy() || flowBlockedReason() !== null"
+              [disabled]="busy()"
               (click)="toggleActivated()"
               [title]="activated() ? 'Pipeline is activated \u2014 click to deactivate' : 'Pipeline is not activated \u2014 click to activate'">
         <mat-icon fontSet="al" [fontIcon]="activated() ? 'al-ico-success' : 'al-ico-status-pending'"></mat-icon>
@@ -66,8 +61,8 @@
         </button>
       } @else {
         <button mat-flat-button type="button" class="cp-flow-toolbar__run" (click)="run()"
-                [disabled]="!activated() || busy() || flowBlockedReason() !== null"
-                [title]="flowBlockedReason() || (activated() ? 'Run the pipeline' : 'Activate the pipeline to run it')">
+                [disabled]="!activated() || busy()"
+                [title]="activated() ? 'Run the pipeline' : 'Activate the pipeline to run it'">
           <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>
           Run
         </button>
@@ -75,13 +70,6 @@
       <input #fileInput type="file" accept="application/json" hidden (change)="importPipeline($event)" />
     </div>
   </header>
-
-  @if (flowBlockedReason(); as reason) {
-    <div class="cp-flow-readonly-reason" role="status">
-      <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
-      {{ reason }}
-    </div>
-  }
 
   <div class="cp-flow-body">
     <aside class="cp-flow-panel cp-flow-panel--left" [class.cp-flow-panel--collapsed]="paletteCollapsed()">

@@ -24,12 +24,10 @@
           <input class="cp-flow-boundary__label"
                  [ngModel]="boundary.label"
                  (ngModelChange)="setBoundaryLabel(boundary, $event)"
-                 [readonly]="layoutOnly()"
                  (pointerdown)="$event.stopPropagation()"
                  placeholder="Boundary" />
           <button mat-icon-button type="button" class="cp-flow-boundary__delete"
                   title="Delete boundary"
-                  [disabled]="layoutOnly()"
                   (pointerdown)="$event.stopPropagation()" (click)="removeBoundary($event, boundary)">
             <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
           </button>
@@ -120,8 +118,7 @@
 
         <div class="cp-flow-node__footer">
           <span class="cp-flow-node__badge">{{ badgeLabel(node) }}</span>
-          @if (!layoutOnly()) {
-            <div class="cp-flow-node__actions">
+          <div class="cp-flow-node__actions">
             <button mat-icon-button type="button" class="cp-flow-node__action"
                     title="Configure" (pointerdown)="$event.stopPropagation()" (click)="configure($event, node)">
               <mat-icon fontSet="al" fontIcon="al-ico-configuration"></mat-icon>
@@ -134,16 +131,13 @@
                     title="Delete" (pointerdown)="$event.stopPropagation()" (click)="remove($event, node)">
               <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
             </button>
-            </div>
-          }
+          </div>
         </div>
 
-        @if (!layoutOnly()) {
-          <span class="cp-flow-handle cp-flow-handle--out"
+        <span class="cp-flow-handle cp-flow-handle--out"
               [attr.data-node-id]="node.id"
               title="Drag to connect"
               (pointerdown)="onOutputPointerDown($event, node)"></span>
-        }
       </div>
     }
   </div>

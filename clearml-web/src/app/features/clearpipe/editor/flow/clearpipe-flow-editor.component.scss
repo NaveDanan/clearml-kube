@@ -55,23 +55,6 @@
     min-width: 0;
   }
 
-  .cp-flow-readonly-reason {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    color: #9a6700;
-    background: color-mix(in srgb, #f59e0b 13%, var(--cp-surface, #fff));
-    border-bottom: 1px solid var(--cp-border, #e0e3e7);
-    font-size: 13px;
-
-    mat-icon {
-      width: 16px;
-      height: 16px;
-      font-size: 16px;
-    }
-  }
-
   &__group--identity {
     flex: 1;
     min-width: 0;

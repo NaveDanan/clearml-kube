@@ -220,10 +220,9 @@ export const CLEARPIPE_FLOW_NODE_TYPES: readonly ClearpipeFlowNodeTypeMeta[] = [
     categoryLabel: 'Tasks',
     accent: '#a855f7',
     defaults: {
-      baseTaskId: '',
-      cloneBaseTask: true,
-      cache: false,
-      queueResourceId: '',
+      project: '',
+      taskIds: [] as string[],
+      queue: '',
     },
   },
   {
