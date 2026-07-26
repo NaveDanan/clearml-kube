@@ -4,6 +4,7 @@ from apiserver.apimodels.autoscaler import (
     GetExecutionRequest,
     GetDashboardRequest,
     GetProjectResourcesRequest,
+    GetTemplateRequest,
     DeleteWorkloadRequest,
     StopWorkloadRequest,
     SaveAppInstanceRequest,
@@ -93,6 +94,13 @@ def get_dashboard(call: APICall, company: str, _: GetDashboardRequest):
 @endpoint("autoscaler.get_project_resources")
 def get_project_resources(call: APICall, company: str, request: GetProjectResourcesRequest):
     call.result.data = autoscaler_bll.get_project_resources(company, request.project)
+
+
+@endpoint("autoscaler.get_template")
+def get_template(call: APICall, company: str, request: GetTemplateRequest):
+    call.result.data = autoscaler_bll.get_template(
+        company, request.name, request.project
+    )
 
 
 @endpoint("autoscaler.save_app_instance")

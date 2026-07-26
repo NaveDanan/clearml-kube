@@ -1112,6 +1112,26 @@ header {
   margin-top: 12px;
 }
 
+.asset-section-note {
+  margin: 0 0 12px;
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.template-load-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--color-on-surface-variant);
+  font-size: 12px;
+
+  &--error {
+    color: var(--color-error);
+  }
+}
+
 /* ── Asset cards ── */
 
 .asset-cards {

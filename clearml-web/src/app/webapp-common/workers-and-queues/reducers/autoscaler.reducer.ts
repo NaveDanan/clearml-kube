@@ -6,6 +6,7 @@ import {
   AutoscalerExecution,
   AutoscalerProjectResources,
   AutoscalerSettingsData,
+  AutoscalerTemplateResult,
   AutoscalerWorkloadLogs,
   AutoscalerWorkloadInfo
 } from '../actions/autoscaler.actions';
@@ -20,6 +21,8 @@ export interface AutoscalerState {
   dashboardError: string | null;
   projectResources: AutoscalerProjectResources | null;
   projectResourcesLoading: boolean;
+  template: AutoscalerTemplateResult | null;
+  templateLoading: boolean;
   workloadLogs: AutoscalerWorkloadLogs | null;
   workloadLogsLoading: boolean;
   workloadInfo: AutoscalerWorkloadInfo | null;
@@ -36,6 +39,8 @@ export const initialState: AutoscalerState = {
   dashboardError: null,
   projectResources: null,
   projectResourcesLoading: false,
+  template: null,
+  templateLoading: false,
   workloadLogs: null,
   workloadLogsLoading: false,
   workloadInfo: null,
@@ -83,6 +88,21 @@ export const autoscalerReducer = createReducer(
     ...state,
     projectResources: resources,
     projectResourcesLoading: false,
+  })),
+  on(autoscalerActions.getTemplate, (state) => ({
+    ...state,
+    template: null,
+    templateLoading: true,
+  })),
+  on(autoscalerActions.setTemplate, (state, {template}) => ({
+    ...state,
+    template,
+    templateLoading: false,
+  })),
+  on(autoscalerActions.clearTemplate, (state) => ({
+    ...state,
+    template: null,
+    templateLoading: false,
   })),
   on(autoscalerActions.setWorkloadLogsLoading, (state, {loading}) => ({
     ...state,

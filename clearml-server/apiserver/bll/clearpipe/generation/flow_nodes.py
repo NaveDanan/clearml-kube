@@ -196,12 +196,16 @@ def _autoscaler_workload(
 
     if not payload.get("command"):
         payload["command"] = "clearml-agent daemon"
-    if not payload.get("image") and not payload.get("environment"):
+    if (
+        not payload.get("image")
+        and not payload.get("environment")
+        and not payload.get("template")
+    ):
         raise _error(
             "CPSEM004",
             path + ".flow.image",
             node_id,
-            "autoscaler requires a container image or Run:ai environment",
+            "autoscaler requires a Run:ai template, environment, or container image",
         )
     _reject_value_secrets(payload, path + ".flow.workload", node_id)
     return payload

@@ -245,6 +245,71 @@
       <!-- ============================================================ -->
       <mat-accordion class="full-width workload-accordion" multi>
 
+        <!-- 1. WORKLOAD TEMPLATE -->
+        <mat-expansion-panel class="workload-panel">
+          <mat-expansion-panel-header>
+            <mat-panel-title>Workload Template</mat-panel-title>
+            @if (workloadForm.controls.template.value) {
+              <mat-panel-description>
+                {{ templateLoading() ? 'Loading…' : workloadForm.controls.template.value }}
+              </mat-panel-description>
+            }
+          </mat-expansion-panel-header>
+
+          <p class="asset-section-note">
+            Select one Run:ai template to fill the complete workload form. You can adjust any populated field before submitting.
+          </p>
+          <div class="asset-cards">
+            @for (resource of pagedTemplates(); track resource.name) {
+              <button type="button" class="asset-card"
+                      [class.selected]="isTemplateSelected(resource)"
+                      (click)="selectTemplate(resource)">
+                <span class="asset-card-badge">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </span>
+                <span class="asset-card-icon">
+                  <svg viewBox="0 0 50 50" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M14 7h16l7 7v29H14z"></path>
+                    <path d="M30 7v8h7M20 23h11M20 29h11M20 35h8"></path>
+                  </svg>
+                </span>
+                <span class="asset-card-name">{{ resource.name }}</span>
+                <span class="asset-card-meta">
+                  @if (resource.workload_type) { <span>{{ resource.workload_type | titlecase }}</span> }
+                  @if (resource.scope) { <span>Scope: {{ resource.scope }}</span> }
+                </span>
+              </button>
+            } @empty {
+              <div class="asset-empty-card">
+                @if (projectResourcesLoading()) {
+                  <mat-spinner diameter="20"></mat-spinner>
+                  <span>Loading workload templates…</span>
+                } @else {
+                  <mat-icon fontSet="al" fontIcon="al-ico-info-circle-outline"></mat-icon>
+                  <span>{{ assetEmptyLabel() }}</span>
+                }
+              </div>
+            }
+          </div>
+          @if (templatePageCount() > 1) {
+            <div class="asset-pagination">
+              @for (p of pageArray(templatePageCount()); track p) {
+                <button type="button" class="asset-page-num"
+                        [class.active]="templatePage() === p"
+                        (click)="templatePage.set(p)">{{ p + 1 }}</button>
+              }
+            </div>
+          }
+          @if (templateLoading()) {
+            <div class="template-load-status"><mat-spinner diameter="18"></mat-spinner> Loading template defaults…</div>
+          } @else if (selectedTemplate()?.error) {
+            <div class="template-load-status template-load-status--error">
+              <mat-icon fontSet="al" fontIcon="al-ico-alert"></mat-icon>
+              {{ selectedTemplate()?.error }}
+            </div>
+          }
+        </mat-expansion-panel>
+
         <!-- ── 1. ENVIRONMENT ── -->
         <mat-expansion-panel class="workload-panel">
           <mat-expansion-panel-header>
@@ -312,11 +377,6 @@
             <mat-form-field appearance="outline">
               <mat-label>Container Image</mat-label>
               <input matInput formControlName="image" placeholder="e.g. ubuntu:latest">
-            </mat-form-field>
-
-            <mat-form-field appearance="outline">
-              <mat-label>Template</mat-label>
-              <input matInput formControlName="template" placeholder="Optional template name">
             </mat-form-field>
 
             @if (workloadForm.controls.workload_type.value === 'training') {
@@ -658,7 +718,7 @@
     <div class="submit-actions dialog-actions">
       <button mat-stroked-button type="button" (click)="resetWorkload()">RESET</button>
       <button mat-flat-button type="button"
-              [disabled]="connectionForm.invalid || workloadForm.invalid"
+              [disabled]="connectionForm.invalid || !workloadReady()"
               (click)="submitWorkload()">SUBMIT WORKLOAD
       </button>
     </div>

@@ -61,6 +61,10 @@ export class ApiAutoscalerService {
     return this.apiRequest.post<any>(`${this.basePath}/autoscaler.get_project_resources`, request);
   }
 
+  public autoscalerGetTemplate(request: object): Observable<any> {
+    return this.apiRequest.post<any>(`${this.basePath}/autoscaler.get_template`, request);
+  }
+
   public autoscalerSaveAppInstance(request: object): Observable<any> {
     return this.apiRequest.post<any>(`${this.basePath}/autoscaler.save_app_instance`, request);
   }

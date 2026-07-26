@@ -1077,6 +1077,71 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertIn(["runai-v2", "environment", "list", "--json", "-p", "project-a"], seen)
         self.assertIn(["runai-v2", "datasource", "list", "--json", "-p", "project-a"], seen)
 
+    def test_template_commands_use_runai_v2_list_and_describe_contract(self):
+        conn = SimpleNamespace(runai_cli_version="v2")
+
+        with patch.object(autoscaler_mod.shutil, "which", return_value="/bin/runai-v2"):
+            list_commands = self.bll._template_list_commands(conn, "project-a")
+            describe_commands = self.bll._template_describe_commands(
+                conn, "template-a", "project-a"
+            )
+
+        self.assertEqual(
+            list_commands[0],
+            ["runai-v2", "template", "list", "--json", "-p", "project-a"],
+        )
+        self.assertEqual(
+            describe_commands[0],
+            [
+                "runai-v2",
+                "template",
+                "describe",
+                "template-a",
+                "-o",
+                "json",
+                "-p",
+                "project-a",
+            ],
+        )
+
+    def test_template_description_maps_complete_workload_defaults(self):
+        detail = {
+            "name": "template-a",
+            "workloadType": "Workspace",
+            "spec": {
+                "image": "repo/workspace:latest",
+                "command": ["python", "serve.py"],
+                "args": ["--port", "8080"],
+                "environment": {"name": "environment-a"},
+                "compute": {"name": "compute-a"},
+                "dataSources": [{"name": "data-a", "type": "pvc"}],
+                "gpuDevicesRequest": 1,
+                "cpuCoreRequest": "2",
+                "workingDir": "/workspace",
+                "environmentVariables": [{"name": "MODE", "value": "prod"}],
+            },
+        }
+
+        workload = self.bll._template_workload(
+            "template-a", "project-a", detail
+        )
+
+        self.assertEqual(workload["template"], "template-a")
+        self.assertEqual(workload["workload_type"], "workspace")
+        self.assertEqual(workload["image"], "repo/workspace:latest")
+        self.assertEqual(workload["command"], "python serve.py")
+        self.assertEqual(workload["args"], "--port 8080")
+        self.assertEqual(workload["environment"], "environment-a")
+        self.assertEqual(workload["compute"], "compute-a")
+        self.assertEqual(
+            json.loads(workload["data_sources"]),
+            [{"name": "data-a", "type": "pvc"}],
+        )
+        self.assertEqual(workload["gpu_devices_request"], "1")
+        self.assertEqual(workload["cpu_core_request"], "2")
+        self.assertEqual(workload["working_dir"], "/workspace")
+        self.assertEqual(workload["environment_variables"], "MODE=prod")
+
     def test_submit_command_includes_selected_asset_cards(self):
         workload = self.bll._workload_from_execution(SimpleNamespace(
             workload_params=json.dumps(self._workload(
@@ -1096,6 +1161,33 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertIn(["--environment", "environment-a"], [command[index:index + 2] for index in range(len(command) - 1)])
         self.assertNotIn("environment-b", command)
         self.assertIn(["--datasource", "type=pvc,name=data-a"], [command[index:index + 2] for index in range(len(command) - 1)])
+
+    def test_submit_command_uses_selected_template_and_explicit_overrides(self):
+        workload = self.bll._workload_from_execution(SimpleNamespace(
+            workload_params=json.dumps(self._workload(
+                template="template-a",
+                compute="compute-a",
+                image="repo/override:latest",
+            ).to_struct()),
+        ))
+
+        with patch.object(autoscaler_mod.shutil, "which", return_value="/bin/runai-v2"):
+            command = self.bll._build_workload_cmds(
+                SimpleNamespace(runai_cli_version="v2"), workload
+            )[0]
+
+        self.assertIn(
+            ["--template", "template-a"],
+            [command[index:index + 2] for index in range(len(command) - 1)],
+        )
+        self.assertIn(
+            ["-i", "repo/override:latest"],
+            [command[index:index + 2] for index in range(len(command) - 1)],
+        )
+        self.assertIn(
+            ["--compute", "compute-a"],
+            [command[index:index + 2] for index in range(len(command) - 1)],
+        )
 
     def test_submit_command_places_name_and_custom_command_around_args_marker(self):
         workload = self.bll._workload_from_execution(SimpleNamespace(

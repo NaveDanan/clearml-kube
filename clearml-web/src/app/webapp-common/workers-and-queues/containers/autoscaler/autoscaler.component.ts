@@ -21,6 +21,8 @@ import {
   AutoscalerComputeResource,
   AutoscalerDataSourceResource,
   AutoscalerEnvironmentResource,
+  AutoscalerTemplateResource,
+  AutoscalerWorkloadData,
 } from '../../actions/autoscaler.actions';
 import {
   selectAutoscalerSettings,
@@ -32,6 +34,8 @@ import {
   selectAutoscalerLastExecution,
   selectAutoscalerProjectResources,
   selectAutoscalerProjectResourcesLoading,
+  selectAutoscalerTemplate,
+  selectAutoscalerTemplateLoading,
   selectAutoscalerWorkloadLogs,
   selectAutoscalerWorkloadLogsLoading,
   selectAutoscalerWorkloadInfo,
@@ -170,14 +174,24 @@ export class AutoscalerComponent implements OnDestroy {
   protected computeResources = computed<AutoscalerComputeResource[]>(() => this.projectResources()?.compute ?? []);
   protected environmentResources = computed<AutoscalerEnvironmentResource[]>(() => this.projectResources()?.environments ?? []);
   protected dataSourceResources = computed<AutoscalerDataSourceResource[]>(() => this.projectResources()?.data_sources ?? []);
+  protected templateResources = computed<AutoscalerTemplateResource[]>(() => this.projectResources()?.templates ?? []);
   protected nodePoolResources = computed<string[]>(() => this.projectResources()?.node_pools ?? []);
-  // Asset-card pagination (Environment / Compute / Data Sources)
+  protected selectedTemplate = this.store.selectSignal(selectAutoscalerTemplate);
+  protected templateLoading = this.store.selectSignal(selectAutoscalerTemplateLoading);
+  // Asset-card pagination (Templates / Environment / Compute / Data Sources)
+  protected templatePage = signal(0);
   protected environmentPage = signal(0);
   protected computePage = signal(0);
   protected dataSourcePage = signal(0);
+  protected templatePageCount = computed(() => Math.max(1, Math.ceil(this.templateResources().length / ASSET_PAGE_SIZE)));
   protected environmentPageCount = computed(() => Math.max(1, Math.ceil(this.environmentResources().length / ASSET_PAGE_SIZE)));
   protected computePageCount = computed(() => Math.max(1, Math.ceil(this.computeResources().length / ASSET_PAGE_SIZE)));
   protected dataSourcePageCount = computed(() => Math.max(1, Math.ceil(this.dataSourceResources().length / ASSET_PAGE_SIZE)));
+  protected pagedTemplates = computed(() => {
+    const all = this.templateResources();
+    const page = Math.min(this.templatePage(), this.templatePageCount() - 1);
+    return all.slice(page * ASSET_PAGE_SIZE, (page + 1) * ASSET_PAGE_SIZE);
+  });
   protected pagedEnvironments = computed(() => {
     const all = this.environmentResources();
     const page = Math.min(this.environmentPage(), this.environmentPageCount() - 1);
@@ -535,7 +549,7 @@ export class AutoscalerComponent implements OnDestroy {
     workload_type: ['training' as WorkloadType, Validators.required],
     workload_name: ['', Validators.required],
     project: [''],
-    image: ['', Validators.required],
+    image: [''],
     command_override: [false],
     command: [''],
     args: [''],
@@ -592,6 +606,11 @@ export class AutoscalerComponent implements OnDestroy {
     this.updateConnectionValidators();
     this.formSubscription.add(this.workloadForm.controls.project.valueChanges.subscribe(project => {
       this.projectFilter.set(project || '');
+      if (this.workloadForm.controls.template.value) {
+        this.workloadForm.controls.template.setValue('', {emitEvent: false});
+        this.store.dispatch(autoscalerActions.clearTemplate());
+        this.lastAppliedTemplateKey = '';
+      }
     }));
     this.formSubscription.add(this.workloadForm.controls.project.valueChanges.pipe(
       debounceTime(400),
@@ -604,6 +623,24 @@ export class AutoscalerComponent implements OnDestroy {
       }
 
       this.patchConnectionFormFromSettings();
+    });
+
+    effect(() => {
+      const result = this.selectedTemplate();
+      if (!result?.connected || !result.workload) {
+        return;
+      }
+      const selectedName = this.workloadForm.controls.template.value || '';
+      const selectedProject = this.workloadForm.controls.project.value || '';
+      if (result.name !== selectedName || (result.project || '') !== selectedProject) {
+        return;
+      }
+      const applyKey = `${result.name}|${result.project || ''}|${JSON.stringify(result.workload)}`;
+      if (applyKey === this.lastAppliedTemplateKey) {
+        return;
+      }
+      this.lastAppliedTemplateKey = applyKey;
+      untracked(() => this.applyTemplateWorkload(result.workload!));
     });
 
     // Drive the app-instance-specific console log: fetch + periodically refresh
@@ -976,6 +1013,8 @@ export class AutoscalerComponent implements OnDestroy {
   resetWorkload() {
     const project = this.settings()?.runai_project || '';
     this.workloadForm.reset({workload_type: 'training', project}, {emitEvent: false});
+    this.store.dispatch(autoscalerActions.clearTemplate());
+    this.lastAppliedTemplateKey = '';
     this.projectFilter.set(project);
     this.setEnvVars([]);
     this.addEnvVar('', '', false);
@@ -1082,13 +1121,16 @@ export class AutoscalerComponent implements OnDestroy {
       .join(',');
   }
 
-  // --- Project resources (interactive compute / data source / environment) ---
+  // --- Project resources (interactive templates / compute / data source / environment) ---
+
+  private lastAppliedTemplateKey = '';
 
   protected loadProjectResources(project: string) {
     if (this.selectedProvider() !== 'runai') {
       return;
     }
     project = project.trim();
+    this.templatePage.set(0);
     this.environmentPage.set(0);
     this.computePage.set(0);
     this.dataSourcePage.set(0);
@@ -1100,6 +1142,7 @@ export class AutoscalerComponent implements OnDestroy {
           compute: [],
           environments: [],
           data_sources: [],
+          templates: [],
           node_pools: [],
         },
       }));
@@ -1126,6 +1169,24 @@ export class AutoscalerComponent implements OnDestroy {
   protected selectProject(project: string) {
     this.workloadForm.controls.project.setValue(project);
     this.workloadForm.markAsDirty();
+  }
+
+  protected selectTemplate(resource: AutoscalerTemplateResource) {
+    const project = this.workloadForm.controls.project.value || '';
+    const selected = this.workloadForm.controls.template.value === resource.name;
+    this.lastAppliedTemplateKey = '';
+    if (selected) {
+      this.workloadForm.controls.template.setValue('');
+      this.store.dispatch(autoscalerActions.clearTemplate());
+    } else {
+      this.workloadForm.controls.template.setValue(resource.name);
+      this.store.dispatch(autoscalerActions.getTemplate({name: resource.name, project}));
+    }
+    this.workloadForm.markAsDirty();
+  }
+
+  protected isTemplateSelected(resource: AutoscalerTemplateResource) {
+    return this.workloadForm.controls.template.value === resource.name;
   }
 
   protected selectCompute(resource: AutoscalerComputeResource) {
@@ -1217,6 +1278,15 @@ export class AutoscalerComponent implements OnDestroy {
 
   protected isDataSourceSelected(resource: AutoscalerDataSourceResource) {
     return this.selectedDataSources().includes(resource.name);
+  }
+
+  protected workloadReady(): boolean {
+    const controls = this.workloadForm.controls;
+    return this.workloadForm.valid && !!(
+      controls.image.value?.trim() ||
+      controls.environment.value?.trim() ||
+      controls.template.value?.trim()
+    );
   }
 
   private getWorkloadValue(): WorkloadFormValue {
@@ -1327,7 +1397,7 @@ export class AutoscalerComponent implements OnDestroy {
     return ['completed', 'succeeded', 'success', 'finished'].includes((status || '').toLowerCase());
   }
 
-  private applyImportedWorkload(workload: WorkloadFormValue, markDirty = true) {
+  private applyImportedWorkload(workload: WorkloadFormValue, markDirty = true, emitEvent = true) {
     this.workloadForm.patchValue({
       workload_type: workload.workload_type || 'training',
       workload_name: workload.workload_name || '',
@@ -1366,13 +1436,28 @@ export class AutoscalerComponent implements OnDestroy {
       metric: workload.metric || '',
       metric_threshold: workload.metric_threshold || '',
       scale_to_zero_retention: workload.scale_to_zero_retention || '',
-    });
+    }, {emitEvent});
     this.setEnvVarsFromString(workload.environment_variables);
     const normalized = this.getWorkloadValue();
     if (markDirty) {
       this.rememberLocalWorkload(normalized);
       this.workloadForm.markAsDirty();
     }
+  }
+
+  private applyTemplateWorkload(workload: Partial<AutoscalerWorkloadData>) {
+    const workloadName = this.workloadForm.controls.workload_name.value || '';
+    const project = this.workloadForm.controls.project.value || '';
+    const workloadType = ['training', 'workspace', 'inference'].includes(workload.workload_type || '')
+      ? workload.workload_type as WorkloadType
+      : this.workloadForm.controls.workload_type.value || 'training';
+    this.applyImportedWorkload({
+      ...workload as WorkloadFormValue,
+      workload_type: workloadType,
+      workload_name: workloadName,
+      project,
+    }, false, false);
+    this.workloadForm.markAsDirty();
   }
 
   private rememberLocalWorkload(workload: WorkloadFormValue) {

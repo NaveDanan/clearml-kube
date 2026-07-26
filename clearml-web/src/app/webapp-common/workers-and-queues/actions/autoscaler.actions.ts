@@ -51,6 +51,12 @@ export interface AutoscalerDataSourceResource {
   path?: string;
 }
 
+export interface AutoscalerTemplateResource {
+  name: string;
+  workload_type?: string;
+  scope?: string;
+}
+
 export interface AutoscalerProjectResources {
   connected?: boolean;
   error?: string;
@@ -61,6 +67,7 @@ export interface AutoscalerProjectResources {
   compute?: AutoscalerComputeResource[];
   environments?: AutoscalerEnvironmentResource[];
   data_sources?: AutoscalerDataSourceResource[];
+  templates?: AutoscalerTemplateResource[];
   node_pools?: string[];
 }
 
@@ -107,6 +114,17 @@ export interface AutoscalerWorkloadData {
   metric?: string;
   metric_threshold?: string;
   scale_to_zero_retention?: string;
+}
+
+export interface AutoscalerTemplateResult {
+  connected?: boolean;
+  error?: string;
+  refreshing?: boolean;
+  execution_id?: string;
+  name: string;
+  project?: string;
+  workload?: Partial<AutoscalerWorkloadData>;
+  console_log?: Array<Record<string, unknown>>;
 }
 
 export interface AutoscalerExecution {
@@ -250,6 +268,9 @@ export const autoscalerActions = createActionGroup({
     'Get Project Resources': props<{project: string}>(),
     'Set Project Resources Loading': props<{loading: boolean}>(),
     'Set Project Resources': props<{resources: AutoscalerProjectResources}>(),
+    'Get Template': props<{name: string; project: string}>(),
+    'Set Template': props<{template: AutoscalerTemplateResult}>(),
+    'Clear Template': emptyProps(),
     'Delete Workload': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),
     'Stop Workload': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),
     'Get Workload Logs': props<{workload: {instance_id?: string; workload_name: string; workload_type?: string; project?: string}}>(),

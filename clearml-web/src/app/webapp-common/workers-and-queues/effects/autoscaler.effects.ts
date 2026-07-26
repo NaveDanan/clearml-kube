@@ -1,7 +1,7 @@
 import {Injectable} from '@angular/core';
 import {Actions, createEffect, ofType} from '@ngrx/effects';
 import {concat, of, timer} from 'rxjs';
-import {catchError, exhaustMap, map, startWith, switchMap, takeWhile} from 'rxjs/operators';
+import {catchError, exhaustMap, map, startWith, switchMap, takeUntil, takeWhile} from 'rxjs/operators';
 import {AutoscalerExecution, autoscalerActions} from '../actions/autoscaler.actions';
 import {addMessage, setNotificationDialog, setServerError} from '@common/core/actions/layout.actions';
 import {ApiAutoscalerService} from '~/business-logic/api-services/autoscaler.service';
@@ -156,6 +156,29 @@ export class AutoscalerEffects {
     )),
   ));
 
+  getTemplate = createEffect(() => this.actions$.pipe(
+    ofType(autoscalerActions.getTemplate),
+    switchMap(action => this.autoscalerApi.autoscalerGetTemplate({
+      name: action.name,
+      project: action.project,
+    }).pipe(
+      switchMap((res: any) => res?.connected
+        ? concat(of(autoscalerActions.setTemplate({template: res})), this.pollTemplate(res))
+        : this.pollTemplate(res)),
+      catchError(error => this.requestErrorActions(error, 'Failed to load Run:ai workload template', [
+        autoscalerActions.setTemplate({
+          template: {
+            connected: false,
+            name: action.name,
+            project: action.project,
+            error: this.errorMessage(error, 'Failed to load Run:ai workload template'),
+          },
+        }),
+      ])),
+      takeUntil(this.actions$.pipe(ofType(autoscalerActions.clearTemplate))),
+    )),
+  ));
+
   getWorkloadLogs = createEffect(() => this.actions$.pipe(
     ofType(autoscalerActions.getWorkloadLogs),
     switchMap(action => this.autoscalerApi.autoscalerGetWorkloadLogs(action.workload).pipe(
@@ -256,6 +279,42 @@ export class AutoscalerEffects {
       catchError(error => [
         autoscalerActions.setProjectResources({
           resources: {connected: false, project: res.project, error: this.errorMessage(error, 'Failed to load Run:ai project resources')},
+        }),
+      ]),
+    );
+  }
+
+  private pollTemplate(res: any) {
+    if (!res?.execution_id) {
+      return of(autoscalerActions.setTemplate({template: res ?? {name: ''}}));
+    }
+    return timer(EXECUTION_POLL_INTERVAL, EXECUTION_POLL_INTERVAL).pipe(
+      switchMap(() => this.autoscalerApi.autoscalerGetExecution({execution_id: res.execution_id})),
+      takeWhile((response: any) => this.isExecutionActive(response.status), true),
+      switchMap((response: any) => {
+        if (this.isExecutionActive(response.status)) {
+          return [];
+        }
+        if (response.result_data) {
+          return [autoscalerActions.setTemplate({template: response.result_data})];
+        }
+        return [autoscalerActions.setTemplate({
+          template: {
+            connected: false,
+            name: res.name || '',
+            project: res.project,
+            error: response.stderr || 'Failed to load Run:ai workload template',
+          },
+        })];
+      }),
+      catchError(error => [
+        autoscalerActions.setTemplate({
+          template: {
+            connected: false,
+            name: res.name || '',
+            project: res.project,
+            error: this.errorMessage(error, 'Failed to load Run:ai workload template'),
+          },
         }),
       ]),
     );

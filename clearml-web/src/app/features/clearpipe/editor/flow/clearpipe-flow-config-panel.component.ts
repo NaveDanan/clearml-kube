@@ -20,11 +20,14 @@ import {
 import {ClearpipeFlowStoreService} from './clearpipe-flow-store.service';
 import {
   clearpipeAutoscalerIssues,
+  AUTOSCALER_WORKLOAD_STRING_FIELDS,
 } from './clearpipe-autoscaler';
 import {
   AutoscalerComputeResource,
   AutoscalerDataSourceResource,
   AutoscalerEnvironmentResource,
+  AutoscalerTemplateResource,
+  AutoscalerTemplateResult,
   ClearpipeFlowResourcesService,
   FlowArtifact,
   FlowAutoscaler,
@@ -185,15 +188,18 @@ export class ClearpipeFlowConfigPanelComponent {
   protected readonly syncDatasetInfo = signal<FlowDatasetInfo | null>(null);
   protected readonly syncInfoLoading = signal(false);
 
-  // Run:ai project assets (Submit Workload parity): compute / environments /
-  // data sources / node pools / project list for the selected autoscaler project.
+  // Run:ai project assets (Submit Workload parity): templates / compute /
+  // environments / data sources / node pools for the selected project.
   protected readonly runaiProjects = signal<string[]>([]);
+  protected readonly templateResources = signal<AutoscalerTemplateResource[]>([]);
   protected readonly computeResources = signal<AutoscalerComputeResource[]>([]);
   protected readonly environmentResources = signal<AutoscalerEnvironmentResource[]>([]);
   protected readonly dataSourceResources = signal<AutoscalerDataSourceResource[]>([]);
   protected readonly nodePools = signal<string[]>([]);
   protected readonly assetsLoading = signal(false);
   protected readonly assetsMessage = signal('');
+  protected readonly templateLoading = signal(false);
+  protected readonly templateMessage = signal('');
   protected readonly autoscalerIssues = computed(() => {
     const node = this.node();
     return node?.type === 'autoscaler' && String(node.config['mode'] ?? 'spinup') === 'spinup'
@@ -300,6 +306,7 @@ export class ClearpipeFlowConfigPanelComponent {
     if (!force && trimmed === this.lastAssetProject) return;
     this.lastAssetProject = trimmed;
     if (!trimmed) {
+      this.templateResources.set([]);
       this.computeResources.set([]);
       this.environmentResources.set([]);
       this.dataSourceResources.set([]);
@@ -311,6 +318,7 @@ export class ClearpipeFlowConfigPanelComponent {
     this.assetsMessage.set('');
     this.resources.getProjectResources(trimmed).subscribe((resources) => {
       this.assetsLoading.set(false);
+      this.templateResources.set(resources?.templates ?? []);
       this.computeResources.set(resources?.compute ?? []);
       this.environmentResources.set(resources?.environments ?? []);
       this.dataSourceResources.set(resources?.data_sources ?? []);
@@ -318,13 +326,79 @@ export class ClearpipeFlowConfigPanelComponent {
       if (resources?.projects?.length) this.runaiProjects.set(resources.projects);
       if (!resources || resources.connected === false) {
         this.assetsMessage.set(resources?.error || 'Could not load Run:ai assets. Enter values manually below.');
-      } else if (!(resources.compute?.length || resources.environments?.length || resources.data_sources?.length)) {
+      } else if (!(resources.templates?.length || resources.compute?.length || resources.environments?.length || resources.data_sources?.length)) {
         this.assetsMessage.set('No assets found for this project. Enter values manually below.');
       }
     });
   }
 
   // --- Run:ai asset selection (auto-fills the workload config) --------------
+  protected isTemplateSelected(resource: AutoscalerTemplateResource): boolean {
+    return this.cfg('template') === resource.name;
+  }
+
+  protected selectTemplate(resource: AutoscalerTemplateResource): void {
+    const node = this.node();
+    if (!node) return;
+    if (this.isTemplateSelected(resource)) {
+      this.store.updateNodeConfig(node.id, 'template', '');
+      this.templateLoading.set(false);
+      this.templateMessage.set('');
+      return;
+    }
+
+    const project = this.cfg('project');
+    this.store.updateNodeConfig(node.id, 'template', resource.name);
+    this.templateLoading.set(true);
+    this.templateMessage.set('');
+    this.resources.getTemplate(resource.name, project).subscribe((result) => {
+      const current = this.node();
+      if (!current || current.id !== node.id || this.cfg('template') !== resource.name) return;
+      this.templateLoading.set(false);
+      if (!result?.connected || !result.workload) {
+        this.templateMessage.set(result?.error || `Could not load Run:ai template "${resource.name}".`);
+        return;
+      }
+      this.applyTemplateWorkload(result);
+    });
+  }
+
+  private applyTemplateWorkload(result: AutoscalerTemplateResult): void {
+    const node = this.node();
+    const workload = result.workload;
+    if (!node || !workload) return;
+    const config: Record<string, unknown> = {
+      ...node.config,
+      template: result.name,
+      workload_type: ['training', 'workspace', 'inference'].includes(workload.workload_type || '')
+        ? workload.workload_type
+        : 'training',
+      large_shm: workload.large_shm === true,
+    };
+    for (const field of AUTOSCALER_WORKLOAD_STRING_FIELDS) {
+      if (field === 'project' || field === 'template' || field === 'data_sources') continue;
+      config[field] = workload[field] ?? '';
+    }
+    config['data_sources'] = this.templateDataSourceNames(workload.data_sources);
+    this.store.updateNode(node.id, {config});
+  }
+
+  private templateDataSourceNames(value?: string): string[] {
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => typeof item === 'string' ? item : item?.name)
+          .filter((name): name is string => typeof name === 'string' && !!name.trim())
+          .map((name) => name.trim());
+      }
+    } catch {
+      // Older Run:ai outputs and saved workloads may use comma-separated names.
+    }
+    return value.split(',').map((name) => name.trim()).filter(Boolean);
+  }
+
   protected isComputeSelected(resource: AutoscalerComputeResource): boolean {
     return this.cfg('compute') === resource.name;
   }
@@ -483,12 +557,21 @@ export class ClearpipeFlowConfigPanelComponent {
     const autoscaler = this.autoscalers().find((item) => item.name === name);
     this.store.updateNodeConfig(node.id, 'autoscaler', name);
     if (autoscaler?.project) {
+      if (this.cfg('project') !== autoscaler.project) {
+        this.store.updateNodeConfig(node.id, 'template', '');
+        this.templateMessage.set('');
+      }
       this.store.updateNodeConfig(node.id, 'project', autoscaler.project);
       this.loadProjectResources(autoscaler.project, true);
     }
   }
 
   protected setAutoscalerProject(project: string): void {
+    if (this.cfg('project') !== project) {
+      this.setCfg('template', '');
+      this.templateMessage.set('');
+      this.templateLoading.set(false);
+    }
     this.setCfg('project', project);
     this.loadProjectResources(project, true);
   }

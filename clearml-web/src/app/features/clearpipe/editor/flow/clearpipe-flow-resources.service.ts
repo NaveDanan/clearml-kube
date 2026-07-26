@@ -9,6 +9,8 @@ import {
   AutoscalerDataSourceResource,
   AutoscalerEnvironmentResource,
   AutoscalerProjectResources,
+  AutoscalerTemplateResource,
+  AutoscalerTemplateResult,
 } from '@common/workers-and-queues/actions/autoscaler.actions';
 
 export type {
@@ -16,6 +18,8 @@ export type {
   AutoscalerDataSourceResource,
   AutoscalerEnvironmentResource,
   AutoscalerProjectResources,
+  AutoscalerTemplateResource,
+  AutoscalerTemplateResult,
 };
 
 export interface FlowResourceOption {
@@ -575,6 +579,17 @@ export class ClearpipeFlowResourcesService {
       .pipe(
         switchMap((response) => this.resolveAsync(response)),
         map((response) => (response as AutoscalerProjectResources) ?? null),
+        catchError(() => of(null)),
+      );
+  }
+
+  /** Describe one selected template and resolve its complete workload defaults. */
+  getTemplate(name: string, project: string): Observable<AutoscalerTemplateResult | null> {
+    return this.requests
+      .post<FlowExecutionResult>(this.url('autoscaler.get_template'), {name, project})
+      .pipe(
+        switchMap((response) => this.resolveAsync(response)),
+        map((response) => (response as unknown as AutoscalerTemplateResult) ?? null),
         catchError(() => of(null)),
       );
   }

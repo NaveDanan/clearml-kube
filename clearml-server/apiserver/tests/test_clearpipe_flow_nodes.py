@@ -937,7 +937,23 @@ class AutoscalerNodeLoweringTests(unittest.TestCase):
             )
 
         self.assertEqual(raised.exception.diagnostics[0].code, "CPSEM004")
-        self.assertIn("container image or Run:ai environment", raised.exception.diagnostics[0].message)
+        self.assertIn("Run:ai template, environment, or container image", raised.exception.diagnostics[0].message)
+
+    def test_autoscaler_template_is_a_complete_workload_definition(self):
+        source = _compile_graph(
+            [
+                _autoscaler_flow_node(
+                    {
+                        "mode": "spinup",
+                        "workloadName": "agent",
+                        "template": "managed-agent-template",
+                    }
+                )
+            ],
+            [],
+        )
+
+        self.assertIn('"template": "managed-agent-template"', source)
 
     def test_generated_program_is_valid_python(self):
         import ast

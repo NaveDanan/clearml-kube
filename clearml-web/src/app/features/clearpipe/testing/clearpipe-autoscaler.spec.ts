@@ -74,7 +74,12 @@ describe('ClearPipe AutoScaler Submit Workload contract', () => {
     }))).toEqual([]);
   });
 
-  it('accepts a RunAI environment without a duplicate image and rejects neither', () => {
+  it('accepts a RunAI template or environment without requiring a duplicate image', () => {
+    expect(clearpipeAutoscalerIssues(autoscalerNode({
+      workloadName: 'agent-worker',
+      template: 'managed-agent-template',
+    }))).toEqual([]);
+
     expect(clearpipeAutoscalerIssues(autoscalerNode({
       workloadName: 'agent-worker',
       environment: 'managed-agent-environment',
@@ -82,7 +87,7 @@ describe('ClearPipe AutoScaler Submit Workload contract', () => {
 
     expect(clearpipeAutoscalerIssues(autoscalerNode({
       workloadName: 'agent-worker',
-    }))).toContain('Select a RunAI environment or enter its container image.');
+    }))).toContain('Select a RunAI template or environment, or enter a container image.');
   });
 
   it('upgrades legacy saved nodes to the runtime defaults without persisting runtime state', () => {

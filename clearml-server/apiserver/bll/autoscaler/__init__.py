@@ -1641,7 +1641,7 @@ class AutoscalerBLL:
     def _collect_project_resources(self, conn, env: dict, project: str) -> dict:
         if (getattr(conn, "runai_cli_version", None) or "auto").lower() == "v1":
             raise RuntimeError(
-                "Run:ai compute resources, environments, and data sources require CLI v2"
+                "Run:ai workload templates, compute resources, environments, and data sources require CLI v2"
             )
         console_log = []
         self._set_runai_context(conn, env, project)

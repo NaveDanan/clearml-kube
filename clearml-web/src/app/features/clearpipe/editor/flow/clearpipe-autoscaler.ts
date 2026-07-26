@@ -1,7 +1,7 @@
 import {AutoscalerWorkloadData} from '@common/workers-and-queues/actions/autoscaler.actions';
 import {ClearpipeFlowNode} from './clearpipe-flow.models';
 
-const STRING_FIELDS: readonly (keyof AutoscalerWorkloadData)[] = [
+export const AUTOSCALER_WORKLOAD_STRING_FIELDS: readonly (keyof AutoscalerWorkloadData)[] = [
   'project',
   'image',
   'command',
@@ -62,7 +62,7 @@ export const clearpipeAutoscalerWorkload = (node: ClearpipeFlowNode): Autoscaler
     command: text(config['command']) || 'clearml-agent daemon',
   };
 
-  for (const field of STRING_FIELDS) {
+  for (const field of AUTOSCALER_WORKLOAD_STRING_FIELDS) {
     if (field === 'image' || field === 'command' || field === 'data_sources') continue;
     const value = text(config[field]);
     if (value) (workload as unknown as Record<string, unknown>)[field] = value;
@@ -79,8 +79,8 @@ export const clearpipeAutoscalerIssues = (node: ClearpipeFlowNode): string[] => 
     issues.push('Select a valid RunAI workload type.');
   }
   if (!workload.workload_name.trim()) issues.push('Enter a workload name.');
-  if (!workload.image.trim() && !text(node.config['environment'])) {
-    issues.push('Select a RunAI environment or enter its container image.');
+  if (!workload.image.trim() && !text(node.config['environment']) && !text(node.config['template'])) {
+    issues.push('Select a RunAI template or environment, or enter a container image.');
   }
   return issues;
 };

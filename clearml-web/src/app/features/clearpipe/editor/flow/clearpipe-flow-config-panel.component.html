@@ -282,6 +282,27 @@
             }
 
             <div class="field">
+              <label class="field-label">Workload template @if (templateLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
+              <p class="note">Select one template to fill the complete workload configuration. Populated values remain editable.</p>
+              <div class="asset-grid">
+                @for (template of templateResources(); track template.name) {
+                  <button type="button" class="asset-card" [class.asset-card--on]="isTemplateSelected(template)" (click)="selectTemplate(template)">
+                    <mat-icon fontSet="al" fontIcon="al-ico-pipelines"></mat-icon>
+                    <span class="asset-name">{{ template.name }}</span>
+                    <span class="asset-sub">
+                      {{ template.workload_type || 'Workload' }}@if (template.scope) { · {{ template.scope }} }
+                    </span>
+                  </button>
+                } @empty { <span class="asset-empty">No workload templates</span> }
+              </div>
+              @if (templateMessage()) {
+                <p class="note note--warn">
+                  <mat-icon fontSet="al" fontIcon="al-ico-alert"></mat-icon>{{ templateMessage() }}
+                </p>
+              }
+            </div>
+
+            <div class="field">
               <label class="field-label">Environments @if (assetsLoading()) { <mat-spinner diameter="12"></mat-spinner> }</label>
               <div class="asset-grid">
                 @for (env of environmentResources(); track env.name) {
@@ -320,18 +341,12 @@
               </div>
             </div>
 
-            <div class="field-row">
-              <div class="field">
-                <label class="field-label">Template</label>
-                <input type="text" [ngModel]="cfg('template')" (ngModelChange)="setCfg('template', $event)" placeholder="Optional RunAI template" />
-              </div>
-              <div class="field">
-                <label class="field-label">Node pool</label>
-                <select [ngModel]="cfg('node_pools')" (ngModelChange)="setCfg('node_pools', $event)">
-                  <option value="">Default</option>
-                  @for (pool of nodePools(); track pool) { <option [value]="pool">{{ pool }}</option> }
-                </select>
-              </div>
+            <div class="field">
+              <label class="field-label">Node pool</label>
+              <select [ngModel]="cfg('node_pools')" (ngModelChange)="setCfg('node_pools', $event)">
+                <option value="">Default</option>
+                @for (pool of nodePools(); track pool) { <option [value]="pool">{{ pool }}</option> }
+              </select>
             </div>
 
             <div class="field">

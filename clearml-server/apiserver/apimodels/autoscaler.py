@@ -87,6 +87,11 @@ class GetProjectResourcesRequest(Base):
     project = StringField()
 
 
+class GetTemplateRequest(Base):
+    name = StringField()
+    project = StringField()
+
+
 class DeleteWorkloadRequest(Base):
     instance_id = StringField()
     workload_name = StringField()
