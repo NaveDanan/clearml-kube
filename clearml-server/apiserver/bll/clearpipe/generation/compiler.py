@@ -36,6 +36,7 @@ from .contracts import (
     SourceMapEntry,
     TaskLoweringInput,
 )
+from .flow_boundaries import project_flow_boundaries
 
 
 _GENERATED_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
@@ -136,6 +137,7 @@ class ClearPipeCompiler:
     def compile(self, graph: GraphV2) -> GeneratedDefinition:
         """Return a pure Python definition; never launch or execute it."""
 
+        graph = project_flow_boundaries(graph).graph
         plan = _compile_plan(graph, self._lowerers)
         lowered = []
         for node in plan.topological_nodes:

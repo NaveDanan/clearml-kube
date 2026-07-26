@@ -19,6 +19,9 @@ import {
 } from './clearpipe-flow.models';
 import {ClearpipeFlowStoreService} from './clearpipe-flow-store.service';
 import {
+  clearpipeAutoscalerIssues,
+} from './clearpipe-autoscaler';
+import {
   AutoscalerComputeResource,
   AutoscalerDataSourceResource,
   AutoscalerEnvironmentResource,
@@ -40,10 +43,14 @@ import {
   expectedOutputsToSources,
   mappingFromOutput,
   mappingIdentity,
+  mergeReportSources,
+  reconcileTaskMetadataMappings,
   ReportSlotMapping,
   ReportSourceOutput,
+  reportSourceIdentity,
   slotAcceptsOutput,
   suggestReportMatches,
+  taskMetadataSources,
   validateReportMappings,
 } from './clearpipe-report-mapping';
 
@@ -138,6 +145,8 @@ export class ClearpipeFlowConfigPanelComponent {
   protected readonly mappingTab = signal<'map' | 'preview'>('map');
   /** Discovering expected outputs for the Task node's base task. */
   protected readonly outputsLoading = signal(false);
+  /** Metadata/hyperparameter outputs discovered from connected base tasks. */
+  private readonly discoveredReportSourceOutputs = signal<ReportSourceOutput[]>([]);
 
   protected readonly listLoading = signal(false);
   protected readonly actionBusy = signal(false);
@@ -185,10 +194,17 @@ export class ClearpipeFlowConfigPanelComponent {
   protected readonly nodePools = signal<string[]>([]);
   protected readonly assetsLoading = signal(false);
   protected readonly assetsMessage = signal('');
+  protected readonly autoscalerIssues = computed(() => {
+    const node = this.node();
+    return node?.type === 'autoscaler' && String(node.config['mode'] ?? 'spinup') === 'spinup'
+      ? clearpipeAutoscalerIssues(node)
+      : [];
+  });
 
   private lastNodeKey = '';
   private lastProject = '';
   private lastAssetProject = '';
+  private lastGraphReportSourceKey = '';
 
   constructor() {
     // Base lists that do not depend on the selected node.
@@ -215,6 +231,23 @@ export class ClearpipeFlowConfigPanelComponent {
       setTimeout(() => {
         document.querySelector<HTMLElement>('.mapping-overlay input[type=search]')?.focus();
       });
+    });
+
+    // A graph-aware Report binds to Task nodes, while design-time metadata and
+    // hyperparameter names come from each Task node's selected base task.
+    effect(() => {
+      const report = this.node();
+      const sources = report?.type === 'report'
+        ? this.connectedTaskNodes().map((task) => ({
+          nodeId: task.id,
+          label: task.label,
+          baseTaskId: String(task.config['baseTaskId'] ?? ''),
+        }))
+        : [];
+      const key = sources.map((source) => `${source.nodeId}:${source.baseTaskId}`).join('|');
+      if (key === this.lastGraphReportSourceKey) return;
+      this.lastGraphReportSourceKey = key;
+      untracked(() => this.loadGraphReportSources(sources, key));
     });
   }
 
@@ -465,95 +498,7 @@ export class ClearpipeFlowConfigPanelComponent {
     this.setCfg('mode', mode);
   }
 
-  /**
-   * Spin-down action: tears down the workload a connected upstream Spin-up
-   * AutoScaler node started, by running a `runai workspace stop|delete` command
-   * inside the target autoscaler. Falls back to a manually entered workload name.
-   */
-  protected spinDownWorkload(): void {
-    const node = this.node();
-    if (!node || this.actionBusy()) return;
-    const manual = this.cfg('spinDownWorkloadName').trim();
-    const workload = manual || this.upstreamWorkloadName();
-    if (!this.upstreamAutoscaler() && !manual) {
-      this.actionOutput.set(
-        'No upstream Spin-up AutoScaler found in the pipeline. Connect one, or enter a workload name to tear down.',
-      );
-      return;
-    }
-    const project = String(node.config['project'] || node.config['autoscaler'] || '');
-    if (!project) {
-      this.actionOutput.set('Select a configured autoscaler / project first.');
-      return;
-    }
-    if (!workload) {
-      this.actionOutput.set('No workload name to tear down.');
-      return;
-    }
-    const isDelete = (this.cfg('spinDownAction') || 'stop') === 'delete';
-    const command = `runai workspace ${isDelete ? 'delete' : 'suspend'} ${workload} -p ${project}`;
-    this.actionBusy.set(true);
-    this.store.setNodeStatus(node.id, 'running', isDelete ? 'Deleting workload...' : 'Stopping workload...');
-    this.resources.runCommand(project, command).subscribe((result) => {
-      this.actionBusy.set(false);
-      if (!result) {
-        this.store.setNodeStatus(node.id, 'error', 'Spin-down failed');
-        this.actionOutput.set('Spin-down failed.');
-        return;
-      }
-      this.store.setNodeStatus(node.id, 'completed', isDelete ? 'Workload deleted' : 'Workload stopped');
-      this.actionOutput.set(this.summarize(result, `Workload ${isDelete ? 'deleted' : 'stopped'}.`));
-    });
-  }
-
   // --- actions -------------------------------------------------------------
-  protected createWorkload(): void {
-    const node = this.node();
-    if (!node || this.actionBusy()) return;
-    const config = node.config;
-    const str = (key: string): string | undefined => String(config[key] ?? '') || undefined;
-    const project = String(config['project'] || config['autoscaler'] || '');
-    if (!project) {
-      this.actionOutput.set('Select a configured autoscaler first.');
-      return;
-    }
-    const dataSources = this.selected('data_sources');
-    this.actionBusy.set(true);
-    this.store.setNodeStatus(node.id, 'running', 'Submitting workload...');
-    this.resources
-      .submitWorkload({
-        project,
-        queue: str('queue'),
-        workload_name: String(config['workloadName'] || node.label),
-        image: str('image'),
-        command: str('command'),
-        args: str('args'),
-        working_dir: str('working_dir'),
-        environment_variables: str('environment_variables'),
-        environment: str('environment'),
-        compute: str('compute'),
-        template: str('template'),
-        data_sources: dataSources.length ? dataSources.join(',') : undefined,
-        node_pools: str('node_pools'),
-        existing_pvc: str('existing_pvc'),
-        gpu_devices_request: str('gpu_devices_request'),
-        gpu_memory_request: str('gpu_memory_request'),
-        gpu_portion_request: str('gpu_portion_request'),
-        cpu_core_request: str('cpu_core_request'),
-        cpu_memory_request: str('cpu_memory_request'),
-      })
-      .subscribe((result) => {
-        this.actionBusy.set(false);
-        if (!result) {
-          this.store.setNodeStatus(node.id, 'error', 'Workload submission failed');
-          this.actionOutput.set('Workload submission failed.');
-          return;
-        }
-        this.store.setNodeStatus(node.id, 'running', 'Workload submitted');
-        this.actionOutput.set(this.summarize(result, 'Workload submitted.'));
-      });
-  }
-
   protected runCommand(): void {
     const node = this.node();
     if (!node || this.actionBusy()) return;
@@ -725,10 +670,22 @@ export class ClearpipeFlowConfigPanelComponent {
     this.templateParseErrors.set([]);
     if (!reportId) return;
     this.resources.getReportMarkdown(reportId).subscribe((markdown) => {
+      const node = this.node();
+      if (!node || node.type !== 'report' || this.cfg('templateReportId') !== reportId) return;
       const parsed = parseReportTemplate(markdown);
       this.templateMarkdown.set(markdown);
       this.templateSlots.set(parsed.slots);
       this.templateParseErrors.set(parsed.errors);
+      const persistedSlots = Array.isArray(node.config['templateSlots'])
+        ? (node.config['templateSlots'] as ReportTemplateSlot[])
+        : [];
+      if (JSON.stringify(persistedSlots) !== JSON.stringify(parsed.slots)) {
+        this.store.updateNodeConfig(node.id, 'templateSlots', parsed.slots);
+      }
+      if (String(node.config['templateFingerprint'] ?? '') !== parsed.fingerprint) {
+        this.store.updateNodeConfig(node.id, 'templateFingerprint', parsed.fingerprint);
+      }
+      this.reconcileGraphReportMappings();
       this.autoMapReport();
     });
   }
@@ -859,10 +816,84 @@ export class ClearpipeFlowConfigPanelComponent {
 
   /** Selectable source outputs derived from each connected Task node's contract. */
   protected readonly reportSourceOutputs = computed<ReportSourceOutput[]>(() =>
-    this.connectedTaskNodes().flatMap((node) =>
-      expectedOutputsToSources(node.id, node.label, this.taskExpectedOutputs(node.config)),
+    mergeReportSources(
+      this.connectedTaskNodes().flatMap((node) => taskMetadataSources(node.id, node.label)),
+      this.connectedTaskNodes().flatMap((node) =>
+        expectedOutputsToSources(node.id, node.label, this.taskExpectedOutputs(node.config)),
+      ),
+      this.discoveredReportSourceOutputs(),
     ),
   );
+
+  private loadGraphReportSources(
+    sources: {nodeId: string; label: string; baseTaskId: string}[],
+    key: string,
+  ): void {
+    const selected = sources.filter((source) => source.baseTaskId);
+    if (!selected.length) {
+      this.discoveredReportSourceOutputs.set([]);
+      this.reconcileGraphReportMappings();
+      return;
+    }
+    const taskIds = [...new Set(selected.map((source) => source.baseTaskId))];
+    this.resources.getReportSources(taskIds).subscribe((items) => {
+      if (this.lastGraphReportSourceKey !== key) return;
+      const outputs: ReportSourceOutput[] = [];
+      for (const source of selected) {
+        for (const item of items.filter((candidate) => candidate.taskId === source.baseTaskId)) {
+          let outputKind: ReportSourceOutput['outputKind'];
+          let selector: ReportSourceOutput['selector'];
+          if (item.kind === 'field') {
+            outputKind = 'field';
+            selector = {field: item.ref};
+          } else if (item.kind === 'hyperparam') {
+            const separator = item.ref.indexOf('/');
+            if (separator <= 0 || separator === item.ref.length - 1) continue;
+            outputKind = 'hyperparam';
+            selector = {
+              section: item.ref.slice(0, separator),
+              parameter: item.ref.slice(separator + 1),
+            };
+          } else if (item.kind === 'artifact') {
+            outputKind = 'artifact';
+            selector = {artifactKey: item.ref.replace(/^artifact\u0000/, '')};
+          } else {
+            outputKind = item.kind === 'plot'
+              ? 'plot'
+              : item.variant
+                ? 'scalar'
+                : 'scalar_graph';
+            selector = {metric: item.metric, variant: item.variant};
+          }
+          const mappingSource = {sourceNodeId: source.nodeId};
+          outputs.push({
+            sourceNodeId: source.nodeId,
+            sourceLabel: source.label,
+            outputKind,
+            selector,
+            label: item.label,
+            identity: reportSourceIdentity(mappingSource, outputKind, selector),
+          });
+        }
+      }
+      this.discoveredReportSourceOutputs.set(outputs);
+      this.reconcileGraphReportMappings();
+    });
+  }
+
+  private reconcileGraphReportMappings(): void {
+    const node = this.node();
+    if (!node || node.type !== 'report' || !this.templateSlots().length) return;
+    const current = this.graphMappings();
+    const next = reconcileTaskMetadataMappings(
+      this.templateSlots(),
+      current,
+      this.reportSourceOutputs(),
+    );
+    if (next.length !== current.length) {
+      this.store.updateNodeConfig(node.id, 'reportMappings', next);
+    }
+  }
 
   /** The Report node's persisted graph-aware mappings. */
   protected graphMappings(): ReportSlotMapping[] {

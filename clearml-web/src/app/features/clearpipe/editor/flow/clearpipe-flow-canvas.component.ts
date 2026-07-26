@@ -15,12 +15,15 @@ import {MatButtonModule} from '@angular/material/button';
 import {
   ClearpipeFlowBoundary,
   ClearpipeFlowNode,
+  ClearpipeFlowRuntimeNode,
   ClearpipeFlowNodeType,
   ClearpipeFlowPoint,
   clearpipeFlowNodeMeta,
   DATASET_MODE_LABELS,
 } from './clearpipe-flow.models';
 import {ClearpipeFlowStoreService} from './clearpipe-flow-store.service';
+import {reportMappingProgress, ReportSlotMapping} from './clearpipe-report-mapping';
+import {ReportTemplateSlot} from './clearpipe-report-template';
 
 const NODE_W = 240;
 const NODE_H = 92;
@@ -41,6 +44,7 @@ const VALID_TYPES: readonly ClearpipeFlowNodeType[] = [
 
 const STATUS_COLORS: Record<string, string> = {
   idle: '#9aa0a6',
+  pending: '#f59e0b',
   running: '#3b82f6',
   completed: '#22c55e',
   error: '#ef4444',
@@ -78,6 +82,9 @@ export class ClearpipeFlowCanvasComponent {
   protected readonly viewport = this.store.viewport;
   protected readonly selectedNodeId = this.store.selectedNodeId;
   protected readonly selectedBoundaryId = this.store.selectedBoundaryId;
+  protected readonly hoveredNodeId = this.store.hoveredNodeId;
+  protected readonly runtimeNodes = this.store.runtimeNodes;
+  protected readonly running = this.store.running;
   protected readonly statusColors = STATUS_COLORS;
 
   protected readonly panning = signal(false);
@@ -169,14 +176,42 @@ export class ClearpipeFlowCanvasComponent {
   protected reportSummary(node: ClearpipeFlowNode): {progress: string; state: 'ok' | 'warn'} | null {
     if (node.type !== 'report') return null;
     if (!String(node.config['templateReportId'] ?? '')) return {progress: 'no template', state: 'warn'};
-    const slots = Array.isArray(node.config['templateSlots']) ? (node.config['templateSlots'] as unknown[]) : [];
-    const mappings = Array.isArray(node.config['reportMappings'])
-      ? (node.config['reportMappings'] as {ignored?: boolean}[])
+    const slots = Array.isArray(node.config['templateSlots'])
+      ? (node.config['templateSlots'] as ReportTemplateSlot[])
       : [];
-    const total = slots.length;
-    const mapped = mappings.filter((mapping) => !mapping.ignored).length;
-    const state: 'ok' | 'warn' = total > 0 && mapped >= total ? 'ok' : 'warn';
-    return {progress: `${mapped}/${total || '?'} mapped`, state};
+    const mappings = Array.isArray(node.config['reportMappings'])
+      ? (node.config['reportMappings'] as ReportSlotMapping[])
+      : [];
+    const progress = reportMappingProgress(slots, mappings);
+    return {
+      progress: `${progress.mappedCount}/${progress.totalRequired || '?'} mapped`,
+      state: progress.valid ? 'ok' : 'warn',
+    };
+  }
+
+  protected hoverNode(nodeId: string): void {
+    this.store.setHoveredNode(nodeId);
+  }
+
+  protected leaveNode(nodeId: string): void {
+    if (this.hoveredNodeId() === nodeId) this.store.setHoveredNode(null);
+  }
+
+  protected runtimeNode(nodeId: string): ClearpipeFlowRuntimeNode | undefined {
+    return this.runtimeNodes().get(nodeId);
+  }
+
+  protected runtimeOutputCount(runtime: ClearpipeFlowRuntimeNode): number {
+    return (runtime.artifacts?.length ?? 0)
+      + (runtime.datasets?.length ?? 0)
+      + (runtime.models?.input?.length ?? 0)
+      + (runtime.models?.output?.length ?? 0);
+  }
+
+  protected runtimeTime(value?: string): string {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.valueOf()) ? value : date.toLocaleTimeString();
   }
 
   protected trackNode = (_: number, node: ClearpipeFlowNode) => node.id;

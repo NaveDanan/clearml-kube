@@ -658,7 +658,7 @@ class TestAutoscalerBLL(unittest.TestCase):
              patch.object(
                  self.bll,
                  "_runai_records_with_fallback",
-                 side_effect=[[{"name": "project-a"}], [], [], [], []],
+                side_effect=[[{"name": "project-a"}], [], [], [], [], []],
              ):
             result = self.bll._collect_project_resources(conn, {}, "project-a")
 
@@ -668,7 +668,8 @@ class TestAutoscalerBLL(unittest.TestCase):
         self.assertIn("Attempting to fetch Run:ai compute resources for project 'project-a'", messages)
         self.assertIn("Attempting to fetch Run:ai environments for project 'project-a'", messages)
         self.assertIn("Attempting to fetch Run:ai data sources for project 'project-a'", messages)
-        self.assertEqual(statuses.count("info"), 3)
+        self.assertIn("Attempting to fetch Run:ai workload templates for project 'project-a'", messages)
+        self.assertEqual(statuses.count("info"), 4)
 
     def test_process_execution_command_failure_persists_error(self):
         self._settings()

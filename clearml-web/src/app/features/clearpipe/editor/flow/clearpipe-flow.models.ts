@@ -126,6 +126,27 @@ export interface ClearpipeFlowEdge {
   target: string;
 }
 
+/** Runtime details returned by the authorized execution-snapshot endpoint. */
+export interface ClearpipeFlowRuntimeNode {
+  graph_node_id: string;
+  pipeline_step_name: string;
+  record_status: 'available' | 'unavailable';
+  task_id?: string;
+  status?: string;
+  started_at?: string;
+  completed_at?: string;
+  updated_at?: string;
+  result?: 'success' | 'failure';
+  log_task_id?: string;
+  artifacts?: {id: string; name: string; type?: string; direction?: 'input' | 'output'}[];
+  artifacts_truncated?: boolean;
+  models?: {
+    input?: {id: string; name?: string}[];
+    output?: {id: string; name?: string}[];
+  };
+  datasets?: {task_id: string; name: string}[];
+}
+
 /**
  * A boundary is a resizable region (not a node) drawn on the canvas. Only nodes
  * inside a boundary and connected to the pipeline are part of that boundary's
@@ -138,7 +159,7 @@ export interface ClearpipeFlowBoundary {
   height: number;
   label: string;
   color?: string;
-  /** Placeholder for a future action when the pipeline reaches this boundary. */
+  /** Runtime action applied when execution attempts to leave this region. */
   onReach?: string;
 }
 
@@ -203,7 +224,7 @@ export const CLEARPIPE_FLOW_NODE_TYPES: readonly ClearpipeFlowNodeTypeMeta[] = [
   {
     type: 'autoscaler',
     label: 'AutoScaler',
-    description: 'Spin up an autoscaler from the autoscaler flow',
+    description: 'Submit a RunAI workload that starts a ClearML agent',
     icon: 'al-ico-queues',
     category: 'compute',
     categoryLabel: 'Compute',
@@ -212,12 +233,47 @@ export const CLEARPIPE_FLOW_NODE_TYPES: readonly ClearpipeFlowNodeTypeMeta[] = [
       mode: 'spinup' as ClearpipeAutoscalerMode,
       autoscaler: '',
       project: '',
-      queue: '',
+      workload_type: 'training',
       workloadName: '',
       image: '',
-      command: '',
-      gpu: '',
-      cpu: '',
+      command: 'clearml-agent daemon',
+      args: '',
+      environment_variables: '',
+      template: '',
+      compute: '',
+      environment: '',
+      data_sources: [],
+      cpu_core_request: '',
+      cpu_core_limit: '',
+      cpu_memory_request: '',
+      cpu_memory_limit: '',
+      gpu_devices_request: '',
+      gpu_memory_request: '',
+      gpu_portion_request: '',
+      gpu_request_type: '',
+      node_pools: '',
+      node_type: '',
+      priority: '',
+      preemptibility: '',
+      run_as_uid: '',
+      run_as_gid: '',
+      supplemental_groups: '',
+      existing_pvc: '',
+      working_dir: '',
+      large_shm: false,
+      parallelism: '',
+      runs: '',
+      restart_policy: '',
+      backoff_limit: '',
+      external_url: '',
+      serving_port: '',
+      min_replicas: '',
+      max_replicas: '',
+      initial_replicas: '',
+      metric: '',
+      metric_threshold: '',
+      scale_to_zero_retention: '',
+      autoscalerTimeoutSeconds: 600,
       // Spin-down tab - tear down a workload started by an upstream Spin-up node.
       spinDownAction: 'stop' as ClearpipeAutoscalerSpinDownAction,
       spinDownWorkloadName: '',

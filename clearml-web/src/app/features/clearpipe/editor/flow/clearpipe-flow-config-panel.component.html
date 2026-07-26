@@ -250,25 +250,29 @@
                 <p class="note">Leave blank to use the workload started by the connected Spin-up node.</p>
               </div>
 
-              <button mat-flat-button class="action-btn action-btn--danger" [disabled]="actionBusy()" (click)="spinDownWorkload()">
-                @if (actionBusy()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon fontSet="al" [fontIcon]="cfg('spinDownAction') === 'delete' ? 'al-ico-trash' : 'al-ico-abort'"></mat-icon> }
-                {{ cfg('spinDownAction') === 'delete' ? 'Delete workload' : 'Stop workload' }}
-              </button>
-              <p class="note">Runs a <span class="mono">runai workspace {{ cfg('spinDownAction') === 'delete' ? 'delete' : 'suspend' }}</span> command inside the target AutoScaler.</p>
+              <p class="note">
+                <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
+                Configuration only. The selected {{ cfg('spinDownAction') === 'delete' ? 'delete' : 'stop' }} action runs when pipeline execution reaches this node.
+              </p>
             } @else {
-            <div class="field">
-              <label class="field-label">Queue</label>
-              <select [ngModel]="cfg('queue')" (ngModelChange)="setCfg('queue', $event)">
-                <option value="">Default queue</option>
-                @for (queue of queues(); track queue.id) {
-                  <option [value]="queue.id">{{ queue.name }}</option>
-                }
-              </select>
-            </div>
-            <div class="field">
-              <label class="field-label">Workload name</label>
-              <input type="text" [ngModel]="cfg('workloadName')" (ngModelChange)="setCfg('workloadName', $event)" placeholder="my-workload" />
-            </div>
+              <p class="note">
+                <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
+                Uses the same worker-backed API as Submit Workload. RunAI assigns the spawned ClearML agent to its platform-managed <span class="mono">runai</span> queue.
+              </p>
+              <div class="field-row">
+                <div class="field">
+                  <label class="field-label">Workload type</label>
+                  <select [ngModel]="cfg('workload_type') || 'training'" (ngModelChange)="setCfg('workload_type', $event)">
+                    <option value="training">Training</option>
+                    <option value="workspace">Workspace</option>
+                    <option value="inference">Inference</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field-label">Workload name</label>
+                  <input type="text" [ngModel]="cfg('workloadName')" (ngModelChange)="setCfg('workloadName', $event)" placeholder="clearml-agent" />
+                </div>
+              </div>
 
             <!-- Run:ai Submit Workload asset cards -->
             @if (assetsMessage()) {
@@ -316,21 +320,22 @@
               </div>
             </div>
 
-            <div class="field">
-              <label class="field-label">Template</label>
-              <input type="text" [ngModel]="cfg('template')" (ngModelChange)="setCfg('template', $event)" placeholder="Run:ai workload template (optional)" />
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">Template</label>
+                <input type="text" [ngModel]="cfg('template')" (ngModelChange)="setCfg('template', $event)" placeholder="Optional RunAI template" />
+              </div>
+              <div class="field">
+                <label class="field-label">Node pool</label>
+                <select [ngModel]="cfg('node_pools')" (ngModelChange)="setCfg('node_pools', $event)">
+                  <option value="">Default</option>
+                  @for (pool of nodePools(); track pool) { <option [value]="pool">{{ pool }}</option> }
+                </select>
+              </div>
             </div>
 
             <div class="field">
-              <label class="field-label">Node pool</label>
-              <select [ngModel]="cfg('node_pools')" (ngModelChange)="setCfg('node_pools', $event)">
-                <option value="">Default</option>
-                @for (pool of nodePools(); track pool) { <option [value]="pool">{{ pool }}</option> }
-              </select>
-            </div>
-
-            <div class="field">
-              <label class="field-label">Image</label>
+              <label class="field-label">Container image</label>
               <input type="text" [ngModel]="cfg('image')" (ngModelChange)="setCfg('image', $event)" placeholder="nvcr.io/…" />
             </div>
             <div class="field-row">
@@ -339,19 +344,139 @@
                 <input type="text" [ngModel]="cfg('gpu_devices_request')" (ngModelChange)="setCfg('gpu_devices_request', $event)" placeholder="1" />
               </div>
               <div class="field">
-                <label class="field-label">CPU cores</label>
+                <label class="field-label">CPU request</label>
                 <input type="text" [ngModel]="cfg('cpu_core_request')" (ngModelChange)="setCfg('cpu_core_request', $event)" placeholder="4" />
               </div>
             </div>
             <div class="field">
-              <label class="field-label">Command</label>
-              <textarea class="mono" [ngModel]="cfg('command')" (ngModelChange)="setCfg('command', $event)" placeholder="python train.py"></textarea>
+              <label class="field-label">ClearML agent command</label>
+              <textarea class="mono" [ngModel]="cfg('command')" (ngModelChange)="setCfg('command', $event)" placeholder="clearml-agent daemon"></textarea>
+              <p class="note">Defaults to <span class="mono">clearml-agent daemon</span>. Credentials and queue assignment remain in the RunAI platform configuration.</p>
             </div>
-            <button mat-flat-button class="action-btn" [disabled]="actionBusy()" (click)="createWorkload()">
-              @if (actionBusy()) { <mat-spinner diameter="16"></mat-spinner> } @else { <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon> }
-              Create workload
-            </button>
-            <p class="note">Fetches the Run:ai project's environments, compute, data sources &amp; templates, then submits a real workload.</p>
+            <div class="field">
+              <label class="field-label">Arguments</label>
+              <textarea class="mono" [ngModel]="cfg('args')" (ngModelChange)="setCfg('args', $event)" placeholder="Optional command arguments"></textarea>
+            </div>
+            <div class="field">
+              <label class="field-label">Environment variables</label>
+              <textarea class="mono" [ngModel]="cfg('environment_variables')" (ngModelChange)="setCfg('environment_variables', $event)" placeholder="Non-secret variables only"></textarea>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">GPU memory</label>
+                <input type="text" [ngModel]="cfg('gpu_memory_request')" (ngModelChange)="setCfg('gpu_memory_request', $event)" placeholder="8Gi" />
+              </div>
+              <div class="field">
+                <label class="field-label">GPU portion</label>
+                <input type="text" [ngModel]="cfg('gpu_portion_request')" (ngModelChange)="setCfg('gpu_portion_request', $event)" placeholder="0.5" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">CPU limit</label>
+                <input type="text" [ngModel]="cfg('cpu_core_limit')" (ngModelChange)="setCfg('cpu_core_limit', $event)" placeholder="8" />
+              </div>
+              <div class="field">
+                <label class="field-label">Memory request</label>
+                <input type="text" [ngModel]="cfg('cpu_memory_request')" (ngModelChange)="setCfg('cpu_memory_request', $event)" placeholder="8Gi" />
+              </div>
+              <div class="field">
+                <label class="field-label">Memory limit</label>
+                <input type="text" [ngModel]="cfg('cpu_memory_limit')" (ngModelChange)="setCfg('cpu_memory_limit', $event)" placeholder="16Gi" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">Working directory</label>
+                <input type="text" [ngModel]="cfg('working_dir')" (ngModelChange)="setCfg('working_dir', $event)" placeholder="/workspace" />
+              </div>
+              <div class="field">
+                <label class="field-label">Existing PVC</label>
+                <input type="text" [ngModel]="cfg('existing_pvc')" (ngModelChange)="setCfg('existing_pvc', $event)" placeholder="Optional PVC" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">Priority</label>
+                <input type="text" [ngModel]="cfg('priority')" (ngModelChange)="setCfg('priority', $event)" />
+              </div>
+              <div class="field">
+                <label class="field-label">Preemptibility</label>
+                <input type="text" [ngModel]="cfg('preemptibility')" (ngModelChange)="setCfg('preemptibility', $event)" />
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field-label">Run as UID</label>
+                <input type="text" [ngModel]="cfg('run_as_uid')" (ngModelChange)="setCfg('run_as_uid', $event)" />
+              </div>
+              <div class="field">
+                <label class="field-label">Run as GID</label>
+                <input type="text" [ngModel]="cfg('run_as_gid')" (ngModelChange)="setCfg('run_as_gid', $event)" />
+              </div>
+            </div>
+            <label class="toggle-row">
+              <input type="checkbox" [checked]="flag('large_shm')" (change)="setFlag('large_shm', $any($event.target).checked)" />
+              <span>Use large shared memory</span>
+            </label>
+            @if ((cfg('workload_type') || 'training') === 'training') {
+              <div class="field-row">
+                <div class="field">
+                  <label class="field-label">Parallelism</label>
+                  <input type="text" [ngModel]="cfg('parallelism')" (ngModelChange)="setCfg('parallelism', $event)" placeholder="1" />
+                </div>
+                <div class="field">
+                  <label class="field-label">Runs</label>
+                  <input type="text" [ngModel]="cfg('runs')" (ngModelChange)="setCfg('runs', $event)" placeholder="1" />
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label class="field-label">Restart policy</label>
+                  <input type="text" [ngModel]="cfg('restart_policy')" (ngModelChange)="setCfg('restart_policy', $event)" placeholder="Never" />
+                </div>
+                <div class="field">
+                  <label class="field-label">Backoff limit</label>
+                  <input type="text" [ngModel]="cfg('backoff_limit')" (ngModelChange)="setCfg('backoff_limit', $event)" placeholder="0" />
+                </div>
+              </div>
+            }
+            @if ((cfg('workload_type') || 'training') === 'inference') {
+              <div class="field-row">
+                <div class="field">
+                  <label class="field-label">Serving port</label>
+                  <input type="text" [ngModel]="cfg('serving_port')" (ngModelChange)="setCfg('serving_port', $event)" />
+                </div>
+                <div class="field">
+                  <label class="field-label">External URL</label>
+                  <input type="text" [ngModel]="cfg('external_url')" (ngModelChange)="setCfg('external_url', $event)" />
+                </div>
+              </div>
+              <div class="field-row">
+                <div class="field">
+                  <label class="field-label">Minimum replicas</label>
+                  <input type="text" [ngModel]="cfg('min_replicas')" (ngModelChange)="setCfg('min_replicas', $event)" />
+                </div>
+                <div class="field">
+                  <label class="field-label">Maximum replicas</label>
+                  <input type="text" [ngModel]="cfg('max_replicas')" (ngModelChange)="setCfg('max_replicas', $event)" />
+                </div>
+              </div>
+            }
+            <div class="field">
+              <label class="field-label">Submission timeout (seconds)</label>
+              <input type="number" min="1" max="3600" [ngModel]="cfg('autoscalerTimeoutSeconds') || '600'" (ngModelChange)="setCfg('autoscalerTimeoutSeconds', $event)" />
+              <p class="note">The node remains Running until RunAI confirms success or failure, then follows normal pipeline status behavior.</p>
+            </div>
+            @if (autoscalerIssues().length) {
+              <ul class="note note--warn">
+                @for (issue of autoscalerIssues(); track issue) { <li>{{ issue }}</li> }
+              </ul>
+            }
+            <p class="note">
+              <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
+              Configuration only. When pipeline execution reaches this node it submits through the same endpoint as Submit Workload, stays Running until RunAI confirms the workload was created, then completes so the next node can start.
+            </p>
             }
           </section>
         }

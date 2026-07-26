@@ -25,10 +25,13 @@ import {
 import {
   expectedOutputsToSources,
   mappingIdentity,
+  reconcileTaskMetadataMappings,
+  reportMappingProgress,
   ReportSlotMapping,
   reportSourceIdentity,
   slotAcceptsOutput,
   suggestReportMatches,
+  taskMetadataSources,
   validateReportMappings,
 } from '../editor/flow/clearpipe-report-mapping';
 import {migrateFlowGraph} from '../editor/flow/clearpipe-flow-migration';
@@ -126,6 +129,27 @@ describe('reportSourceIdentity', () => {
     expect(reportSourceIdentity({sourceNodeId: 't'}, 'artifact', sel))
       .not.toBe(reportSourceIdentity({externalTaskId: 't'}, 'artifact', sel));
   });
+
+  it('exposes stable metadata identities including author and company', () => {
+    const fields = taskMetadataSources('task-1', 'Train').map((source) => source.selector.field);
+    expect(fields).toContain('name');
+    expect(fields).toContain('author');
+    expect(fields).toContain('company_id');
+  });
+
+  it('distinguishes sectioned hyperparameters', () => {
+    const weights = reportSourceIdentity(
+      {sourceNodeId: 'task-1'},
+      'hyperparam',
+      {section: 'training', parameter: 'weights'},
+    );
+    const dataset = reportSourceIdentity(
+      {sourceNodeId: 'task-1'},
+      'hyperparam',
+      {section: 'training', parameter: 'clearml_dataset_name'},
+    );
+    expect(weights).not.toBe(dataset);
+  });
 });
 
 describe('slotAcceptsOutput', () => {
@@ -137,7 +161,28 @@ describe('slotAcceptsOutput', () => {
     expect(slotAcceptsOutput(plotSlot, 'scalar')).toBeFalse();
     expect(slotAcceptsOutput(scalarSlot, 'scalar_graph')).toBeTrue();
     expect(slotAcceptsOutput(textSlot, 'field')).toBeTrue();
+    expect(slotAcceptsOutput(textSlot, 'hyperparam')).toBeTrue();
     expect(slotAcceptsOutput(textSlot, 'plot')).toBeFalse();
+  });
+});
+
+describe('reconcileTaskMetadataMappings', () => {
+  it('maps deterministic author/company fields without changing authored mappings', () => {
+    const slots = parseReportTemplate('<TASK_NAME> <AUTHOR> <COMPANY_ID>').slots;
+    const sources = taskMetadataSources('task-1', 'Train');
+    const existing: ReportSlotMapping[] = [{
+      slotKey: 'text:TASK_NAME',
+      source: {sourceNodeId: 'task-1'},
+      outputKind: 'field',
+      selector: {field: 'name'},
+      required: true,
+      confirmed: true,
+    }];
+    const mappings = reconcileTaskMetadataMappings(slots, existing, sources);
+    expect(mappings.length).toBe(3);
+    expect(mappings.find((mapping) => mapping.slotKey === 'text:AUTHOR')?.selector.field).toBe('author');
+    expect(mappings.find((mapping) => mapping.slotKey === 'text:COMPANY_ID')?.selector.field).toBe('company_id');
+    expect(mappings.every((mapping) => mapping.confirmed)).toBeTrue();
   });
 });
 
@@ -219,6 +264,75 @@ describe('validateReportMappings', () => {
       {slotKey: 'text:TASK_NAME', source: {}, outputKind: 'field', selector: {}, required: false, confirmed: true, ignored: true},
     ];
     expect(validateReportMappings({...base, mappings}).valid).toBeTrue();
+  });
+
+  it('accepts connected metadata and hyperparameter mappings in one contract', () => {
+    const contractSlots = parseReportTemplate('<AUTHOR> <COMPANY_ID> <ARCHITECTURE>').slots;
+    const metadata = taskMetadataSources('task-1', 'Train');
+    const architectureIdentity = reportSourceIdentity(
+      {sourceNodeId: 'task-1'},
+      'hyperparam',
+      {section: 'training', parameter: 'weights'},
+    );
+    const mappings = reconcileTaskMetadataMappings(contractSlots, [], metadata);
+    mappings.push({
+      slotKey: 'text:ARCHITECTURE',
+      source: {sourceNodeId: 'task-1'},
+      outputKind: 'hyperparam',
+      selector: {section: 'training', parameter: 'weights'},
+      required: true,
+      confirmed: true,
+    });
+    const result = validateReportMappings({
+      slots: contractSlots,
+      mappings,
+      connectedSourceNodeIds: new Set(['task-1']),
+      availableIdentities: new Set([
+        ...metadata.map((source) => source.identity),
+        architectureIdentity,
+      ]),
+      templateSelected: true,
+    });
+    expect(result.valid).toBeTrue();
+    expect(result.mappedCount).toBe(3);
+    expect(result.totalRequired).toBe(3);
+  });
+});
+
+describe('reportMappingProgress', () => {
+  it('counts only required mappings and never exceeds the required total', () => {
+    const slots = parseReportTemplate('<TASK_NAME> <ARCHITECTURE>').slots;
+    const mappings: ReportSlotMapping[] = [
+      {
+        slotKey: 'text:TASK_NAME',
+        source: {sourceNodeId: 'task-1'},
+        outputKind: 'field',
+        selector: {field: 'name'},
+        required: true,
+        confirmed: true,
+      },
+      {
+        slotKey: 'text:ARCHITECTURE',
+        source: {sourceNodeId: 'task-1'},
+        outputKind: 'hyperparam',
+        selector: {section: 'training', parameter: 'weights'},
+        required: false,
+        confirmed: true,
+      },
+      {
+        slotKey: 'text:STALE_OPTIONAL',
+        source: {sourceNodeId: 'task-1'},
+        outputKind: 'field',
+        selector: {field: 'name'},
+        required: false,
+        confirmed: true,
+      },
+    ];
+    expect(reportMappingProgress(slots, mappings)).toEqual({
+      valid: true,
+      mappedCount: 1,
+      totalRequired: 1,
+    });
   });
 });
 

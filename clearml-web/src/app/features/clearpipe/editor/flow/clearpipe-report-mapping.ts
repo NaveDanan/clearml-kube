@@ -16,6 +16,7 @@ import {TaskExpectedOutput, TaskExpectedOutputKind} from './clearpipe-flow.model
 /** Output kinds a Report slot can bind to. `image` is a debug-image sample. */
 export type ReportOutputKind =
   | 'field'        // a task field for text slots (name/id/status/project/…)
+  | 'hyperparam'   // a sectioned task hyperparameter for text slots
   | 'scalar'       // a single scalar last value
   | 'scalar_graph' // a whole scalar metric graph
   | 'plot'         // a plot
@@ -28,6 +29,9 @@ export interface ReportOutputSelector {
   artifactKey?: string;
   /** Task field key for `field` outputs (e.g. `name`, `id`, `status`). */
   field?: string;
+  /** Hyperparameter section/name for `hyperparam` outputs. */
+  section?: string;
+  parameter?: string;
 }
 
 /** Where a mapped value comes from: a pipeline Task node, or a fixed external task. */
@@ -81,6 +85,8 @@ const selectorKey = (kind: ReportOutputKind, selector: ReportOutputSelector): st
     ? `artifact\u0000${selector.artifactKey ?? ''}`
     : kind === 'field'
       ? `field\u0000${selector.field ?? ''}`
+      : kind === 'hyperparam'
+        ? `hyperparam\u0000${selector.section ?? ''}\u0000${selector.parameter ?? ''}`
       : `${kind}\u0000${selector.metric ?? ''}\u0000${selector.variant ?? ''}`;
 
 /**
@@ -137,6 +143,48 @@ export const expectedOutputsToSources = (
     };
   });
 
+const TASK_METADATA_FIELDS: readonly {field: string; label: string}[] = [
+  {field: 'name', label: 'Task name'},
+  {field: 'id', label: 'Task ID'},
+  {field: 'project', label: 'Project'},
+  {field: 'status', label: 'Status'},
+  {field: 'author', label: 'Author'},
+  {field: 'started', label: 'Started'},
+  {field: 'completed', label: 'Completed'},
+  {field: 'iteration', label: 'Iterations'},
+  {field: 'company_id', label: 'Company ID'},
+];
+
+/** Metadata every ClearML Task exposes independently of its telemetry contract. */
+export const taskMetadataSources = (
+  sourceNodeId: string,
+  sourceLabel: string,
+): ReportSourceOutput[] =>
+  TASK_METADATA_FIELDS.map(({field, label}) => {
+    const source = {sourceNodeId};
+    const selector = {field};
+    return {
+      sourceNodeId,
+      sourceLabel,
+      outputKind: 'field',
+      selector,
+      label,
+      identity: reportSourceIdentity(source, 'field', selector),
+    };
+  });
+
+/** Keep the first occurrence of each stable source identity. */
+export const mergeReportSources = (
+  ...groups: readonly (readonly ReportSourceOutput[])[]
+): ReportSourceOutput[] => {
+  const seen = new Set<string>();
+  return groups.flatMap((group) => group.filter((output) => {
+    if (seen.has(output.identity)) return false;
+    seen.add(output.identity);
+    return true;
+  }));
+};
+
 // ---------------------------------------------------------------------------
 // Slot / output compatibility
 // ---------------------------------------------------------------------------
@@ -145,7 +193,7 @@ export const expectedOutputsToSources = (
 export const slotAcceptsOutput = (slot: ReportTemplateSlot, kind: ReportOutputKind): boolean => {
   if (slot.kind === 'text') {
     // Text slots resolve to metadata, a last scalar value, or an artifact link.
-    return kind === 'field' || kind === 'scalar' || kind === 'artifact';
+    return kind === 'field' || kind === 'hyperparam' || kind === 'scalar' || kind === 'artifact';
   }
   const mediaType = (slot.mediaType ?? 'scalar').toLowerCase();
   if (mediaType === 'plot') return kind === 'plot';
@@ -167,9 +215,15 @@ const normalize = (value: string): string =>
  * alone AND the `metric variant` combination (plus the variant) as candidates.
  */
 const sourceMatchNames = (output: ReportSourceOutput): string[] => {
-  const {artifactKey, field, metric, variant} = output.selector;
+  const {artifactKey, field, section, parameter, metric, variant} = output.selector;
   if (artifactKey) return [artifactKey];
   if (field) return [field];
+  if (section || parameter) {
+    return [
+      parameter ?? '',
+      `${section ?? ''} ${parameter ?? ''}`.trim(),
+    ].filter(Boolean);
+  }
   const names: string[] = [];
   if (metric && variant) names.push(`${metric} ${variant}`);
   if (metric) names.push(metric);
@@ -234,6 +288,44 @@ export const mappingFromOutput = (
   confirmed: opts.confirmed ?? true,
 });
 
+const TOKEN_TO_TASK_FIELD: Readonly<Record<string, string>> = {
+  TASK_NAME: 'name',
+  TASK_ID: 'id',
+  PROJECT: 'project',
+  STATUS: 'status',
+  AUTHOR: 'author',
+  START: 'started',
+  END: 'completed',
+  N: 'iteration',
+  COMPANY_ID: 'company_id',
+};
+
+/**
+ * Fill only deterministic Task-metadata tokens. Telemetry and hyperparameter
+ * suggestions remain explicit author choices because similarly named outputs
+ * can be ambiguous.
+ */
+export const reconcileTaskMetadataMappings = (
+  slots: readonly ReportTemplateSlot[],
+  mappings: readonly ReportSlotMapping[],
+  outputs: readonly ReportSourceOutput[],
+): ReportSlotMapping[] => {
+  const next = [...mappings];
+  const mapped = new Set(next.map((mapping) => mapping.slotKey));
+  for (const slot of slots) {
+    if (slot.kind !== 'text' || !slot.token || mapped.has(slot.key)) continue;
+    const field = TOKEN_TO_TASK_FIELD[slot.token];
+    if (!field) continue;
+    const output = outputs.find((candidate) =>
+      candidate.outputKind === 'field' && candidate.selector.field === field
+    );
+    if (!output) continue;
+    next.push(mappingFromOutput(slot, output, {required: true, confirmed: true}));
+    mapped.add(slot.key);
+  }
+  return next;
+};
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -256,6 +348,38 @@ export interface ReportValidationResult {
   mappedCount: number;
   totalRequired: number;
 }
+
+/** Structural progress for compact surfaces that do not load source catalogs. */
+export const reportMappingProgress = (
+  slots: readonly ReportTemplateSlot[],
+  mappings: readonly ReportSlotMapping[],
+): Pick<ReportValidationResult, 'valid' | 'mappedCount' | 'totalRequired'> => {
+  const byKey = new Map(mappings.map((mapping) => [mapping.slotKey, mapping]));
+  let valid = slots.length > 0;
+  let mappedCount = 0;
+  let totalRequired = 0;
+  for (const slot of slots) {
+    const mapping = byKey.get(slot.key);
+    const required = mapping ? mapping.required && !mapping.ignored : true;
+    if (required) totalRequired++;
+    if (!mapping) {
+      if (required) valid = false;
+      continue;
+    }
+    if (mapping.ignored) {
+      if (mapping.required) valid = false;
+      continue;
+    }
+    const mappingValid = !!(
+      (mapping.source.sourceNodeId || mapping.source.externalTaskId) &&
+      mapping.confirmed &&
+      !mapping.broken
+    );
+    if (!mappingValid) valid = false;
+    if (required && mappingValid) mappedCount++;
+  }
+  return {valid, mappedCount, totalRequired};
+};
 
 /**
  * Validate a Report node's mappings. Mirrors the server-side save/run gate:

@@ -8,12 +8,14 @@ import {
   ClearpipeFlowNode,
   ClearpipeFlowNodeType,
   ClearpipeFlowPoint,
+  ClearpipeFlowRuntimeNode,
   ClearpipeFlowStatus,
   ClearpipeFlowViewport,
   clearpipeFlowNodeMeta,
   emptyClearpipeFlowGraph,
 } from './clearpipe-flow.models';
 import {ReportSlotMapping} from './clearpipe-report-mapping';
+import {flowBoundaryExecutionPlan} from './clearpipe-flow-boundaries';
 
 interface FlowSnapshot {
   nodes: ClearpipeFlowNode[];
@@ -40,6 +42,11 @@ export class ClearpipeFlowStoreService {
   readonly running = signal(false);
   /** The controller run task id of the in-progress/last run, for status polling. */
   readonly runTaskId = signal<string | null>(null);
+  /** Node currently hovered on the canvas; transient and never persisted. */
+  readonly hoveredNodeId = signal<string | null>(null);
+  /** Last authorized runtime record for each graph node. */
+  readonly runtimeNodes = signal<Map<string, ClearpipeFlowRuntimeNode>>(new Map());
+  readonly runtimeUpdatedAt = signal<string | null>(null);
 
   private readonly history = signal<FlowSnapshot[]>([]);
   private readonly historyIndex = signal(-1);
@@ -75,6 +82,7 @@ export class ClearpipeFlowStoreService {
     this.selectedNodeId.set(null);
     this.selectedBoundaryId.set(null);
     this.connectingFrom.set(null);
+    this.hoveredNodeId.set(null);
     this.activated.set(clone.activated === true);
     this.dirty.set(false);
     this.history.set([this.snapshot(clone)]);
@@ -433,9 +441,41 @@ export class ClearpipeFlowStoreService {
   beginRun(runTaskId: string): void {
     this.runTaskId.set(runTaskId);
     this.running.set(true);
+    this.runtimeNodes.set(new Map());
+    this.runtimeUpdatedAt.set(null);
+    const boundaryPlan = flowBoundaryExecutionPlan(this.graph());
     const pending = new Map<string, {status: ClearpipeFlowStatus; message?: string}>();
-    this.graph().nodes.forEach((node) => pending.set(node.id, {status: 'pending', message: 'Pending'}));
+    this.graph().nodes.forEach((node) => {
+      const boundary = boundaryPlan.excludedByBoundary.get(node.id);
+      pending.set(node.id, boundary
+        ? {status: 'stopped', message: `Not executed: ${boundary} stops the pipeline.`}
+        : {status: 'pending', message: 'Pending'});
+    });
     this.applyRunStatuses(pending);
+  }
+
+  setHoveredNode(nodeId: string | null): void {
+    this.hoveredNodeId.set(nodeId);
+  }
+
+  applyRuntimeSnapshot(nodes: readonly ClearpipeFlowRuntimeNode[]): void {
+    const next = new Map(this.runtimeNodes());
+    for (const node of nodes) next.set(node.graph_node_id, node);
+    this.runtimeNodes.set(next);
+    this.runtimeUpdatedAt.set(new Date().toISOString());
+  }
+
+  /** Re-assert compiler-equivalent boundary stops after a final restored run. */
+  applyBoundaryStops(): void {
+    const plan = flowBoundaryExecutionPlan(this.graph());
+    const stopped = new Map<string, {status: ClearpipeFlowStatus; message?: string}>();
+    for (const [nodeId, boundary] of plan.excludedByBoundary) {
+      stopped.set(nodeId, {
+        status: 'stopped',
+        message: `Not executed: ${boundary} stops the pipeline.`,
+      });
+    }
+    if (stopped.size) this.applyRunStatuses(stopped);
   }
 
   /** Apply real per-node statuses from a backend execution snapshot. */
@@ -464,6 +504,9 @@ export class ClearpipeFlowStoreService {
   resetRun(): void {
     this.running.set(false);
     this.runTaskId.set(null);
+    this.hoveredNodeId.set(null);
+    this.runtimeNodes.set(new Map());
+    this.runtimeUpdatedAt.set(null);
     if (this.graph().nodes.every((node) => node.status === 'idle')) return;
     const cleared = new Map<string, {status: ClearpipeFlowStatus}>();
     this.graph().nodes.forEach((node) => cleared.set(node.id, {status: 'idle'}));

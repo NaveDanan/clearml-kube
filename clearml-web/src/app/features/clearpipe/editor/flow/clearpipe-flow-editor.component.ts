@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy, Component, DestroyRef, effect, ElementRef, inject, signal, viewChild} from '@angular/core';
+import {ChangeDetectionStrategy, Component, computed, DestroyRef, effect, ElementRef, inject, signal, viewChild} from '@angular/core';
 import {FormsModule} from '@angular/forms';
 import {ActivatedRoute, Router, RouterLink} from '@angular/router';
 import {MatButtonModule} from '@angular/material/button';
@@ -8,7 +8,7 @@ import {filter, finalize, Subscription, switchMap, take, timer} from 'rxjs';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {addMessage} from '@common/core/actions/layout.actions';
 
-import {ClearpipeApiService} from '../../clearpipe-api.service';
+import {ClearpipeApiService, ClearpipeExecutionSnapshotResponse} from '../../clearpipe-api.service';
 import {ClearpipeAdapterService} from '../../platform/clearpipe-adapter.service';
 import {createEmptyGraphV2} from '../../domain/graph-store.service';
 import {ClearpipeFlowPaletteComponent} from './clearpipe-flow-palette.component';
@@ -18,9 +18,15 @@ import {ClearpipeFlowStoreService} from './clearpipe-flow-store.service';
 import {ClearpipeFlowResourcesService, FlowResourceOption} from './clearpipe-flow-resources.service';
 import {mapSnapshotNodeStatus, TERMINAL_CONTROLLER_STATUSES} from './clearpipe-flow-run-status';
 import {flowToGraphNodes, graphV2ToFlow} from './clearpipe-flow-codec';
-import {ClearpipeFlowGraph, ClearpipeFlowStatus, emptyClearpipeFlowGraph} from './clearpipe-flow.models';
+import {
+  ClearpipeFlowGraph,
+  ClearpipeFlowRuntimeNode,
+  ClearpipeFlowStatus,
+  emptyClearpipeFlowGraph,
+} from './clearpipe-flow.models';
 
 const RUN_POLL_INTERVAL_MS = 5000;
+const HOVER_POLL_INTERVAL_MS = 1000;
 
 /**
  * clearpipe-main-style flow editor shell for both /clearpipe/new and existing
@@ -62,6 +68,22 @@ export class ClearpipeFlowEditorComponent {
   protected readonly saving = signal(false);
   /** True while an activation toggle or run submission request is in flight. */
   protected readonly busy = signal(false);
+  protected readonly overviewOpen = signal(false);
+  protected readonly overviewFilter = signal('all');
+  protected readonly runtimeNodes = this.store.runtimeNodes;
+  protected readonly runtimeUpdatedAt = this.store.runtimeUpdatedAt;
+  protected readonly overviewRows = computed(() => {
+    const filterId = this.overviewFilter();
+    const runtime = this.runtimeNodes();
+    return this.store.nodes()
+      .filter(node => filterId === 'all' || node.id === filterId)
+      .map(node => ({node, runtime: runtime.get(node.id)}));
+  });
+  protected readonly overviewStatusSummary = computed(() => {
+    const counts = new Map<ClearpipeFlowStatus, number>();
+    for (const node of this.store.nodes()) counts.set(node.status, (counts.get(node.status) ?? 0) + 1);
+    return [...counts.entries()].map(([status, count]) => ({status, count}));
+  });
 
   /** Live polling subscription for the current run's execution snapshots. */
   private pollSub: Subscription | null = null;
@@ -94,6 +116,27 @@ export class ClearpipeFlowEditorComponent {
       const nothingSelected =
         this.store.selectedNodeId() === null && this.store.selectedBoundaryId() === null;
       this.inspectorCollapsed.set(nothingSelected);
+    });
+
+    // Hovering a node (or keeping Overview open) upgrades the normal five-second
+    // background refresh to a one-second live snapshot stream. Cleanup stops the
+    // extra requests immediately on mouseleave/dialog close.
+    effect((onCleanup) => {
+      const liveSurfaceOpen = this.store.hoveredNodeId() !== null || this.overviewOpen();
+      const runId = this.store.runTaskId();
+      if (!liveSurfaceOpen || !this.store.running() || !runId) return;
+      const subscription = timer(0, HOVER_POLL_INTERVAL_MS).pipe(
+        switchMap(() => this.api.executionSnapshot({
+          run: runId,
+          definition_revision: this.editingRevision,
+          node_limit: 200,
+        })),
+        takeUntilDestroyed(this.destroyRef),
+      ).subscribe({
+        next: response => this.consumeSnapshot(runId, response),
+        error: () => undefined,
+      });
+      onCleanup(() => subscription.unsubscribe());
     });
   }
 
@@ -350,7 +393,7 @@ export class ClearpipeFlowEditorComponent {
 
   private consumeSnapshot(
     runId: string,
-    response: {status: string; snapshot?: {nodes: {graph_node_id: string}[]; controller?: {status?: string}}},
+    response: ClearpipeExecutionSnapshotResponse,
     track = true,
   ): void {
     if (this.store.runTaskId() !== runId) return;
@@ -358,10 +401,12 @@ export class ClearpipeFlowEditorComponent {
     if (response.status === 'unavailable' || !snapshot) return;
     const statuses = new Map<string, {status: ClearpipeFlowStatus; message?: string}>();
     for (const node of snapshot.nodes) {
-      const mapped = mapSnapshotNodeStatus(node as never);
+      const mapped = mapSnapshotNodeStatus(node);
       if (mapped) statuses.set(node.graph_node_id, mapped);
     }
+    this.store.applyRuntimeSnapshot(snapshot.nodes);
     if (statuses.size) this.store.applyRunSnapshot(statuses);
+    this.store.applyBoundaryStops();
     if (!track) return;
     const controllerStatus = (snapshot.controller?.status ?? '').toLowerCase();
     if (TERMINAL_CONTROLLER_STATUSES.has(controllerStatus)) {
@@ -379,6 +424,47 @@ export class ClearpipeFlowEditorComponent {
   private stopPolling(): void {
     this.pollSub?.unsubscribe();
     this.pollSub = null;
+  }
+
+  protected openOverview(): void {
+    this.overviewOpen.set(true);
+    const runId = this.store.runTaskId();
+    if (runId && !this.running()) this.fetchSnapshotOnce(runId);
+  }
+
+  protected closeOverview(): void {
+    this.overviewOpen.set(false);
+  }
+
+  protected setOverviewFilter(nodeId: string): void {
+    this.overviewFilter.set(nodeId);
+  }
+
+  protected runtimeOutputs(runtime?: ClearpipeFlowRuntimeNode): string[] {
+    if (!runtime) return [];
+    return [
+      ...(runtime.artifacts ?? []).map(item => `Artifact · ${item.name}`),
+      ...(runtime.datasets ?? []).map(item => `Dataset · ${item.name}`),
+      ...(runtime.models?.input ?? []).map(item => `Input model · ${item.name ?? item.id}`),
+      ...(runtime.models?.output ?? []).map(item => `Output model · ${item.name ?? item.id}`),
+    ];
+  }
+
+  protected runtimeTime(value?: string): string {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
+  }
+
+  protected runtimeDuration(runtime?: ClearpipeFlowRuntimeNode): string {
+    if (!runtime?.started_at) return '—';
+    const start = new Date(runtime.started_at).valueOf();
+    const end = runtime.completed_at ? new Date(runtime.completed_at).valueOf() : Date.now();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '—';
+    const seconds = Math.floor((end - start) / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}m ${seconds % 60}s`;
   }
 
   protected exportPipeline(): void {

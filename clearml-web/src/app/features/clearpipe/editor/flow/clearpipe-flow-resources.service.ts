@@ -111,31 +111,6 @@ export interface FlowDatasetInfo {
   alias?: string;
 }
 
-export interface FlowWorkloadRequest {
-  project: string;
-  queue?: string;
-  workload_name?: string;
-  image?: string;
-  command?: string;
-  args?: string;
-  working_dir?: string;
-  environment_variables?: string;
-  environment?: string;
-  compute?: string;
-  data_sources?: string;
-  template?: string;
-  node_pools?: string;
-  existing_pvc?: string;
-  gpu_devices_request?: string;
-  gpu_memory_request?: string;
-  gpu_portion_request?: string;
-  cpu_core_request?: string;
-  cpu_memory_request?: string;
-  /** Legacy short fields kept for compatibility. */
-  gpu?: string;
-  cpu?: string;
-}
-
 export interface FlowExecutionResult {
   execution_id?: string;
   status?: string;
@@ -602,12 +577,6 @@ export class ClearpipeFlowResourcesService {
         map((response) => (response as AutoscalerProjectResources) ?? null),
         catchError(() => of(null)),
       );
-  }
-
-  submitWorkload(request: FlowWorkloadRequest): Observable<FlowExecutionResult | null> {
-    return this.requests
-      .post<FlowExecutionResult>(this.url('autoscaler.submit_workload'), {workload: request})
-      .pipe(catchError(() => of(null)));
   }
 
   runCommand(project: string, command: string): Observable<FlowExecutionResult | null> {

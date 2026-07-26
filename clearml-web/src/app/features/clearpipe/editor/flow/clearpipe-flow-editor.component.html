@@ -34,6 +34,12 @@
         <mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>
         Save
       </button>
+      <button mat-stroked-button type="button" class="cp-flow-toolbar__overview"
+              (click)="openOverview()" [disabled]="!store.runTaskId()"
+              title="View live status and outputs for every node">
+        <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
+        Overview
+      </button>
 
       <span class="cp-flow-toolbar__divider"></span>
 
@@ -52,7 +58,7 @@
         <button mat-flat-button type="button" class="cp-flow-toolbar__run cp-flow-toolbar__run--running"
                 disabled title="Pipeline is running">
           <mat-icon class="cp-flow-toolbar__spinner" fontSet="al" fontIcon="al-ico-running"></mat-icon>
-          Running…
+          Running...
         </button>
         <button mat-flat-button type="button" class="cp-flow-toolbar__stop" (click)="stop()"
                 [disabled]="busy()" title="Stop the running pipeline">
@@ -112,4 +118,88 @@
       }
     </aside>
   </div>
+
+  @if (overviewOpen()) {
+    <div class="cp-flow-overview-backdrop" (click)="closeOverview()">
+      <section class="cp-flow-overview" role="dialog" aria-modal="true"
+               aria-labelledby="cp-flow-overview-title" (click)="$event.stopPropagation()">
+        <header class="cp-flow-overview__header">
+          <div>
+            <span class="cp-flow-overview__eyebrow">Runtime monitor</span>
+            <h2 id="cp-flow-overview-title">Pipeline overview</h2>
+            <p>
+              @if (running()) {
+                Live refresh every second
+              } @else {
+                Latest completed run
+              }
+              @if (runtimeUpdatedAt()) {
+                | Updated {{ runtimeTime(runtimeUpdatedAt()!) }}
+              }
+            </p>
+          </div>
+          <button mat-icon-button type="button" aria-label="Close overview" (click)="closeOverview()">
+            <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+          </button>
+        </header>
+
+        <div class="cp-flow-overview__toolbar">
+          <label>
+            <span>Filter by node</span>
+            <select [ngModel]="overviewFilter()" (ngModelChange)="setOverviewFilter($event)">
+              <option value="all">All nodes</option>
+              @for (node of store.nodes(); track node.id) {
+                <option [value]="node.id">{{ node.label }}</option>
+              }
+            </select>
+          </label>
+          <div class="cp-flow-overview__summary" aria-label="Status summary">
+            @for (item of overviewStatusSummary(); track item.status) {
+              <span [attr.data-status]="item.status">{{ item.count }} {{ item.status }}</span>
+            }
+          </div>
+        </div>
+
+        <div class="cp-flow-overview__grid">
+          @for (row of overviewRows(); track row.node.id) {
+            <article class="cp-flow-overview-card" [attr.data-status]="row.node.status">
+              <div class="cp-flow-overview-card__title">
+                <span class="cp-flow-overview-card__icon"
+                      [style.--accent]="row.node.status === 'error' ? '#ef4444' : '#6366f1'">
+                  <mat-icon fontSet="al" [fontIcon]="row.node.status === 'completed' ? 'al-ico-success' : 'al-ico-task'"></mat-icon>
+                </span>
+                <div>
+                  <h3>{{ row.node.label }}</h3>
+                  <p>{{ row.node.statusMessage || row.node.status }}</p>
+                </div>
+                <span class="cp-flow-overview-card__status">{{ row.node.status }}</span>
+              </div>
+
+              <dl>
+                <div><dt>Task ID</dt><dd>{{ row.runtime?.task_id || 'Not created' }}</dd></div>
+                <div><dt>Started</dt><dd>{{ runtimeTime(row.runtime?.started_at) }}</dd></div>
+                <div><dt>Duration</dt><dd>{{ runtimeDuration(row.runtime) }}</dd></div>
+                <div><dt>Result</dt><dd>{{ row.runtime?.result || row.runtime?.status || 'Not available' }}</dd></div>
+              </dl>
+
+              <div class="cp-flow-overview-card__outputs">
+                <strong>Outputs</strong>
+                @if (runtimeOutputs(row.runtime).length) {
+                  <ul>
+                    @for (output of runtimeOutputs(row.runtime); track output) {
+                      <li>{{ output }}</li>
+                    }
+                  </ul>
+                } @else {
+                  <p>{{ row.node.status === 'stopped'
+                    ? 'No task created; execution stopped at the boundary.'
+                    : 'No runtime outputs reported yet.' }}</p>
+                }
+              </div>
+            </article>
+          }
+        </div>
+      </section>
+    </div>
+  }
 </section>

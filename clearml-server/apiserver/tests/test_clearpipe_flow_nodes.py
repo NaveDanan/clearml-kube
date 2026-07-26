@@ -16,11 +16,13 @@ import types
 import unittest
 from types import SimpleNamespace
 
-from apiserver.bll.clearpipe.generation.compiler import compile_graph
+from apiserver.bll.clearpipe.generation.compiler import GenerationError, compile_graph
 from apiserver.bll.clearpipe.generation.flow_nodes import (
+    _render_autoscaler_function,
     _render_report_function,
     _render_report_function_v2,
     _resolve_base_task_id,
+    _resolve_dataset_task_id,
     _sanitize_report_mappings,
     flow_node_meta,
     lower_flow_function_node,
@@ -107,8 +109,10 @@ def _lowering_for(node):
 
 
 class _FakeResponse:
-    def __init__(self, data):
+    def __init__(self, data, ok=True, text=""):
         self._data = data
+        self.ok = ok
+        self.text = text
 
     def json(self):
         return {"data": self._data}
@@ -150,6 +154,14 @@ class _FakeCurrentTask:
 class _FakeArtifactTask:
     def __init__(self, artifacts):
         self.artifacts = artifacts
+
+
+def _last_report_markdown(session):
+    return next(
+        call["json"]["report"]
+        for call in reversed(session.calls)
+        if call["service"] == "reports" and call["action"] == "update"
+    )
 
 
 def _run_report_body(
@@ -345,7 +357,7 @@ class ReportRuntimeTests(unittest.TestCase):
             current_task=_FakeCurrentTask(),
             tasks_by_id=tasks,
         )
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("## metrics", report_md)
         self.assertIn("PREVIEW-BODY", report_md)
 
@@ -362,7 +374,7 @@ class ReportRuntimeTests(unittest.TestCase):
             current_task=_FakeCurrentTask(),
             tasks_by_id=tasks,
         )
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("s3://bucket/model.bin", report_md)
 
     def test_template_report_prepended(self):
@@ -381,7 +393,7 @@ class ReportRuntimeTests(unittest.TestCase):
         )
         actions = [(c["service"], c["action"]) for c in session.calls]
         self.assertEqual(actions[0], ("reports", "get_all_ex"))
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertTrue(report_md.startswith("TEMPLATE-MD"))
 
     def test_no_template_fetch_when_id_absent(self):
@@ -403,7 +415,7 @@ class ReportRuntimeTests(unittest.TestCase):
             current_task=_FakeCurrentTask(),
         )
         self.assertEqual(result, "report-1")
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("template report unavailable", report_md)
 
     def test_missing_artifact_task_degrades_gracefully(self):
@@ -419,7 +431,7 @@ class ReportRuntimeTests(unittest.TestCase):
             tasks_by_id={},
         )
         self.assertEqual(result, "report-1")
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("unavailable", report_md)
 
     def test_absent_artifact_on_existing_task_falls_back_to_literal(self):
@@ -721,6 +733,57 @@ def _task_flow_node(config, name="train_step", node_id="task-node"):
     )
 
 
+def _dataset_flow_node(config, name="dataset_step", node_id="dataset-node"):
+    meta = "# clearpipe-flow-node:" + json.dumps(
+        {"type": "dataset", "config": config}
+    )
+    source = "\n".join(
+        [meta, "def {}() -> object:".format(name), "    return None", ""]
+    )
+    return function_node(
+        node_id,
+        name=name,
+        signature="def {}() -> object".format(name),
+        source=source,
+        ports=_output_only_ports(),
+        configuration={"task_type": "application", "cache": False},
+    )
+
+
+def _scheduled_flow_node(config=None, name="scheduled_step", node_id="scheduled-node"):
+    meta = "# clearpipe-flow-node:" + json.dumps(
+        {"type": "scheduled", "config": config or {}}
+    )
+    source = "\n".join(
+        [meta, "def {}() -> object:".format(name), "    return None", ""]
+    )
+    return function_node(
+        node_id,
+        name=name,
+        signature="def {}() -> object".format(name),
+        source=source,
+        ports=_output_only_ports(),
+        configuration={"task_type": "application", "cache": False},
+    )
+
+
+def _autoscaler_flow_node(config, name="autoscaler_step", node_id="autoscaler-node"):
+    meta = "# clearpipe-flow-node:" + json.dumps(
+        {"type": "autoscaler", "config": config}
+    )
+    source = "\n".join(
+        [meta, "def {}() -> object:".format(name), "    return None", ""]
+    )
+    return function_node(
+        node_id,
+        name=name,
+        signature="def {}() -> object".format(name),
+        source=source,
+        ports=_output_only_ports(),
+        configuration={"task_type": "application", "cache": False},
+    )
+
+
 def _compile_graph(nodes, bindings):
     parsed = read_graph_v2(graph_document(nodes=nodes, bindings=bindings))
     assert parsed.is_supported, parsed
@@ -747,6 +810,30 @@ class TaskNodeLoweringTests(unittest.TestCase):
         self.assertIn('base_task_id="base-abc"', source)
         self.assertNotIn("add_function_step", source)
 
+    def test_flow_queue_and_parameter_overrides_are_preserved(self):
+        source = _compile_graph(
+            [
+                _task_flow_node(
+                    {
+                        "baseTaskId": "base-abc",
+                        "queue": "default",
+                        "parameterOverrides": {
+                            "Args/clearml_dataset_project": "datasets",
+                            "Args/clearml_dataset_name": "training-data",
+                        },
+                    }
+                )
+            ],
+            [],
+        )
+        self.assertIn('execution_queue="default"', source)
+        self.assertIn(
+            '"Args/clearml_dataset_name": "training-data"', source
+        )
+        self.assertIn(
+            '"Args/clearml_dataset_project": "datasets"', source
+        )
+
     def test_unconfigured_task_keeps_backward_compatible_noop(self):
         source = _compile_graph([_task_flow_node({})], [])
         self.assertIn("add_function_step", source)
@@ -760,6 +847,209 @@ class TaskNodeLoweringTests(unittest.TestCase):
         import ast
 
         ast.parse(_compile_graph([_task_flow_node({"baseTaskId": "base-abc"})], []))
+
+
+class DatasetNodeLoweringTests(unittest.TestCase):
+    def test_resolve_sync_task_id_rules(self):
+        self.assertEqual(
+            _resolve_dataset_task_id({"syncTaskId": "sync-1"}), "sync-1"
+        )
+        self.assertEqual(
+            _resolve_dataset_task_id({"baseTaskId": "sync-2"}), "sync-2"
+        )
+        self.assertIsNone(_resolve_dataset_task_id({"syncDatasetId": "project"}))
+
+    def test_dataset_sync_clones_task_on_dataset_queue(self):
+        source = _compile_graph(
+            [
+                _dataset_flow_node(
+                    {
+                        "mode": "sync",
+                        "syncTaskId": "dataset-sync-task",
+                        "queue": "dataset",
+                    }
+                )
+            ],
+            [],
+        )
+        self.assertIn("pipe.add_step(", source)
+        self.assertIn('base_task_id="dataset-sync-task"', source)
+        self.assertIn('execution_queue="dataset"', source)
+        self.assertNotIn("add_function_step", source)
+
+
+class ScheduledNodeLoweringTests(unittest.TestCase):
+    def test_scheduled_marker_returns_primitive_instead_of_pickle_artifact(self):
+        source = _compile_graph([_scheduled_flow_node()], [])
+        self.assertIn("def scheduled_step() -> object:\n    return True", source)
+        self.assertIn("pipe.add_function_step(", source)
+        self.assertNotIn("def scheduled_step() -> object:\n    return None", source)
+
+
+class AutoscalerNodeLoweringTests(unittest.TestCase):
+    def test_spinup_uses_submit_workload_and_platform_managed_queue(self):
+        source = _compile_graph(
+            [
+                _autoscaler_flow_node(
+                    {
+                        "mode": "spinup",
+                        "workloadName": "pipeline-agent",
+                        "workload_type": "training",
+                        "project": "ml-project",
+                        "image": "allegroai/clearml-agent:latest",
+                        "command": "clearml-agent daemon",
+                        "queue": "runai",
+                        "gpu_devices_request": "1",
+                    }
+                )
+            ],
+            [],
+        )
+
+        self.assertIn('action="submit_workload"', source)
+        self.assertIn('"workload_name": "pipeline-agent"', source)
+        self.assertIn('"command": "clearml-agent daemon"', source)
+        self.assertIn('"gpu_devices_request": "1"', source)
+        self.assertNotIn('"queue": "runai"', source)
+        self.assertIn('action="get_execution"', source)
+
+    def test_missing_command_defaults_to_clearml_agent_daemon(self):
+        source = _compile_graph(
+            [
+                _autoscaler_flow_node(
+                    {
+                        "mode": "spinup",
+                        "workloadName": "pipeline-agent",
+                        "environment": "clearml-agent-environment",
+                    }
+                )
+            ],
+            [],
+        )
+
+        self.assertIn('"command": "clearml-agent daemon"', source)
+
+    def test_image_or_environment_is_required_like_submit_dialog(self):
+        with self.assertRaises(GenerationError) as raised:
+            _compile_graph(
+                [_autoscaler_flow_node({"mode": "spinup", "workloadName": "agent"})],
+                [],
+            )
+
+        self.assertEqual(raised.exception.diagnostics[0].code, "CPSEM004")
+        self.assertIn("container image or Run:ai environment", raised.exception.diagnostics[0].message)
+
+    def test_generated_program_is_valid_python(self):
+        import ast
+
+        ast.parse(
+            _compile_graph(
+                [
+                    _autoscaler_flow_node(
+                        {
+                            "mode": "spinup",
+                            "workloadName": "pipeline-agent",
+                            "image": "allegroai/clearml-agent:latest",
+                        }
+                    )
+                ],
+                [],
+            )
+        )
+
+    def test_downstream_task_waits_for_successful_runai_submission(self):
+        autoscaler = _autoscaler_flow_node(
+            {
+                "mode": "spinup",
+                "workloadName": "pipeline-agent",
+                "image": "allegroai/clearml-agent:latest",
+            }
+        )
+        task = _task_flow_node(
+            {"baseTaskId": "base-task", "queue": "runai"},
+            name="training_step",
+            node_id="task-node",
+        )
+        edge = binding(
+            "autoscaler-to-task",
+            kind="execution-only",
+            source_node_id="autoscaler-node",
+            target_node_id="task-node",
+        )
+        source = _compile_graph([autoscaler, task], [edge])
+
+        self.assertIn('action="submit_workload"', source)
+        self.assertIn('execution_queue="runai"', source)
+        self.assertIn('parents=["autoscaler_step"]', source)
+
+    def test_runtime_waits_for_worker_execution_and_returns_identity(self):
+        session = _FakeSession(
+            responses={
+                ("autoscaler", "submit_workload"): {
+                    "status": "queued",
+                    "execution_id": "execution-1",
+                },
+                ("autoscaler", "get_execution"): {
+                    "status": "success",
+                    "stdout": "workload submitted",
+                },
+            }
+        )
+
+        class _Task:
+            @staticmethod
+            def _get_default_session():
+                return session
+
+        fake_clearml = types.ModuleType("clearml")
+        fake_clearml.Task = _Task
+        saved = sys.modules.get("clearml")
+        sys.modules["clearml"] = fake_clearml
+        try:
+            namespace = {}
+            source = _render_autoscaler_function(
+                "autoscaler_step",
+                "submit_workload",
+                {
+                    "workload": {
+                        "workload_type": "training",
+                        "workload_name": "pipeline-agent",
+                        "project": "ml-project",
+                        "image": "agent:latest",
+                        "command": "clearml-agent daemon",
+                    }
+                },
+                60,
+            )
+            exec(compile(source, "<autoscaler>", "exec"), namespace)  # noqa: S102
+            result = namespace["autoscaler_step"]()
+        finally:
+            if saved is not None:
+                sys.modules["clearml"] = saved
+            else:
+                sys.modules.pop("clearml", None)
+
+        self.assertEqual(result["execution_id"], "execution-1")
+        self.assertEqual(result["workload_name"], "pipeline-agent")
+        self.assertEqual(result["project"], "ml-project")
+        self.assertEqual(
+            [(call["action"], call["json"]) for call in session.calls],
+            [
+                (
+                    "submit_workload",
+                    {
+                        "workload": {
+                            "workload_type": "training",
+                            "workload_name": "pipeline-agent",
+                            "project": "ml-project",
+                            "image": "agent:latest",
+                            "command": "clearml-agent daemon",
+                        }
+                    },
+                ),
+                ("get_execution", {"execution_id": "execution-1"}),
+            ],
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -889,6 +1179,34 @@ class ReportGraphAwareCompileTests(unittest.TestCase):
             )
         )
 
+    def test_runtime_report_uses_task_plot_artifacts_when_plot_events_are_absent(self):
+        source = self._source(
+            [
+                {
+                    "slotKey": "media:confusion",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "artifact",
+                    "selector": {"artifactKey": "validation_confusion_matrix"},
+                    "required": True,
+                    "confirmed": True,
+                },
+                {
+                    "slotKey": "media:loss",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "scalar_graph",
+                    "selector": {"metric": "val", "variant": "loss"},
+                    "required": True,
+                    "confirmed": True,
+                },
+            ]
+        )
+        self.assertIn(
+            "_artifact_url(primary, 'validation_confusion_matrix')", source
+        )
+        self.assertIn(
+            "_artifact_url(primary, 'validation_precision_recall_curve')", source
+        )
+
     def test_sanitize_report_mappings_filters_invalid(self):
         clean = _sanitize_report_mappings(
             [
@@ -902,9 +1220,65 @@ class ReportGraphAwareCompileTests(unittest.TestCase):
         self.assertEqual(clean[0]["slotKey"], "text:A")
         self.assertTrue(clean[0]["required"])  # default required
 
+    def test_persisted_template_manifest_requires_every_slot_mapping(self):
+        task = _task_flow_node(
+            {"baseTaskId": "base-abc"}, name="train_step", node_id="task-node"
+        )
+        report = _report_ga(
+            [],
+            config={
+                "templateSlots": [
+                    {"key": "text:AUTHOR", "kind": "text", "label": "AUTHOR"}
+                ],
+                "templateFingerprint": "abc12345",
+            },
+        )
+        edge = binding(
+            "edge-1",
+            kind="execution-only",
+            source_node_id="task-node",
+            target_node_id="report-node",
+        )
+        with self.assertRaises(GenerationError) as raised:
+            _compile_graph([task, report], [edge])
+        self.assertEqual(raised.exception.diagnostics[0].code, "CPSEM004")
+        self.assertIn("unmapped", raised.exception.diagnostics[0].message)
 
-def _report_ga(mappings, name="report_step"):
-    return _report_node({"templateReportId": "tmpl", "reportMappings": mappings}, name=name)
+    def test_persisted_template_manifest_accepts_confirmed_connected_mapping(self):
+        task = _task_flow_node(
+            {"baseTaskId": "base-abc"}, name="train_step", node_id="task-node"
+        )
+        mapping = {
+            "slotKey": "text:AUTHOR",
+            "source": {"sourceNodeId": "task-node"},
+            "outputKind": "field",
+            "selector": {"field": "author"},
+            "required": True,
+            "confirmed": True,
+        }
+        report = _report_ga(
+            [mapping],
+            config={
+                "templateSlots": [
+                    {"key": "text:AUTHOR", "kind": "text", "label": "AUTHOR"}
+                ],
+                "templateFingerprint": "abc12345",
+            },
+        )
+        edge = binding(
+            "edge-1",
+            kind="execution-only",
+            source_node_id="task-node",
+            target_node_id="report-node",
+        )
+        source = _compile_graph([task, report], [edge])
+        self.assertIn('"${train_step.id}"', source)
+
+
+def _report_ga(mappings, name="report_step", config=None):
+    report_config = {"templateReportId": "tmpl", "reportMappings": mappings}
+    report_config.update(config or {})
+    return _report_node(report_config, name=name)
 
 
 class ReportGraphAwareRuntimeTests(unittest.TestCase):
@@ -937,8 +1311,49 @@ class ReportGraphAwareRuntimeTests(unittest.TestCase):
             session=session,
             template_report_id="tmpl",
         )
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("Run resnet-run", report_md)
+        self.assertIn(
+            ("reports", "publish"),
+            [(call["service"], call["action"]) for call in session.calls],
+        )
+
+    def test_author_and_company_fields_resolve_from_runtime_task(self):
+        session = self._session(
+            "By <AUTHOR> at <COMPANY_ID>",
+            [
+                {
+                    "id": "run-123",
+                    "user": {"name": "Tester"},
+                    "company": {"id": "company-1"},
+                }
+            ],
+        )
+        _run_report_v2(
+            [
+                {
+                    "slotKey": "text:AUTHOR",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "field",
+                    "selector": {"field": "author"},
+                    "required": True,
+                    "confirmed": True,
+                },
+                {
+                    "slotKey": "text:COMPANY_ID",
+                    "source": {"sourceNodeId": "task-node"},
+                    "outputKind": "field",
+                    "selector": {"field": "company_id"},
+                    "required": True,
+                    "confirmed": True,
+                },
+            ],
+            [("task-node", "train_step", "s0")],
+            ("run-123",),
+            session=session,
+            template_report_id="tmpl",
+        )
+        self.assertIn("By Tester at company-1", _last_report_markdown(session))
 
     def test_required_missing_output_fails_before_report_creation(self):
         session = self._session("Run <TASK_NAME>", [])
@@ -980,7 +1395,7 @@ class ReportGraphAwareRuntimeTests(unittest.TestCase):
             session=session,
             template_report_id="tmpl",
         )
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("_(not reported)_", report_md)
         self.assertIn("Not reported", report_md)
 
@@ -1008,7 +1423,7 @@ class ReportGraphAwareRuntimeTests(unittest.TestCase):
             session=session,
             template_report_id="tmpl",
         )
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("objects=run-123", report_md)
         self.assertIn("metrics=ROC", report_md)
         self.assertIn("variants=plot%20image", report_md)
@@ -1033,7 +1448,7 @@ class ReportGraphAwareRuntimeTests(unittest.TestCase):
             session=session,
             template_report_id="tmpl",
         )
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("Run hist-run", report_md)
 
     def test_template_fingerprint_drift_fails(self):
@@ -1068,7 +1483,7 @@ class ReportGraphAwareRuntimeTests(unittest.TestCase):
             template_report_id="tmpl",
             template_fingerprint=_fingerprint(template),
         )
-        report_md = session.calls[-1]["json"]["report"]
+        report_md = _last_report_markdown(session)
         self.assertIn("ok-run", report_md)
 
 

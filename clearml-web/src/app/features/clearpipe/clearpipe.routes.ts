@@ -21,16 +21,16 @@ export const clearpipeRoutes: Routes = [
   },
   {
     path: ':taskId/edit',
-    loadComponent: () => import('./existing-pipeline/clearpipe-existing-pipeline.component')
-      .then(m => m.ClearpipeExistingPipelineComponent),
+    loadComponent: () => import('./editor/flow/clearpipe-flow-editor.component')
+      .then(m => m.ClearpipeFlowEditorComponent),
     providers: clearpipeEditorProviders(),
     canDeactivate: [clearpipeUnsavedWorkGuard],
     data: {clearpipeVisualEdit: true, existingPipeline: true},
   },
   {
     path: ':taskId',
-    loadComponent: () => import('./existing-pipeline/clearpipe-existing-pipeline.component')
-      .then(m => m.ClearpipeExistingPipelineComponent),
+    loadComponent: () => import('./editor/flow/clearpipe-flow-editor.component')
+      .then(m => m.ClearpipeFlowEditorComponent),
     providers: clearpipeEditorProviders(),
     canDeactivate: [clearpipeUnsavedWorkGuard],
     data: {existingPipeline: true},

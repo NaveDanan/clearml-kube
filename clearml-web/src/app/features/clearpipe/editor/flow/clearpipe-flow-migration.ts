@@ -65,9 +65,30 @@ export const migrateFlowGraph = (input: ClearpipeFlowGraph): FlowMigrationResult
   const taskNodesNeedingSplit: string[] = [];
   const reportsWithExternalSources: string[] = [];
 
-  // Pass 1: Task nodes -> baseTaskId, building baseTaskId -> nodeId lookup.
+  // Pass 1: AutoScaler runtime defaults + Task nodes -> baseTaskId.
   const baseTaskToNode = new Map<string, string>();
   const nodes: ClearpipeFlowNode[] = input.nodes.map((node) => {
+    if (node.type === 'autoscaler') {
+      const config = {...node.config};
+      let autoscalerChanged = false;
+      if (!String(config['workload_type'] ?? config['workloadType'] ?? '').trim()) {
+        config['workload_type'] = 'training';
+        autoscalerChanged = true;
+      }
+      if (!String(config['command'] ?? '').trim()) {
+        config['command'] = 'clearml-agent daemon';
+        autoscalerChanged = true;
+      }
+      if (config['autoscalerTimeoutSeconds'] == null) {
+        config['autoscalerTimeoutSeconds'] = 600;
+        autoscalerChanged = true;
+      }
+      if (autoscalerChanged) {
+        changed = true;
+        return {...node, config};
+      }
+      return node;
+    }
     if (node.type !== 'task') return node;
     const config = {...node.config};
     const legacyIds = asStringArray(config['taskIds']);

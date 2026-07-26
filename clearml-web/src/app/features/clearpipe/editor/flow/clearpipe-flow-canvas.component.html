@@ -70,6 +70,8 @@
            [style.left.px]="node.position.x"
            [style.top.px]="node.position.y"
            [attr.data-node-id]="node.id"
+           (mouseenter)="hoverNode(node.id)"
+           (mouseleave)="leaveNode(node.id)"
            (pointerdown)="onNodePointerDown($event, node)">
 
         <span class="cp-flow-handle cp-flow-handle--in" [attr.data-node-id]="node.id" title="Input"></span>
@@ -143,6 +145,33 @@
               [attr.data-node-id]="node.id"
               title="Drag to connect"
               (pointerdown)="onOutputPointerDown($event, node)"></span>
+
+        @if (hoveredNodeId() === node.id) {
+          <aside class="cp-flow-node-runtime" role="status" [attr.aria-label]="node.label + ' live status'">
+            <div class="cp-flow-node-runtime__head">
+              <strong>{{ node.label }}</strong>
+              @if (running()) {
+                <span class="cp-flow-node-runtime__live"><span></span>Live</span>
+              }
+            </div>
+            <div class="cp-flow-node-runtime__status">
+              <span [style.background]="statusColors[node.status]"></span>
+              {{ node.statusMessage || node.status }}
+            </div>
+            @if (runtimeNode(node.id); as runtime) {
+              <dl>
+                <div><dt>Task</dt><dd>{{ runtime.task_id || 'Not created yet' }}</dd></div>
+                <div><dt>Started</dt><dd>{{ runtimeTime(runtime.started_at) }}</dd></div>
+                <div><dt>Updated</dt><dd>{{ runtimeTime(runtime.updated_at) }}</dd></div>
+                <div><dt>Outputs</dt><dd>{{ runtimeOutputCount(runtime) }}</dd></div>
+              </dl>
+            } @else {
+              <p>{{ node.status === 'stopped'
+                ? 'No task was created because execution stopped at the boundary.'
+                : 'Waiting for the runtime record…' }}</p>
+            }
+          </aside>
+        }
       </div>
     }
   </div>
