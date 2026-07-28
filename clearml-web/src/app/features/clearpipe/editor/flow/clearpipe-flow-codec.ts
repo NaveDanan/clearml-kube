@@ -14,6 +14,7 @@ import {GraphBinding, GraphNode, GraphV2} from '../../domain/graph-v2.types';
 import {
   ClearpipeFlowBoundary,
   ClearpipeFlowEdge,
+  ClearpipeFlowEdgeRule,
   ClearpipeFlowGraph,
   ClearpipeFlowNode,
   ClearpipeFlowNodeType,
@@ -35,6 +36,8 @@ interface FlowNodeMeta {
   type: ClearpipeFlowNodeType;
   config: Record<string, unknown>;
   description?: string;
+  /** Shared group identity (Group/Ungroup); round-tripped so groups survive reload. */
+  groupId?: string;
   /** Marks the fallback stub emitted for an empty pipeline so decode can drop it. */
   synthetic?: boolean;
 }
@@ -46,7 +49,20 @@ interface FlowGraphMeta {
   activated?: boolean;
   boundaries?: ClearpipeFlowBoundary[];
   viewport?: ClearpipeFlowViewport;
+  /** Conditional edge routing rules keyed by `<source>-><target>` (round-tripped
+   *  losslessly; the server compiler ignores authoring metadata). */
+  edgeRules?: Record<string, ClearpipeFlowEdgeRule[]>;
 }
+
+const edgeRuleKey = (edge: {source: string; target: string}): string => `${edge.source}->${edge.target}`;
+
+const collectEdgeRules = (edges: readonly ClearpipeFlowEdge[]): Record<string, ClearpipeFlowEdgeRule[]> | undefined => {
+  const map: Record<string, ClearpipeFlowEdgeRule[]> = {};
+  for (const edge of edges) {
+    if (edge.rules?.length) map[edgeRuleKey(edge)] = edge.rules;
+  }
+  return Object.keys(map).length ? map : undefined;
+};
 
 const sanitizeName = (name: string): string => {
   const normalized = name.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
@@ -112,6 +128,7 @@ export const flowToGraphNodes = (flow: ClearpipeFlowGraph): {nodes: GraphNode[];
     activated: flow.activated,
     boundaries: flow.boundaries,
     viewport: flow.viewport,
+    edgeRules: collectEdgeRules(flow.edges),
   };
 
   if (!flow.nodes.length) {
@@ -123,7 +140,12 @@ export const flowToGraphNodes = (flow: ClearpipeFlowGraph): {nodes: GraphNode[];
   const used = new Set<string>();
   const nodes = flow.nodes.map((node, index) => {
     const name = uniqueName(node.label || node.type, used);
-    const meta: FlowNodeMeta = {type: node.type, config: node.config ?? {}, ...(node.description ? {description: node.description} : {})};
+    const meta: FlowNodeMeta = {
+      type: node.type,
+      config: node.config ?? {},
+      ...(node.description ? {description: node.description} : {}),
+      ...(node.groupId ? {groupId: node.groupId} : {}),
+    };
     return functionNode(node.id, name, node.label || node.type, node.position, meta, index === 0 ? graphMeta : undefined);
   });
 
@@ -166,7 +188,11 @@ const endpointNodeId = (endpoint: unknown): string | null => {
   return value && typeof value.node_id === 'string' ? value.node_id : null;
 };
 
-const decodeEdges = (graph: GraphV2, keptIds: ReadonlySet<string>): ClearpipeFlowEdge[] => {
+const decodeEdges = (
+  graph: GraphV2,
+  keptIds: ReadonlySet<string>,
+  edgeRules?: Record<string, ClearpipeFlowEdgeRule[]>,
+): ClearpipeFlowEdge[] => {
   const edges: ClearpipeFlowEdge[] = [];
   const seen = new Set<string>();
   graph.bindings.forEach((binding, index) => {
@@ -176,7 +202,13 @@ const decodeEdges = (graph: GraphV2, keptIds: ReadonlySet<string>): ClearpipeFlo
     const key = `${source}->${target}`;
     if (seen.has(key)) return;
     seen.add(key);
-    edges.push({id: (binding as {id?: string}).id ?? `edge_${index}`, source, target});
+    const rules = edgeRules?.[key];
+    edges.push({
+      id: (binding as {id?: string}).id ?? `edge_${index}`,
+      source,
+      target,
+      ...(rules?.length ? {rules} : {}),
+    });
   });
   return edges;
 };
@@ -204,6 +236,7 @@ export const graphV2ToFlow = (graph: GraphV2): ClearpipeFlowGraph => {
       position: {x: node.visual?.position?.x ?? 0, y: node.visual?.position?.y ?? 0},
       label: node.label || node.name,
       ...(meta?.description ? {description: meta.description} : {}),
+      ...(meta?.groupId ? {groupId: meta.groupId} : {}),
       status: 'idle',
       config: {...clearpipeFlowNodeMeta(type).defaults, ...(meta?.config ?? {})},
     });
@@ -218,7 +251,7 @@ export const graphV2ToFlow = (graph: GraphV2): ClearpipeFlowGraph => {
     ...(meta.description ?? graph.document.description ? {description: meta.description ?? graph.document.description} : {}),
     activated: meta.activated ?? false,
     nodes,
-    edges: decodeEdges(graph, keptIds),
+    edges: decodeEdges(graph, keptIds, meta.edgeRules),
     boundaries: meta.boundaries ?? [],
     viewport: meta.viewport ?? base.viewport,
   };

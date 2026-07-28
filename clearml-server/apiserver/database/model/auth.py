@@ -56,7 +56,17 @@ class Credentials(EmbeddedDocument):
 
 
 class User(DbModelMixin, AuthDocument):
-    meta = {"db_alias": Database.auth, "strict": strict}
+    meta = {
+        "db_alias": Database.auth,
+        "strict": strict,
+        "indexes": [
+            {
+                "fields": ("oidc_issuer", "oidc_subject"),
+                "unique": True,
+                "sparse": True,
+            }
+        ],
+    }
 
     id = StringField(primary_key=True)
     name = StringField()
@@ -81,3 +91,9 @@ class User(DbModelMixin, AuthDocument):
 
     autocreated = BooleanField(default=False)
     """ Set to true if the user was auto created based on config settings"""
+
+    oidc_issuer = StringField()
+    """OIDC issuer that owns this external identity."""
+
+    oidc_subject = StringField()
+    """Stable OIDC subject identifier. Never use email as the identity key."""

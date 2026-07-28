@@ -16,9 +16,8 @@ standard authorization-code flow, and seeds no users.
 
 The `client-secret` in `keycloak-oidc` must be the same value as
 `client-secret` in the chart's `auth.oidc.existingSecret` in the ClearML release
-namespace. That chart Secret also requires `cookie-secret`, and requires the
-session-bridge key configured by `auth.oidc.sessionBridge.passwordKey` when the
-bridge is enabled.
+namespace. The ClearML OIDC Secret requires only that `client-secret` key;
+native OIDC state is one-time and stored in Redis.
 
 Credentials previously committed to this repository must be revoked and rotated
 outside Git before use. This change does not perform or verify that rotation.

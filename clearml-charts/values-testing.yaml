@@ -23,8 +23,9 @@
 #
 # On Docker Desktop / Windows minikube, Kubernetes YAML cannot create local
 # localhost port-forwards. If NodePorts are not directly reachable from Windows,
-# run these local commands after sync:
-#   kubectl port-forward -n clearml-server svc/clearml-server-webserver 8080:8080
+# run these local commands after sync. The ingress forward is required for OIDC
+# because it serves ClearML and Keycloak on the same local port:
+#   kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8080:80
 #   kubectl port-forward -n clearml-server svc/clearml-server-apiserver 8008:8008
 #   kubectl port-forward -n clearml-server svc/clearml-server-fileserver 8081:8081
 
@@ -44,56 +45,34 @@ clearml:
   clientConfigurationApiUrl: "/api"
   clientConfigurationFilesUrl: "/files"
 
-# OIDC SSO login through the oauth2-proxy front door, backed by the Keycloak
-# instance deployed by the "keycloak" ArgoCD app (namespace clearml-tools).
-# Uses nip.io wildcard DNS (clearml.127.0.0.1.nip.io etc. auto-resolve to
-# 127.0.0.1) so NO /etc/hosts edits are needed - just run `minikube tunnel`
-# so the nginx ingress is reachable on 127.0.0.1:80.
+# Native OIDC SSO login backed by the Keycloak instance deployed by the
+# "keycloak" ArgoCD app (namespace clearml-tools).
+# The hostless ClearML ingress supports the familiar http://127.0.0.1:8080
+# address, while nip.io gives Keycloak a distinct host on the same ingress.
 auth:
-  # OIDC/SSO DISABLED for ClearPipe functional validation (test-only). The dev
-  # web server (localhost:4200) and direct apiserver access are used for E2E, so
-  # the oauth2-proxy front door is not required. Re-enable later for auth work.
-  mode: "password"
-  fixedUsers:
-    # The externally managed clearml-fixed-users Secret supplies apiserver.conf.
-    passHashed: false
-    existingSecret: "clearml-fixed-users"
+  mode: "oidc"
   oidc:
-    enabled: false
-    # oauth2-proxy requires a confidential Keycloak client. The externally
-    # managed Secret supplies client-secret, cookie-secret, and the session
-    # bridge password.
+    enabled: true
     displayName: "Keycloak"
-    issuerUrl: "http://keycloak.127.0.0.1.nip.io/realms/clearml"
+    startUrl: "/api/login.oidc_start"
+    issuerUrl: "http://keycloak.127.0.0.1.nip.io:8080/realms/clearml"
     clientId: "clearml"
     scopes: "openid profile email"
-    redirectUrl: "http://clearml.127.0.0.1.nip.io/oauth2/callback"
-    # Externally managed; requires client-secret, cookie-secret, and
-    # basic-auth-password keys. Create it before syncing this chart.
+    redirectUrl: "http://127.0.0.1:8080/api/login.oidc_callback"
+    postLogoutRedirectUrl: "http://127.0.0.1:8080/login"
+    loginErrorUrl: "http://127.0.0.1:8080/login"
+    # The browser uses the public authorization/logout endpoints. Server-side
+    # token and JWKS calls use cluster DNS while the validated issuer remains
+    # the public realm URL.
+    authorizationUrl: "http://keycloak.127.0.0.1.nip.io:8080/realms/clearml/protocol/openid-connect/auth"
+    tokenUrl: "http://keycloak.clearml-tools.svc.cluster.local:8080/realms/clearml/protocol/openid-connect/token"
+    jwksUrl: "http://keycloak.clearml-tools.svc.cluster.local:8080/realms/clearml/protocol/openid-connect/certs"
+    endSessionUrl: "http://keycloak.127.0.0.1.nip.io:8080/realms/clearml/protocol/openid-connect/logout"
+    verifyTls: false
+    adminGroups:
+      - "/clearml-admins"
+    # Externally managed; requires only client-secret.
     existingSecret: "clearml-oidc"
-    sessionBridge:
-      enabled: true
-      usernameClaim: "email"
-      passwordKey: "basic-auth-password"
-
-oauth2Proxy:
-  provider: "keycloak-oidc"
-  emailDomains: "*"
-  # Split-horizon OIDC: the browser hits Keycloak via the ingress hostname while
-  # oauth2-proxy redeems tokens / fetches JWKS over in-cluster service DNS. Skip
-  # discovery and pin the endpoints so the token issuer stays consistent.
-  extraArgs:
-    cookie-secure: "false"
-    skip-oidc-discovery: "true"
-    login-url: "http://keycloak.127.0.0.1.nip.io/realms/clearml/protocol/openid-connect/auth"
-    redeem-url: "http://keycloak.clearml-tools.svc.cluster.local:8080/realms/clearml/protocol/openid-connect/token"
-    oidc-jwks-url: "http://keycloak.clearml-tools.svc.cluster.local:8080/realms/clearml/protocol/openid-connect/certs"
-    whitelist-domain: "keycloak.127.0.0.1.nip.io"
-  ingress:
-    enabled: true
-    ingressClassName: "nginx"
-    hostName: "clearml.127.0.0.1.nip.io"
-    path: "/"
 
 # Outgoing SMTP routed to the Mailpit test sink deployed by the "mailpit"
 # ArgoCD app (namespace clearml-tools). Captured mail is viewable at
@@ -105,9 +84,6 @@ email:
 
 apiserver:
   enabled: true
-  # Fixed-users override (auth.fixed_users block) used by the OIDC session
-  # bridge. Provision this externally before Argo CD sync.
-  existingAdditionalConfigsSecret: clearml-fixed-users
   # ClearPipe v2 execution requires a dedicated provenance signing key. Without
   # it the apiserver reports capabilities.execution/run = false and the web
   # "Run" button is disabled (clearpipe.start rejects with
@@ -125,7 +101,7 @@ apiserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-25-clearpipe-integration-75faddc"
+    tag: "2026-07-28"
     pullPolicy: Never
   service:
     type: NodePort
@@ -150,7 +126,7 @@ fileserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-25-clearpipe-integration-75faddc"
+    tag: "2026-07-28"
     pullPolicy: Never
   service:
     type: NodePort
@@ -182,8 +158,9 @@ clearpipeScheduler:
   enabled: true
   image:
     registry: ""
-    repository: "clearpipe-scheduler"
-    tag: "2026-07-25-clearpipe-integration-75faddc"
+    repository: "clearml/clearpipe-scheduler"
+    tag: "2026-07-28"
+    pullPolicy: Never
   pollSeconds: 30
   existingSecret: "clearpipe-scheduler-credentials"
   containerSecurityContext:
@@ -206,7 +183,7 @@ webserver:
   image:
     registry: ""
     repository: "clearml/clearml"
-    tag: "2026-07-25-clearpipe-integration-75faddc"
+    tag: "2026-07-28"
     pullPolicy: Never
   service:
     type: NodePort
@@ -222,7 +199,11 @@ webserver:
         }
       }
   ingress:
-    enabled: false
+    enabled: true
+    ingressClassName: "nginx"
+    # Empty means a hostless catch-all rule, so 127.0.0.1:8080 works. The
+    # Keycloak ingress has a specific host and takes precedence.
+    hostName: ""
   podSecurityContext:
     runAsNonRoot: false
     runAsUser: 0
@@ -241,7 +222,7 @@ runaiWorker:
   image:
     registry: ""
     repository: "clearml/runai-worker"
-    tag: "2026-07-26"
+    tag: "2026-07-28"
     pullPolicy: Never
   replicaCount: 1
   pollInterval: 10

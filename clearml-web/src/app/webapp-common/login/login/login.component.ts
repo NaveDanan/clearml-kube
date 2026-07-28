@@ -88,7 +88,7 @@ export class LoginComponent {
 
   protected showLogin = computed(() => this.showSimpleLogin() || [loginModes.password, loginModes.simple].includes(this.loginMode()));
 
-  protected ssoProviders = computed<SsoProvider[]>(() => this.environment().ssoProviders ?? []);
+  protected ssoProviders = this.loginService.ssoProviders;
   protected showSso = computed(() =>
     this.ssoProviders().length > 0 &&
     [loginModes.password, loginModes.simple, loginModes.ssoOnly].includes(this.loginMode())
@@ -187,6 +187,7 @@ export class LoginComponent {
       .subscribe((params: Params) => {
         this.redirectUrl = params['redirect'] || '';
         this.redirectUrl = this.redirectUrl.replace('/login', '');
+        this.loginFailed.set(!!params['oidc_error']);
       });
 
     this.loginService.getLoginMode()
@@ -260,10 +261,10 @@ export class LoginComponent {
     }
     this.showSpinner.set(true);
     // Return the user to the originally requested in-app path after the
-    // provider/proxy completes the OIDC flow. oauth2-proxy reads `rd`.
+    // ClearML OIDC callback establishes the application session.
     const returnPath = this.getNavigateUrl() || '/';
     const separator = provider.url.includes('?') ? '&' : '?';
-    const target = `${provider.url}${separator}rd=${encodeURIComponent(returnPath)}`;
+    const target = `${provider.url}${separator}return_to=${encodeURIComponent(returnPath)}`;
     this.document.location.href = target;
   }
 

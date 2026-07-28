@@ -49,23 +49,40 @@ function Require-TemplateFailure {
     [string]$ExpectedError
   )
 
-  $output = & $Helm template validation $chart @Arguments 2>&1
-  if ($LASTEXITCODE -eq 0) {
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $output = & $Helm template validation $chart @Arguments 2>&1
+    $helmExitCode = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  if ($helmExitCode -eq 0) {
     throw "${Description}: expected Helm rendering to fail"
   }
   Require-Contains ($output -join "`n") $ExpectedError $Description
 }
 
 $confidential = Render-Chart "confidential-oidc" (Join-Path $PSScriptRoot "confidential-oidc-values.yaml")
-Require-Contains $confidential "name: OAUTH2_PROXY_CLIENT_SECRET" "Confidential OIDC"
-Require-Contains $confidential "name: OAUTH2_PROXY_COOKIE_SECRET" "Confidential OIDC"
-Require-Contains $confidential "name: OAUTH2_PROXY_BASIC_AUTH_PASSWORD" "Confidential OIDC"
-Require-NotContains $confidential "--code-challenge-method=S256" "Confidential OIDC"
+Require-Contains $confidential "name: CLEARML_OIDC_CLIENT_SECRET" "Native OIDC"
+Require-Contains $confidential "name: CLEARML__APISERVER__AUTH__OIDC__ISSUER_URL" "Native OIDC"
+Require-Contains $confidential "name: CLEARML__APISERVER__AUTH__OIDC__JWKS_URL" "Native OIDC"
+Require-NotContains $confidential "oauth2-proxy" "Native OIDC"
+Require-NotContains $confidential "CLEARML__apiserver__auth__fixed_users__enabled" "Native OIDC"
 
 $unauthenticatedSmtp = Render-Chart "unauthenticated-smtp" (Join-Path $PSScriptRoot "unauthenticated-smtp-values.yaml")
 Require-NotContains $unauthenticatedSmtp "name: CLEARML__apiserver__email__username" "Unauthenticated SMTP"
 Require-NotContains $unauthenticatedSmtp "key: smtp-username" "Unauthenticated SMTP"
 Require-NotContains $unauthenticatedSmtp "key: smtp-password" "Unauthenticated SMTP"
+
+$esa = Render-Chart "esa" (Join-Path $chart "esa-values.yaml")
+Require-Contains $esa "name: CLEARML__apiserver__auth__fixed_users__enabled" "ESA password authentication"
+Require-Contains $esa "secretName: clearml-fixed-users" "ESA fixed-user configuration"
+Require-Contains $esa "name: CLEARML__secure__clearpipe__provenance_keys__current_key_id" "ESA ClearPipe provenance key id"
+Require-Contains $esa "name: CLEARML__secure__clearpipe__provenance_keys__keys__current" "ESA ClearPipe provenance signing key"
+Require-Contains $esa "name: clearml-provenance" "ESA ClearPipe provenance Secret"
+Require-Contains $esa "name: CLEARPIPE_SCHEDULER_POLL_SECONDS" "ESA ClearPipe scheduler polling"
 
 Require-TemplateFailure "Authenticated SMTP without a Secret" @(
   "--set", "email.enabled=true",
@@ -73,18 +90,15 @@ Require-TemplateFailure "Authenticated SMTP without a Secret" @(
   "--set", "email.smtpServer=smtp.example.invalid"
 ) "email.existingSecret is required"
 
-Require-TemplateFailure "Invalid OIDC client authentication mode" @(
-  "--set", "auth.oidc.clientAuthenticationMode=invalid"
-) "auth.oidc.clientAuthenticationMode must be 'confidential'"
-
-Require-TemplateFailure "Public OIDC client mode is unsupported" @(
-  "--set", "auth.oidc.clientAuthenticationMode=public"
-) "oauth2-proxy requires a confidential Keycloak client secret"
+Require-TemplateFailure "Invalid OIDC client authentication method" @(
+  "-f", (Join-Path $PSScriptRoot "confidential-oidc-values.yaml"),
+  "--set", "auth.oidc.clientAuthenticationMethod=invalid"
+) "auth.oidc.clientAuthenticationMethod must be 'client_secret_post' or 'client_secret_basic'"
 
 Require-TemplateFailure "Confidential OIDC Secret validation" @(
   "-f", (Join-Path $PSScriptRoot "confidential-oidc-values.yaml"),
   "--set", "auth.oidc.existingSecret="
-) "auth.oidc.existingSecret is required when auth.mode is 'oidc'; it must contain client-secret and cookie-secret keys"
+) "auth.oidc.existingSecret is required when auth.mode is 'oidc'; it must contain client-secret"
 
 Require-TemplateFailure "Confidential OIDC issuer validation" @(
   "-f", (Join-Path $PSScriptRoot "confidential-oidc-values.yaml"),
@@ -95,6 +109,11 @@ Require-TemplateFailure "Confidential OIDC redirect validation" @(
   "-f", (Join-Path $PSScriptRoot "confidential-oidc-values.yaml"),
   "--set", "auth.oidc.redirectUrl="
 ) "auth.oidc.redirectUrl is required when auth.mode is 'oidc'"
+
+Require-TemplateFailure "OIDC logout redirect validation" @(
+  "-f", (Join-Path $PSScriptRoot "confidential-oidc-values.yaml"),
+  "--set", "auth.oidc.postLogoutRedirectUrl="
+) "auth.oidc.postLogoutRedirectUrl is required when auth.mode is 'oidc'"
 
 Require-TemplateFailure "SMTP host validation" @(
   "--set", "email.enabled=true",

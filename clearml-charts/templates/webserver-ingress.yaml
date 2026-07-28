@@ -29,7 +29,9 @@ spec:
       secretName: {{ .Values.webserver.ingress.tlsSecretName }}
   {{- end }}
   rules:
-  - host: {{ .Values.webserver.ingress.hostName }}
+  -{{- if .Values.webserver.ingress.hostName }}
+    host: {{ .Values.webserver.ingress.hostName }}
+    {{- end }}
     http:
       paths:
       - path: {{ .Values.webserver.ingress.path }}

@@ -119,21 +119,6 @@ Reference Name (runai worker)
 {{- end }}
 
 {{/*
-Reference Name (oauth2-proxy)
-*/}}
-{{- define "oauth2proxy.referenceName" -}}
-{{- include "clearml.fullname" . }}-oauth2-proxy
-{{- end }}
-
-{{/*
-Selector labels (oauth2-proxy)
-*/}}
-{{- define "oauth2proxy.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "clearml.fullname" . }}
-app.kubernetes.io/instance: {{ include "oauth2proxy.referenceName" . }}
-{{- end }}
-
-{{/*
 Selector labels (runai worker)
 */}}
 {{- define "runaiWorker.selectorLabels" -}}

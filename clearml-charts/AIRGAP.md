@@ -8,8 +8,9 @@ This chart is prepared for the ESA cluster values in `esa-values.yaml`.
 or in the registry/mirror used by the cluster:
 
 ```text
-clearml/clearml:2026-06-24
-clearml/runai-worker:2026-07-26
+clearml/clearml:2026-07-28
+clearml/runai-worker:2026-07-28
+clearml/clearpipe-scheduler:2026-07-28
 clearml/redis:7.0.9-debian-11-r1
 clearml/mongodb:6.0.10-debian-11-r8
 clearml/elasticsearch:7.17.3
@@ -18,20 +19,23 @@ clearml/elasticsearch:7.17.3
 Load the exported slim tar on the connected staging host or registry host:
 
 ```bash
-docker load -i clearml-images-slim-2026-07-26.tar
+docker load -i clearml-images-slim-2026-07-28.tar
 ```
 
-The slim tar contains only the ClearML application images. The Redis, MongoDB,
-and Elasticsearch images listed above must already exist in the cluster registry,
-registry mirror, or node image cache. If the final cluster uses an internal
-registry hostname, retag these images for that registry and update
-`global.imageRegistry` in `esa-values.yaml` to match.
+The slim tar contains the three release images: ClearML, the RunAI worker, and
+the ClearPipe scheduler. Native OIDC is handled by the ClearML API and adds no
+proxy image. The Redis, MongoDB, and Elasticsearch images listed above must already
+exist in the cluster registry, registry mirror, or node image cache. If the final
+cluster uses an internal registry hostname, retag these images for that registry
+and update `global.imageRegistry` in `esa-values.yaml` to match.
 
 ```bash
-docker tag clearml/clearml:2026-06-24 <registry>/clearml/clearml:2026-06-24
-docker tag clearml/runai-worker:2026-07-26 <registry>/clearml/runai-worker:2026-07-26
-docker push <registry>/clearml/clearml:2026-06-24
-docker push <registry>/clearml/runai-worker:2026-07-26
+docker tag clearml/clearml:2026-07-28 <registry>/clearml/clearml:2026-07-28
+docker tag clearml/runai-worker:2026-07-28 <registry>/clearml/runai-worker:2026-07-28
+docker tag clearml/clearpipe-scheduler:2026-07-28 <registry>/clearml/clearpipe-scheduler:2026-07-28
+docker push <registry>/clearml/clearml:2026-07-28
+docker push <registry>/clearml/runai-worker:2026-07-28
+docker push <registry>/clearml/clearpipe-scheduler:2026-07-28
 ```
 
 ## Required existing cluster resources
@@ -42,6 +46,10 @@ these resources already exist in the deployment namespace before syncing:
 ```text
 Secret: nave-pull-secret
 Secret: clearml-server-secrets
+Secret: clearml-fixed-users
+Secret: clearml-provenance
+Secret: clearpipe-scheduler-credentials
+Secret: rf-ca-cert
 Secret: wildcard-certs-secret
 StorageClass: nfs-main
 IngressClass: nginx
@@ -60,6 +68,17 @@ The `clearml-server-secrets` Secret must be provisioned as
 `clearml.existingSecret` for the ESA release. Its required keys, along with all
 other chart credential contracts and rotation guidance, are documented in
 [CREDENTIALS.md](CREDENTIALS.md).
+
+The ESA UI uses password authentication. Provision `clearml-fixed-users` with
+an `apiserver.conf` key containing the bcrypt-hashed fixed-user configuration.
+Provision `clearml-provenance` with a dedicated `signing-key` used only for
+ClearPipe runtime provenance. ClearPipe graph-v2 execution is unavailable
+without that signing key. Follow the step-by-step Ubuntu instructions in
+[ESA-SECRETS-SETUP.md](ESA-SECRETS-SETUP.md).
+
+External Keycloak and SMTP services do not require images in this archive.
+When OIDC or authenticated SMTP is enabled, provision their referenced Secrets
+according to `CREDENTIALS.md`.
 
 ## Helm/Argo CD values
 

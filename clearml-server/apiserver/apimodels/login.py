@@ -6,8 +6,26 @@ from apiserver.apimodels import DictField, callable_default
 
 class GetSupportedModesRequest(Base):
     pass
-    # state = StringField(help_text="ASCII base64 encoded application state")
-    # callback_url_prefix = StringField()
+
+
+class OidcStartRequest(Base):
+    return_to = StringField()
+
+
+class OidcCallbackRequest(Base):
+    code = StringField()
+    state = StringField()
+    error = StringField()
+    error_description = StringField()
+
+
+class LogoutRequest(Base):
+    redirect_url = StringField()
+    provider = StringField()
+
+
+class LogoutResponse(Base):
+    redirect_url = StringField()
 
 
 class BasicGuestMode(Base):

@@ -10,6 +10,7 @@ imageCredentials:
   existingSecret: "nave-pull-secret"
 
 clearml:
+  cookieSecure: true
   # -- Name fo the UI cookie
   cookieName: "clearml-token-k8s"
   # -- Cookie domain to be left empty if not exposed with an ingress
@@ -24,13 +25,31 @@ clearml:
   # -- Must contain the documented ClearML credential keys; see CREDENTIALS.md.
   existingSecret: "clearml-server-secrets"
 
+# Require username/password authentication for the externally exposed ESA UI.
+# The Secret must contain an apiserver.conf with bcrypt-hashed fixed users.
+auth:
+  mode: "password"
+  fixedUsers:
+    passHashed: true
+    existingSecret: "clearml-fixed-users"
 
 apiserver:
   enabled: true
+  # Mount the fixed-user configuration used by auth.mode=password.
+  existingAdditionalConfigsSecret: "clearml-fixed-users"
+  # ClearPipe graph-v2 execution requires a dedicated provenance signing key.
+  extraEnvs:
+    - name: CLEARML__secure__clearpipe__provenance_keys__current_key_id
+      value: "current"
+    - name: CLEARML__secure__clearpipe__provenance_keys__keys__current
+      valueFrom:
+        secretKeyRef:
+          name: "clearml-provenance"
+          key: "signing-key"
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-26"
+    tag: "2026-07-28"
   service:
     type: ClusterIP
   ingress:
@@ -55,7 +74,7 @@ fileserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-26"
+    tag: "2026-07-28"
   service:
     type: ClusterIP
   ingress:
@@ -101,7 +120,7 @@ webserver:
   image:
     repository: "clearml"
     pullPolicy: IfNotPresent
-    tag: "2026-07-26"
+    tag: "2026-07-28"
   service:
     type: ClusterIP
   additionalConfigs:
@@ -132,12 +151,34 @@ webserver:
     # tlsSecretName: wildcard-tls
     pathType: ImplementationSpecific
 
+clearpipeScheduler:
+  enabled: true
+  image:
+    repository: "clearpipe-scheduler"
+    pullPolicy: IfNotPresent
+    tag: "2026-07-28"
+  pollSeconds: 30
+  existingSecret: "clearpipe-scheduler-credentials"
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
 runaiWorker:
   enabled: true
   image:
     repository: "runai-worker"
     pullPolicy: IfNotPresent
-    tag: "2026-07-26"
+    tag: "2026-07-28"
   replicaCount: 1
   pollInterval: 3
   batchSize: 5

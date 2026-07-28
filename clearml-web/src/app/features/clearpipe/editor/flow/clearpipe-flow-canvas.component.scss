@@ -43,7 +43,7 @@ button[mat-icon-button] {
 .cp-flow-canvas {
   position: absolute;
   inset: 0;
-  cursor: grab;
+  cursor: default;
   touch-action: none;
 
   &--panning {
@@ -88,7 +88,13 @@ button[mat-icon-button] {
   }
 
   &:hover .cp-flow-edge__line {
-    stroke: #ef4444;
+    stroke: #14b8a6;
+    stroke-width: 2.5;
+  }
+
+  &--ruled .cp-flow-edge__line {
+    stroke: #6366f1;
+    stroke-dasharray: 8 3;
   }
 
   &__pending {
@@ -99,6 +105,47 @@ button[mat-icon-button] {
     opacity: 0.7;
     pointer-events: none;
   }
+}
+
+// Rule count badge floating at a ruled edge's midpoint.
+.cp-flow-edge-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 7px 2px 5px;
+  border: 1px solid #6366f1;
+  border-radius: 999px;
+  background: var(--cp-surface, #fff);
+  color: #6366f1;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 3;
+  box-shadow: var(--cp-shadow);
+
+  mat-icon {
+    font-size: 13px;
+    width: 13px;
+    height: 13px;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, #6366f1 12%, var(--cp-surface, #fff));
+  }
+}
+
+// Rubber-band marquee selection rectangle (graph coordinates, inside world).
+.cp-flow-marquee {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #6366f1;
+  background: color-mix(in srgb, #6366f1 12%, transparent);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 4;
 }
 
 @keyframes cp-flow-dash {
@@ -247,7 +294,11 @@ button[mat-icon-button] {
 
 .cp-flow-node {
   position: absolute;
+  box-sizing: border-box;
   width: 240px;
+  height: 104px;
+  display: flex;
+  flex-direction: column;
   border-radius: var(--cp-radius, 12px);
   border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   background: var(--cp-surface, #fff);
@@ -259,6 +310,25 @@ button[mat-icon-button] {
   &--selected {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent),
+      var(--cp-shadow, 0 4px 16px rgba(0, 0, 0, 0.12));
+  }
+
+  // Part of a multi-selection (marquee / ctrl+click) but not the primary node.
+  &--multiselected:not(&--selected) {
+    outline: 2px solid color-mix(in srgb, var(--accent) 75%, transparent);
+    outline-offset: 2px;
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent),
+      var(--cp-shadow, 0 4px 16px rgba(0, 0, 0, 0.12));
+  }
+
+  // Grouped nodes carry a persistent violet dashed ring when not selected, so a
+  // group is visible at rest (Group/Ungroup action).
+  &--grouped:not(&--selected):not(&--multiselected) {
+    outline: 2px dashed color-mix(in srgb, #8b5cf6 65%, transparent);
+    outline-offset: 3px;
   }
 
   // Nodes whose center sits inside a boundary get a teal ring cue.
@@ -461,6 +531,7 @@ button[mat-icon-button] {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    margin-top: auto;
     padding: 6px 10px;
     background: var(--cp-surface-muted, #f5f6f8);
     border-radius: 0 0 calc(var(--cp-radius, 12px) - 2px) calc(var(--cp-radius, 12px) - 2px);
@@ -662,6 +733,9 @@ button[mat-icon-button] {
     height: 34px;
     line-height: 34px;
     border-radius: 0;
+    // Fit the Material hover/ripple state layer to the button so the rounded
+    // square below fills it without overflowing the stacked control.
+    --mat-icon-button-state-layer-size: 34px;
 
     mat-icon {
       font-size: 16px;
@@ -674,5 +748,352 @@ button[mat-icon-button] {
     & + button {
       border-top: 1px solid var(--cp-border, #e0e3e7);
     }
+
+    // Material renders the hover state-layer + click ripple as a full circle;
+    // make it a rounded square for these stacked zoom controls.
+    ::ng-deep .mat-mdc-button-persistent-ripple,
+    ::ng-deep .mat-mdc-button-persistent-ripple::before,
+    ::ng-deep .mat-mdc-button-ripple,
+    ::ng-deep .mat-ripple {
+      border-radius: 8px;
+    }
   }
 }
+
+// --- edge right-click context menu -----------------------------------------
+.cp-flow-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.cp-flow-menu {
+  position: absolute;
+  z-index: 41;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--cp-border, #e0e3e7);
+  border-radius: 10px;
+  background: var(--cp-surface, #fff);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  color: var(--cp-text, #1a1c1e);
+
+  &__group {
+    position: relative;
+  }
+
+  &__group--open > &__item--parent {
+    background: var(--cp-surface-muted, #f5f6f8);
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 9px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+
+    mat-icon {
+      font-size: 16px;
+      width: 16px;
+      height: 16px;
+      line-height: 16px;
+      color: var(--cp-text-muted, #5f6368);
+    }
+
+    span {
+      flex: 1;
+    }
+
+    &:hover {
+      background: var(--cp-surface-muted, #f5f6f8);
+    }
+
+    &--parent .cp-flow-menu__chevron {
+      flex: 0;
+      margin-left: auto;
+    }
+
+    &--danger {
+      color: #ef4444;
+
+      mat-icon {
+        color: #ef4444;
+      }
+    }
+  }
+
+  &__chevron {
+    font-size: 14px !important;
+  }
+
+  &__item &__shortcut {
+    flex: 0 0 auto;
+    margin-left: 12px;
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    color: var(--cp-text-muted, #5f6368);
+  }
+
+  &__sep {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--cp-border, #e0e3e7);
+  }
+}
+
+// "Add Rule" flyout: opens to the SIDE of the main menu, next to its parent row.
+.cp-flow-submenu {
+  position: absolute;
+  top: -5px;
+  left: 100%;
+  margin-left: 5px;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--cp-border, #e0e3e7);
+  border-radius: 10px;
+  background: var(--cp-surface, #fff);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+  z-index: 43;
+}
+
+// --- conditional-routing rules editor overlay ------------------------------
+.cp-flow-rules {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 42;
+  width: 420px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--cp-border, #e0e3e7);
+  border-radius: 12px;
+  background: var(--cp-surface, #fff);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+  color: var(--cp-text, #1a1c1e);
+  overflow: hidden;
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--cp-border, #e0e3e7);
+
+    strong {
+      display: block;
+      font-size: 14px;
+    }
+  }
+
+  &__sub {
+    display: block;
+    font-size: 11px;
+    color: var(--cp-text-muted, #5f6368);
+    margin-top: 2px;
+  }
+
+  &__body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  &__empty {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--cp-text-muted, #5f6368);
+  }
+
+  &__foot {
+    padding: 10px 14px;
+    border-top: 1px solid var(--cp-border, #e0e3e7);
+  }
+
+  &__add-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  &__add {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid var(--accent, #6366f1);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--cp-text, #1a1c1e);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+
+    mat-icon {
+      font-size: 15px;
+      width: 15px;
+      height: 15px;
+      line-height: 15px;
+    }
+
+    &:hover {
+      background: color-mix(in srgb, #6366f1 10%, transparent);
+    }
+
+    &-caret {
+      transition: transform 0.15s ease;
+    }
+
+    &--open &-caret {
+      transform: rotate(-90deg);
+    }
+  }
+
+  // "Add rule" dropdown (If / Action), opening upward above the button.
+  &__add-menu {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 6px);
+    min-width: 150px;
+    padding: 4px;
+    border: 1px solid var(--cp-border, #e0e3e7);
+    border-radius: 10px;
+    background: var(--cp-surface, #fff);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    z-index: 5;
+  }
+}
+
+.cp-flow-rule {
+  border: 1px solid var(--cp-border, #e0e3e7);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--cp-surface-muted, #f5f6f8);
+
+  &__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  &__title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--cp-text-muted, #5f6368);
+  }
+
+  &__remove mat-icon {
+    color: #ef4444;
+    font-size: 15px;
+    width: 15px;
+    height: 15px;
+    line-height: 15px;
+  }
+
+  &__add-cond {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 4px 8px;
+    border: 1px dashed var(--cp-border, #c8ccd1);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--cp-text-muted, #5f6368);
+    font-size: 11px;
+    cursor: pointer;
+
+    mat-icon {
+      font-size: 13px;
+      width: 13px;
+      height: 13px;
+      line-height: 13px;
+    }
+
+    &:hover {
+      color: var(--cp-text, #1a1c1e);
+      border-color: var(--cp-text-muted, #5f6368);
+    }
+  }
+
+  &__then {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--cp-border, #e0e3e7);
+  }
+
+  &__action {
+    flex: 1;
+  }
+}
+
+.cp-flow-cond {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+
+  &__kw {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent, #6366f1);
+    min-width: 26px;
+  }
+
+  select,
+  input {
+    padding: 5px 6px;
+    border: 1px solid var(--cp-border, #e0e3e7);
+    border-radius: 6px;
+    background: var(--cp-surface, #fff);
+    color: var(--cp-text, #1a1c1e);
+    font-size: 12px;
+  }
+
+  &__node,
+  &__var {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  &__op {
+    flex: 0 0 auto;
+  }
+
+  &__value {
+    flex: 1 1 70px;
+    min-width: 0;
+  }
+
+  &__connector {
+    flex: 0 0 auto;
+  }
+
+  &__remove mat-icon {
+    color: var(--cp-text-muted, #5f6368);
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+  }
+}
+

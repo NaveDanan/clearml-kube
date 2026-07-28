@@ -7,6 +7,7 @@ from apiserver.config.info import get_default_company
 from apiserver.database.model import User
 from apiserver.database.model.auth import Role, User as AuthUser
 from apiserver.service_repo.auth.fixed_user import FixedUser
+from apiserver.bll.oidc import OidcClient
 from .migration import _apply_migrations, check_mongo_empty, get_last_server_version
 from .pre_populate import PrePopulate
 from .user import ensure_fixed_user, _ensure_auth_user
@@ -61,6 +62,7 @@ def init_mongo_data():
         _ensure_default_queue(company_id)
 
         fixed_mode = FixedUser.enabled()
+        protected_login_mode = fixed_mode or OidcClient.enabled()
 
         internal_user_emails = set()
         for user, credentials in config.get("secure.credentials", {}).items():
@@ -74,7 +76,9 @@ def init_mongo_data():
                 "autocreated": True,
             }
             internal_user_emails.add(email.lower())
-            revoke = fixed_mode and credentials.get("revoke_in_fixed_mode", False)
+            revoke = protected_login_mode and credentials.get(
+                "revoke_in_fixed_mode", False
+            )
             user_id = _ensure_auth_user(
                 user_data, company_id, log=log, revoke=revoke, internal_user=True
             )

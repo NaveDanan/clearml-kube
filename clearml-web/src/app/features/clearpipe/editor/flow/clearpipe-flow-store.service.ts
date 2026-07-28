@@ -4,6 +4,7 @@ import {
   CLEARPIPE_FLOW_NODE_TYPES,
   ClearpipeFlowBoundary,
   ClearpipeFlowEdge,
+  ClearpipeFlowEdgeRule,
   ClearpipeFlowGraph,
   ClearpipeFlowNode,
   ClearpipeFlowNodeType,
@@ -31,6 +32,9 @@ interface FlowSnapshot {
 export class ClearpipeFlowStoreService {
   readonly graph = signal<ClearpipeFlowGraph>(emptyClearpipeFlowGraph());
   readonly selectedNodeId = signal<string | null>(null);
+  /** Full multi-selection set (canvas marquee / ctrl+click). The `selectedNodeId`
+   *  above is the "primary" node the inspector configures. */
+  readonly selectedNodeIds = signal<ReadonlySet<string>>(new Set());
   readonly selectedBoundaryId = signal<string | null>(null);
   readonly dirty = signal(false);
   /** Output port of an in-progress connection gesture (drag from a node output). */
@@ -80,6 +84,7 @@ export class ClearpipeFlowStoreService {
     this.resetRun();
     this.graph.set(clone);
     this.selectedNodeId.set(null);
+    this.selectedNodeIds.set(new Set());
     this.selectedBoundaryId.set(null);
     this.connectingFrom.set(null);
     this.hoveredNodeId.set(null);
@@ -177,6 +182,11 @@ export class ClearpipeFlowStoreService {
       edges: graph.edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
     }));
     if (this.selectedNodeId() === nodeId) this.selectedNodeId.set(null);
+    if (this.selectedNodeIds().has(nodeId)) {
+      const next = new Set(this.selectedNodeIds());
+      next.delete(nodeId);
+      this.selectedNodeIds.set(next);
+    }
   }
 
   duplicateNode(nodeId: string): string | null {
@@ -283,7 +293,185 @@ export class ClearpipeFlowStoreService {
 
   selectNode(nodeId: string | null): void {
     this.selectedNodeId.set(nodeId);
+    this.selectedNodeIds.set(nodeId ? new Set([nodeId]) : new Set());
     if (nodeId) this.selectedBoundaryId.set(null);
+  }
+
+  /** Toggle a node in the multi-selection (ctrl/shift+click). Keeps the toggled
+   *  node (or another remaining member) as the inspector's primary selection. */
+  toggleNodeSelection(nodeId: string): void {
+    const next = new Set(this.selectedNodeIds());
+    if (next.has(nodeId)) {
+      next.delete(nodeId);
+    } else {
+      next.add(nodeId);
+    }
+    this.selectedNodeIds.set(next);
+    if (next.has(nodeId)) {
+      this.selectedNodeId.set(nodeId);
+      this.selectedBoundaryId.set(null);
+    } else if (this.selectedNodeId() === nodeId) {
+      this.selectedNodeId.set(next.size ? [...next][next.size - 1] : null);
+    }
+  }
+
+  /** Replace the whole multi-selection (marquee). Primary = last id. */
+  setSelection(nodeIds: readonly string[]): void {
+    const set = new Set(nodeIds);
+    this.selectedNodeIds.set(set);
+    this.selectedNodeId.set(nodeIds.length ? nodeIds[nodeIds.length - 1] : null);
+    if (nodeIds.length) this.selectedBoundaryId.set(null);
+  }
+
+  /** True when the node is part of the current multi-selection. */
+  isNodeSelected(nodeId: string): boolean {
+    return this.selectedNodeIds().has(nodeId);
+  }
+
+  /** Move several nodes at once (used to drag a whole multi-selection). */
+  moveNodes(moves: readonly {id: string; position: ClearpipeFlowPoint}[]): void {
+    const byId = new Map(moves.map((move) => [move.id, move.position]));
+    this.mutate(
+      (graph) => ({
+        ...graph,
+        nodes: graph.nodes.map((node) => (byId.has(node.id) ? {...node, position: byId.get(node.id)!} : node)),
+      }),
+      false,
+    );
+  }
+
+  /** Delete every node in the multi-selection (and their edges) in one step. */
+  removeSelectedNodes(): void {
+    const ids = this.selectedNodeIds();
+    if (!ids.size) return;
+    this.mutate((graph) => ({
+      ...graph,
+      nodes: graph.nodes.filter((node) => !ids.has(node.id)),
+      edges: graph.edges.filter((edge) => !ids.has(edge.source) && !ids.has(edge.target)),
+    }));
+    this.selectedNodeId.set(null);
+    this.selectedNodeIds.set(new Set());
+  }
+
+  // --- grouping ------------------------------------------------------------
+  /** All node ids sharing a group with the given node (or just itself). */
+  groupMemberIds(nodeId: string): string[] {
+    const node = this.graph().nodes.find((item) => item.id === nodeId);
+    if (!node?.groupId) return [nodeId];
+    const groupId = node.groupId;
+    return this.graph().nodes.filter((item) => item.groupId === groupId).map((item) => item.id);
+  }
+
+  /** True when the current selection contains at least one grouped node. */
+  readonly hasGroupedSelection = computed(() => {
+    const ids = this.selectedNodeIds();
+    return this.graph().nodes.some((node) => ids.has(node.id) && !!node.groupId);
+  });
+
+  /** Group all selected nodes under one new shared group id. */
+  groupSelectedNodes(): void {
+    const ids = this.selectedNodeIds();
+    if (ids.size < 2) return;
+    const groupId = `group-${crypto.randomUUID()}`;
+    this.mutate((graph) => ({
+      ...graph,
+      nodes: graph.nodes.map((node) => (ids.has(node.id) ? {...node, groupId} : node)),
+    }));
+  }
+
+  /** Remove the group binding from every group touched by the selection. */
+  ungroupSelectedNodes(): void {
+    const ids = this.selectedNodeIds();
+    if (!ids.size) return;
+    const groups = new Set<string>();
+    this.graph().nodes.forEach((node) => {
+      if (ids.has(node.id) && node.groupId) groups.add(node.groupId);
+    });
+    if (!groups.size) return;
+    this.mutate((graph) => ({
+      ...graph,
+      nodes: graph.nodes.map((node) => {
+        if (node.groupId && groups.has(node.groupId)) {
+          const {groupId: _drop, ...rest} = node;
+          return rest;
+        }
+        return node;
+      }),
+    }));
+  }
+
+  // --- clipboard (copy / cut / paste / duplicate) --------------------------
+  /** In-memory clipboard of copied/cut nodes + their internal edges. */
+  readonly clipboard = signal<{nodes: ClearpipeFlowNode[]; edges: ClearpipeFlowEdge[]} | null>(null);
+  readonly hasClipboard = computed(() => !!this.clipboard()?.nodes.length);
+
+  /** Copy the selected nodes and the edges wholly contained by that selection. */
+  copySelectedNodes(): void {
+    const ids = this.selectedNodeIds();
+    if (!ids.size) return;
+    const nodes = this.graph().nodes.filter((node) => ids.has(node.id));
+    const edges = this.graph().edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+    this.clipboard.set({nodes: structuredClone(nodes), edges: structuredClone(edges)});
+  }
+
+  /** Copy the selection then delete it. */
+  cutSelectedNodes(): void {
+    this.copySelectedNodes();
+    this.removeSelectedNodes();
+  }
+
+  /** Paste the clipboard at an offset; the pasted nodes become the selection. */
+  pasteClipboard(offset = 40): string[] {
+    const clip = this.clipboard();
+    if (!clip?.nodes.length) return [];
+    return this.insertClones(clip.nodes, clip.edges, offset);
+  }
+
+  /** Duplicate the current selection in place (offset); clones become selected. */
+  duplicateSelectedNodes(offset = 40): string[] {
+    const ids = this.selectedNodeIds();
+    if (!ids.size) return [];
+    const nodes = this.graph().nodes.filter((node) => ids.has(node.id));
+    const edges = this.graph().edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
+    return this.insertClones(nodes, edges, offset);
+  }
+
+  /** Clone nodes (fresh ids + remapped groups/edges), insert them, and select them. */
+  private insertClones(
+    sourceNodes: readonly ClearpipeFlowNode[],
+    sourceEdges: readonly ClearpipeFlowEdge[],
+    offset: number,
+  ): string[] {
+    const idMap = new Map<string, string>();
+    const groupMap = new Map<string, string>();
+    const clones = sourceNodes.map((node) => {
+      const id = `${node.type}-${crypto.randomUUID()}`;
+      idMap.set(node.id, id);
+      const clone: ClearpipeFlowNode = {
+        ...structuredClone(node),
+        id,
+        position: {x: node.position.x + offset, y: node.position.y + offset},
+        status: 'idle' as ClearpipeFlowStatus,
+        statusMessage: undefined,
+      };
+      if (node.groupId) {
+        if (!groupMap.has(node.groupId)) groupMap.set(node.groupId, `group-${crypto.randomUUID()}`);
+        clone.groupId = groupMap.get(node.groupId);
+      }
+      return clone;
+    });
+    const newEdges: ClearpipeFlowEdge[] = sourceEdges
+      .filter((edge) => idMap.has(edge.source) && idMap.has(edge.target))
+      .map((edge) => ({
+        id: `edge-${crypto.randomUUID()}`,
+        source: idMap.get(edge.source)!,
+        target: idMap.get(edge.target)!,
+        ...(edge.rules?.length ? {rules: structuredClone(edge.rules)} : {}),
+      }));
+    this.mutate((graph) => ({...graph, nodes: [...graph.nodes, ...clones], edges: [...graph.edges, ...newEdges]}));
+    const newIds = clones.map((clone) => clone.id);
+    this.setSelection(newIds);
+    return newIds;
   }
 
   // --- boundaries ----------------------------------------------------------
@@ -380,6 +568,46 @@ export class ClearpipeFlowStoreService {
 
   removeEdge(edgeId: string): void {
     this.mutate((graph) => ({...graph, edges: graph.edges.filter((edge) => edge.id !== edgeId)}));
+  }
+
+  // --- edge rules ----------------------------------------------------------
+  /** Add a conditional routing rule to an edge and return its id. */
+  addEdgeRule(edgeId: string, rule?: Partial<ClearpipeFlowEdgeRule>): string {
+    const id = `rule-${crypto.randomUUID()}`;
+    const newRule: ClearpipeFlowEdgeRule = {
+      id,
+      label: rule?.label,
+      conditions: rule?.conditions ?? [],
+      action: rule?.action ?? 'continue',
+    };
+    this.mutate((graph) => ({
+      ...graph,
+      edges: graph.edges.map((edge) =>
+        edge.id === edgeId ? {...edge, rules: [...(edge.rules ?? []), newRule]} : edge,
+      ),
+    }));
+    return id;
+  }
+
+  /** Patch an existing edge rule (conditions / action / label). */
+  updateEdgeRule(edgeId: string, ruleId: string, patch: Partial<Omit<ClearpipeFlowEdgeRule, 'id'>>): void {
+    this.mutate((graph) => ({
+      ...graph,
+      edges: graph.edges.map((edge) =>
+        edge.id === edgeId
+          ? {...edge, rules: (edge.rules ?? []).map((rule) => (rule.id === ruleId ? {...rule, ...patch} : rule))}
+          : edge,
+      ),
+    }));
+  }
+
+  removeEdgeRule(edgeId: string, ruleId: string): void {
+    this.mutate((graph) => ({
+      ...graph,
+      edges: graph.edges.map((edge) =>
+        edge.id === edgeId ? {...edge, rules: (edge.rules ?? []).filter((rule) => rule.id !== ruleId)} : edge,
+      ),
+    }));
   }
 
   /** All ancestor nodes reachable by following incoming edges, nearest-first (BFS). */

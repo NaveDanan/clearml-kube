@@ -18,7 +18,7 @@ data:
   {{- $provider := dict
         "name" ($oidc.displayName | default "sso" | lower)
         "displayName" ($oidc.displayName | default "SSO")
-        "url" ($oidc.startUrl | default "/oauth2/start") }}
+        "url" ($oidc.startUrl | default "/api/login.oidc_start") }}
   {{- if $oidc.icon }}
   {{- $_ := set $provider "icon" $oidc.icon }}
   {{- end }}

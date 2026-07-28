@@ -21,6 +21,7 @@ import {selectDarkTheme} from '@common/core/reducers/view.reducer';
 import {environment} from '../../../../environments/environment';
 import {TIME_IN_MILLI} from '@common/shared/utils/time-util';
 import {resetCurrentUser} from '~/core/actions/users.action';
+import {SsoProvider} from '../../../../environments/base';
 
 export type LoginMode = 'simple' | 'password' | 'ssoOnly' | 'error' | 'tenant';
 
@@ -46,6 +47,7 @@ export class BaseLoginService {
   protected locationStrategy = inject(LocationStrategy);
 
   loginMode = signal<LoginMode>(null);
+  ssoProviders = signal<SsoProvider[]>([]);
   protected basePath = HTTP.API_BASE_URL;
   private userKey: string;
   private userSecret: string;
@@ -118,6 +120,16 @@ export class BaseLoginService {
         .pipe(
           tap((res: LoginModeResponse) => {
             this.authenticated = res.authenticated;
+            const serverProviders = (res.sso_providers ?? []).map(provider => ({
+              name: provider.name,
+              displayName: provider.displayName ?? provider.display_name ?? provider.name,
+              url: provider.url,
+            }));
+            this.ssoProviders.set(
+              serverProviders.length > 0 ?
+                serverProviders :
+                (this.environment().ssoProviders ?? [])
+            );
             this._loginMode = this.calcLoginMode(res);
             this._loginModeTTL = new Date().getTime() + TIME_IN_MILLI.ONE_MIN * 10;
           }),
@@ -140,6 +152,8 @@ export class BaseLoginService {
     const fallback = this.configService.configuration().loginFallback;
     return  res.basic.enabled ?
       loginModes.password :
+      (res.sso_providers?.length || this.environment().ssoProviders?.length) ?
+        loginModes.ssoOnly :
         fallback === 'error' ?
           loginModes.error :
           loginModes.simple;

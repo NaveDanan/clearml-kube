@@ -111,9 +111,53 @@
     margin-left: 4px;
   }
 
+  // Toolbar actions deliberately use native buttons with a fully local style
+  // contract. Letting Material's global button theme own these controls caused
+  // the former large pill buttons to return after theme/style rehydration.
+  &__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--cp-border, #e0e3e7);
+    border-radius: 8px;
+    background: var(--cp-surface, #fff);
+    color: var(--cp-text, #1a1c1e);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    appearance: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--cp-text, #1a1c1e) 6%, var(--cp-surface, #fff));
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in srgb, #6366f1 65%, transparent);
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+  }
+
   &__save {
+    border-color: #6366f1;
     background: #6366f1;
     color: #fff;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, #000 8%, #6366f1);
+    }
   }
 
   &__overview {
@@ -130,29 +174,42 @@
 
   &__activate {
     &--off {
-      background: #3b82f6;
-      color: #fff;
+      border-color: color-mix(in srgb, #3b82f6 50%, var(--cp-border, #e0e3e7));
+      background: color-mix(in srgb, #3b82f6 10%, var(--cp-surface, #fff));
+      color: #2563eb;
     }
 
     &--on {
-      background: #22c55e;
-      color: #fff;
+      border-color: color-mix(in srgb, #22c55e 55%, var(--cp-border, #e0e3e7));
+      background: color-mix(in srgb, #22c55e 12%, var(--cp-surface, #fff));
+      color: #15803d;
     }
   }
 
   &__run {
+    border-color: #22c55e;
     background: #22c55e;
     color: #fff;
 
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, #000 8%, #22c55e);
+    }
+
     &--running {
+      border-color: #f59e0b;
       background: #f59e0b;
       color: #fff;
     }
   }
 
   &__stop {
+    border-color: #ef4444;
     background: #ef4444;
     color: #fff;
+
+    &:hover:not(:disabled) {
+      background: color-mix(in srgb, #000 8%, #ef4444);
+    }
   }
 
   &__spinner {
@@ -166,6 +223,10 @@
     line-height: 16px;
     margin-right: 4px;
     vertical-align: middle;
+  }
+
+  &__button mat-icon {
+    margin: 0;
   }
 }
 

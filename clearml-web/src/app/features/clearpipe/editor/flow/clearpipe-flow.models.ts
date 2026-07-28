@@ -102,7 +102,7 @@ export function incrementDatasetVersion(version: string | undefined): string {
 }
 
 /** On-canvas node footprint (kept in sync with the canvas component + boundary math). */
-export const CLEARPIPE_FLOW_NODE_SIZE = {width: 240, height: 92} as const;
+export const CLEARPIPE_FLOW_NODE_SIZE = {width: 240, height: 104} as const;
 
 export interface ClearpipeFlowPoint {
   x: number;
@@ -118,12 +118,122 @@ export interface ClearpipeFlowNode {
   status: ClearpipeFlowStatus;
   statusMessage?: string;
   config: Record<string, unknown>;
+  /** Nodes sharing a groupId select and move together (Group/Ungroup action). */
+  groupId?: string;
 }
 
 export interface ClearpipeFlowEdge {
   id: string;
   source: string;
   target: string;
+  /** Conditional routing rules evaluated when execution reaches this edge. */
+  rules?: ClearpipeFlowEdgeRule[];
+}
+
+/**
+ * Comparison operators available in an edge rule's `If` condition. The boolean
+ * operators (`is_true`/`is_false`) take no comparison value.
+ */
+export type ClearpipeFlowRuleOperator = 'eq' | 'neq' | 'gte' | 'lte' | 'is_true' | 'is_false';
+
+export const CLEARPIPE_FLOW_RULE_OPERATOR_LABELS: Record<ClearpipeFlowRuleOperator, string> = {
+  eq: '==',
+  neq: '!=',
+  gte: '>=',
+  lte: '<=',
+  is_true: 'is true',
+  is_false: 'is false',
+};
+
+/** Operators that compare against a value (i.e. require the `value` field). */
+export const CLEARPIPE_FLOW_RULE_VALUE_OPERATORS: readonly ClearpipeFlowRuleOperator[] = [
+  'eq',
+  'neq',
+  'gte',
+  'lte',
+];
+
+/**
+ * What happens when an edge rule matches (the `Then` branch):
+ * - `continue`      : follow this route only.
+ * - `continue_all`  : follow this route and all the source node's other routes.
+ * - `stop`          : halt the pipeline here.
+ */
+export type ClearpipeFlowRuleAction = 'continue' | 'continue_all' | 'stop';
+
+export const CLEARPIPE_FLOW_RULE_ACTION_LABELS: Record<ClearpipeFlowRuleAction, string> = {
+  continue: 'Continue this route',
+  continue_all: 'Continue all routes',
+  stop: 'Stop pipeline',
+};
+
+/** How a condition chains onto the previous one within a rule (if / elif). */
+export type ClearpipeFlowRuleConnector = 'and' | 'or';
+
+/** One `If`/`elif` clause: read a variable from a previous node and test it. */
+export interface ClearpipeFlowRuleCondition {
+  id: string;
+  /** Which previous (ancestor or source) node the variable is read from. */
+  sourceNodeId: string;
+  /** The variable/state key exposed by that node (see flowNodeVariables). */
+  variable: string;
+  operator: ClearpipeFlowRuleOperator;
+  /** Comparison value for value-operators; ignored for boolean operators. */
+  value?: string;
+  /** Joins this clause to the previous one (`and` = If, `or` = elif). */
+  connector?: ClearpipeFlowRuleConnector;
+}
+
+/** A conditional routing rule attached to an edge. */
+export interface ClearpipeFlowEdgeRule {
+  id: string;
+  label?: string;
+  conditions: ClearpipeFlowRuleCondition[];
+  action: ClearpipeFlowRuleAction;
+}
+
+/** A single selectable variable/state exposed by a node for edge rules. */
+export interface ClearpipeFlowVariable {
+  key: string;
+  label: string;
+  kind: 'boolean' | 'number' | 'string';
+}
+
+/**
+ * Enumerate the states/variables a node exposes to downstream edge rules. Every
+ * node exposes execution states; Task nodes additionally expose their declared
+ * expected outputs (scalars as numbers, artifacts as strings).
+ */
+export function flowNodeVariables(node: ClearpipeFlowNode): ClearpipeFlowVariable[] {
+  const variables: ClearpipeFlowVariable[] = [
+    {key: 'status', label: 'Status', kind: 'string'},
+    {key: 'succeeded', label: 'Succeeded', kind: 'boolean'},
+    {key: 'failed', label: 'Failed', kind: 'boolean'},
+  ];
+  if (node.type === 'task') {
+    const outputs = Array.isArray(node.config['expectedOutputs'])
+      ? (node.config['expectedOutputs'] as TaskExpectedOutput[])
+      : [];
+    for (const output of outputs) {
+      if (output.kind === 'scalar' || output.kind === 'scalar_graph') {
+        const metric = output.metric ?? '';
+        const variant = output.variant ?? '';
+        variables.push({
+          key: `scalar:${metric}/${variant}`,
+          label: variant ? `${metric} / ${variant}` : metric || 'Scalar',
+          kind: 'number',
+        });
+      } else if (output.kind === 'artifact') {
+        variables.push({
+          key: `artifact:${output.artifactKey ?? ''}`,
+          label: `Artifact: ${output.artifactKey ?? ''}`,
+          kind: 'string',
+        });
+      }
+    }
+  }
+  if (node.type === 'scheduled') variables.push({key: 'fired', label: 'Fired', kind: 'boolean'});
+  return variables;
 }
 
 /** Runtime details returned by the authorized execution-snapshot endpoint. */

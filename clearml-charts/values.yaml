@@ -16,6 +16,8 @@ clearml:
   cookieName: "clearml-token-k8s"
   # -- Cookie domain to be left empty if not exposed with an ingress
   cookieDomain: ""
+  # -- Mark authentication cookies Secure. Enable for every HTTPS deployment.
+  cookieSecure: false
   # -- Company name
   defaultCompany: "d1bd92a3b039400cbafc60a7a5b1e52b"
   # -- Name of a pre-provisioned ClearML credential Secret. It must contain:
@@ -33,10 +35,10 @@ auth:
   # -- Login mode surfaced to users. One of:
   #   "name-only" : default ClearML flow, any typed full name is accepted (no password).
   #   "password"  : fixed-user username/password login (enables apiserver fixed_users).
-  #   "oidc"      : password login PLUS an "Log in with <provider>" SSO button,
-  #                 with the OIDC flow handled by the oauth2-proxy front door.
+  #   "oidc"      : native OIDC authorization-code login. The API validates the
+  #                 ID token, provisions the user, and issues a ClearML session.
   mode: "name-only"
-  # -- Fixed users used by "password" and "oidc" modes.
+  # -- Fixed users used by "password" mode.
   fixedUsers:
     # -- Whether the supplied passwords are base64(bcrypt) hashes. Strongly recommended.
     passHashed: true
@@ -47,93 +49,61 @@ auth:
     existingSecret: ""
   # -- OIDC / SSO configuration (used when mode == "oidc").
   oidc:
-    # -- Master switch for surfacing the SSO button and deploying oauth2-proxy.
+    # -- Master switch for native OIDC login.
     enabled: false
     # -- Human-readable provider name shown on the login button ("Log in with <displayName>").
     displayName: "Keycloak"
     # -- Optional ClearML icon class rendered on the SSO button.
     icon: "al-ico-lock"
-    # -- Browser entrypoint that starts the OIDC flow. For the bundled oauth2-proxy
-    #    front door this is the proxy sign-in path.
-    startUrl: "/oauth2/start"
+    # -- Browser entrypoint that starts the server-side OIDC flow.
+    startUrl: "/api/login.oidc_start"
     # -- Keycloak/OIDC issuer (e.g. https://keycloak.example.com/realms/clearml).
     issuerUrl: ""
-    # -- OIDC client id registered for oauth2-proxy as a confidential Keycloak client.
+    # -- Confidential OIDC client registered for the ClearML API.
     clientId: "clearml"
+    # -- Client authentication at the token endpoint: client_secret_post or
+    #    client_secret_basic.
+    clientAuthenticationMethod: "client_secret_post"
     # -- Requested OIDC scopes.
     scopes: "openid profile email"
     # -- Public redirect/callback URL registered in Keycloak
-    #    (e.g. https://clearml.example.com/oauth2/callback).
+    #    (e.g. https://clearml.example.com/api/login.oidc_callback).
     redirectUrl: ""
-    # -- Name of an externally managed OIDC Secret. It must contain client-secret
-    #    and cookie-secret; see CREDENTIALS.md for session-bridge requirements.
+    # -- Browser destination after provider logout.
+    postLogoutRedirectUrl: ""
+    # -- Browser destination for a failed login. The API appends oidc_error.
+    loginErrorUrl: ""
+    # -- Optional split-horizon endpoint overrides. Leave empty to use discovery.
+    authorizationUrl: ""
+    tokenUrl: ""
+    jwksUrl: ""
+    endSessionUrl: ""
+    # -- Verify TLS for discovery, token, and JWKS HTTP requests.
+    verifyTls: true
+    httpTimeoutSec: 10
+    stateTtlSec: 600
+    # -- Only signed ID tokens using these algorithms are accepted.
+    allowedAlgorithms:
+      - "RS256"
+    # -- Name of an externally managed Secret containing client-secret.
     existingSecret: ""
-    # -- Session bridge: how the verified SSO identity becomes a real ClearML
-    #    session. Open-source ClearML will not mint a session from an external
-    #    identity on its own, so oauth2-proxy injects an HTTP Basic Authorization
-    #    header (user + shared password) to the ClearML upstream. ClearML's
-    #    fixed-user auth then accepts the request and issues its own session.
-    #
-    #    Requirements:
-    #      * oauth2Proxy.ingress must be the front door (all app traffic flows
-    #        through the proxy) -- see oauth2Proxy.ingress below.
-    #      * A ClearML fixed user must exist for each SSO user, with
-    #        username == the value sent by oauth2-proxy (email or preferred
-    #        username) and password == the shared basic-auth-password.
-    #      * Non-browser clients (SDK/agents) cannot do OIDC; route them around
-    #        the proxy or authenticate them with ClearML credentials directly.
-    sessionBridge:
-      # -- Enable the Basic-auth bridge described above.
-      enabled: true
-      # -- Claim used as the Basic auth username sent upstream:
-      #    "email" (adds --prefer-email-to-user) or "user" (preferred_username).
-      usernameClaim: "email"
-      # -- Key in auth.oidc.existingSecret holding the shared Basic auth password.
-      passwordKey: "basic-auth-password"
-
-# -- OIDC reverse-proxy front door (oauth2-proxy). Only deployed when auth.oidc.enabled.
-oauth2Proxy:
-  image:
-    registry: "quay.io"
-    repository: "oauth2-proxy/oauth2-proxy"
-    tag: "v7.6.0"
-    pullPolicy: IfNotPresent
-  # -- oauth2-proxy provider. "keycloak-oidc" targets a Keycloak realm.
-  provider: "keycloak-oidc"
-  # -- Service port exposed by oauth2-proxy.
-  port: 4180
-  replicaCount: 1
-  # -- Upstream that oauth2-proxy proxies authenticated requests to.
-  #    Defaults to the in-cluster ClearML webserver service.
-  upstream: ""
-  # -- Comma-separated email domains permitted to sign in ("*" allows all).
-  emailDomains: "*"
-  resources:
-    requests:
-      cpu: 50m
-      memory: 64Mi
-    limits:
-      cpu: 250m
-      memory: 128Mi
-  # -- Extra raw args passed to oauth2-proxy for advanced/edge configuration.
-  extraArgs: {}
-  # -- Sample ingress that makes oauth2-proxy the front door for the whole app.
-  #    When enabled, DISABLE webserver.ingress for the same host: the proxy
-  #    upstreams to the ClearML webserver and serves "/oauth2/*" itself, so the
-  #    SSO button (startUrl "/oauth2/start") and the OIDC callback both resolve.
-  ingress:
-    # -- Enable the oauth2-proxy front-door ingress.
-    enabled: false
-    # -- Ingress class (e.g. "nginx").
-    ingressClassName: ""
-    # -- Public hostname users browse to (must match auth.oidc.redirectUrl host).
-    hostName: "clearml.example.com"
-    # -- Root path routed through the proxy.
-    path: "/"
-    # -- TLS secret for the host. Strongly recommended (SSO over plain HTTP is unsafe).
-    tlsSecretName: ""
-    # -- Extra ingress annotations.
-    annotations: {}
+    # -- Claim and authorization mapping.
+    emailClaim: "email"
+    nameClaim: "name"
+    givenNameClaim: "given_name"
+    familyNameClaim: "family_name"
+    groupsClaim: "groups"
+    requireVerifiedEmail: true
+    # -- Empty allows any identity accepted by the configured provider.
+    allowedGroups: []
+    # -- Members of any listed group receive the ClearML admin role.
+    adminGroups: []
+    defaultRole: "user"
+    syncRoles: true
+    syncProfile: true
+    # -- Link a pre-existing ClearML account only when its verified email exactly
+    #    matches. Disabled by default to prevent accidental account takeover.
+    linkExistingUsersByEmail: false
 
 # -- Outgoing email (SMTP) for user notifications (task/pipeline/dataset/report done).
 #    Wires the apiserver.email.* config. Disabled by default.

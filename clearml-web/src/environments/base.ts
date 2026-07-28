@@ -30,8 +30,8 @@ export interface SsoProvider {
   displayName?: string;
   /**
    * URL the browser is redirected to in order to start the SSO flow.
-   * For the reverse-proxy (oauth2-proxy) setup this is the proxy sign-in
-   * entrypoint, e.g. "/oauth2/start".
+   * For native OIDC this is the ClearML API entrypoint, for example
+   * "/api/login.oidc_start".
    */
   url: string;
   /** Optional ClearML icon class rendered before the label (e.g. "al-ico-lock"). */

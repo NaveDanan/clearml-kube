@@ -18,23 +18,24 @@
     </div>
 
     <div class="cp-flow-toolbar__group cp-flow-toolbar__group--actions">
-      <button mat-stroked-button type="button" (click)="newPipeline()">
+      <button class="cp-flow-toolbar__button" type="button" (click)="newPipeline()">
         <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon>
         New
       </button>
-      <button mat-stroked-button type="button" (click)="triggerImport()">
+      <button class="cp-flow-toolbar__button" type="button" (click)="triggerImport()">
         <mat-icon fontSet="al" fontIcon="al-ico-upload"></mat-icon>
         Import
       </button>
-      <button mat-stroked-button type="button" (click)="exportPipeline()">
+      <button class="cp-flow-toolbar__button" type="button" (click)="exportPipeline()">
         <mat-icon fontSet="al" fontIcon="al-ico-download"></mat-icon>
         Export
       </button>
-      <button mat-flat-button type="button" class="cp-flow-toolbar__save" (click)="save()" [disabled]="saving()">
-        <mat-icon fontSet="al" fontIcon="al-ico-save"></mat-icon>
+      <button type="button" class="cp-flow-toolbar__button cp-flow-toolbar__save"
+              (click)="save()" [disabled]="saving()">
+        <mat-icon fontSet="al" fontIcon="al-ico-success"></mat-icon>
         Save
       </button>
-      <button mat-stroked-button type="button" class="cp-flow-toolbar__overview"
+      <button type="button" class="cp-flow-toolbar__button cp-flow-toolbar__overview"
               (click)="openOverview()" [disabled]="!store.runTaskId()"
               title="View live status and outputs for every node">
         <mat-icon fontSet="al" fontIcon="al-ico-info"></mat-icon>
@@ -43,8 +44,8 @@
 
       <span class="cp-flow-toolbar__divider"></span>
 
-      <button mat-flat-button type="button"
-              class="cp-flow-toolbar__activate"
+      <button type="button"
+              class="cp-flow-toolbar__button cp-flow-toolbar__activate"
               [class.cp-flow-toolbar__activate--on]="activated()"
               [class.cp-flow-toolbar__activate--off]="!activated()"
               [disabled]="busy()"
@@ -55,18 +56,18 @@
       </button>
 
       @if (running()) {
-        <button mat-flat-button type="button" class="cp-flow-toolbar__run cp-flow-toolbar__run--running"
+        <button type="button" class="cp-flow-toolbar__button cp-flow-toolbar__run cp-flow-toolbar__run--running"
                 disabled title="Pipeline is running">
           <mat-icon class="cp-flow-toolbar__spinner" fontSet="al" fontIcon="al-ico-running"></mat-icon>
           Running...
         </button>
-        <button mat-flat-button type="button" class="cp-flow-toolbar__stop" (click)="stop()"
+        <button type="button" class="cp-flow-toolbar__button cp-flow-toolbar__stop" (click)="stop()"
                 [disabled]="busy()" title="Stop the running pipeline">
           <mat-icon fontSet="al" fontIcon="al-ico-abort"></mat-icon>
           Stop
         </button>
       } @else {
-        <button mat-flat-button type="button" class="cp-flow-toolbar__run" (click)="run()"
+        <button type="button" class="cp-flow-toolbar__button cp-flow-toolbar__run" (click)="run()"
                 [disabled]="!activated() || busy()"
                 [title]="activated() ? 'Run the pipeline' : 'Activate the pipeline to run it'">
           <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>
@@ -97,7 +98,7 @@
     </aside>
 
     <main class="cp-flow-stage">
-      <sm-clearpipe-flow-canvas></sm-clearpipe-flow-canvas>
+      <sm-clearpipe-flow-canvas (configureRequested)="openInspector()"></sm-clearpipe-flow-canvas>
     </main>
 
     <aside class="cp-flow-panel cp-flow-panel--right" [class.cp-flow-panel--collapsed]="inspectorCollapsed()">

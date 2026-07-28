@@ -26,13 +26,15 @@ spec:
             - --import-realm
           env:
             # These externally managed Secret references are required. See README.md.
-            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+            # Keycloak 25 uses the legacy bootstrap variable names. The
+            # KC_BOOTSTRAP_ADMIN_* names are only supported by newer releases.
+            - name: KEYCLOAK_ADMIN
               valueFrom:
                 secretKeyRef:
                   name: keycloak-bootstrap
                   key: admin-username
                   optional: false
-            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+            - name: KEYCLOAK_ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: keycloak-bootstrap
@@ -51,9 +53,9 @@ spec:
             - name: KC_PROXY_HEADERS
               value: "xforwarded"
             # Fixed public issuer so the token "iss" is stable regardless of the
-            # in-cluster service DNS oauth2-proxy uses for token/jwks calls.
+            # in-cluster service DNS the ClearML API uses for token/JWKS calls.
             - name: KC_HOSTNAME
-              value: "http://keycloak.127.0.0.1.nip.io"
+              value: "http://keycloak.127.0.0.1.nip.io:8080"
             - name: KC_HOSTNAME_STRICT
               value: "false"
             # Allow backchannel (token/jwks) requests via any host (service DNS).

@@ -34,6 +34,16 @@ class RequestHandlers:
         settings = (
             self._custom_cookie_settings.get(cookie_key) or self._basic_cookie_settings
         ).copy()
+        if self._is_oidc_state_cookie(cookie_key):
+            # OIDC state is browser-bound and one-time in Redis. Do not inherit
+            # the effectively permanent session-cookie lifetime.
+            settings.update(
+                httponly=True,
+                samesite="Lax",
+                max_age=int(
+                    config.get("apiserver.auth.oidc.state_ttl_sec", 600)
+                ),
+            )
         if isinstance(settings["domain"], list):
             host_without_port, _, _ = request.host.partition(":")
             domain = first(
@@ -42,6 +52,17 @@ class RequestHandlers:
             )
             settings["domain"] = domain
         return settings
+
+    @staticmethod
+    def _is_oidc_state_cookie(cookie_key=None):
+        return (
+            config.get("apiserver.auth.oidc.enabled", False)
+            and cookie_key
+            == config.get(
+                "apiserver.auth.oidc.state_cookie_name",
+                "clearml_oidc_state",
+            )
+        )
 
     def _get_identity_from_encoded_token(self, encoded: str):
         return Token.decode_identity(encoded)
@@ -113,7 +134,10 @@ class RequestHandlers:
                         kwargs["max_age"] = 0
                         kwargs["expires"] = 0
                         value = ""
-                    elif not company:
+                    elif (
+                        not company
+                        and not self._is_oidc_state_cookie(key)
+                    ):
                         # Setting a cookie, let's try to figure out the company
                         # noinspection PyBroadException
                         try:

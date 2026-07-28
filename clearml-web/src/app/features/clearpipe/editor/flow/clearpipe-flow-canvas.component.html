@@ -39,14 +39,16 @@
 
     <svg class="cp-flow-edges" [attr.overflow]="'visible'">
       <defs>
-        <marker id="cp-flow-arrow" viewBox="0 0 10 10" refX="9" refY="5"
-                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--cp-accent-edge, #7c8598)"></path>
+        <marker id="cp-flow-arrow" viewBox="0 0 12 12" refX="0" refY="6"
+                markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto">
+          <path d="M 0 0 L 12 6 L 0 12 z" fill="var(--cp-accent-edge, #7c8598)"></path>
         </marker>
       </defs>
 
       @for (edge of edgeViews(); track trackEdge($index, edge)) {
-        <g class="cp-flow-edge" (contextmenu)="removeEdge($event, edge.id)">
+        <g class="cp-flow-edge"
+           [class.cp-flow-edge--ruled]="edge.ruleCount > 0"
+           (contextmenu)="onEdgeContextMenu($event, edge)">
           <path class="cp-flow-edge__hit" [attr.d]="edge.path"></path>
           <path class="cp-flow-edge__line" [attr.d]="edge.path" marker-end="url(#cp-flow-arrow)"></path>
         </g>
@@ -57,9 +59,26 @@
       }
     </svg>
 
+    <!-- Rule badges: HTML overlay positioned at each ruled edge's midpoint. -->
+    @for (edge of edgeViews(); track trackEdge($index, edge)) {
+      @if (edge.ruleCount > 0) {
+        <button type="button" class="cp-flow-edge-badge"
+                [style.left.px]="edge.midX"
+                [style.top.px]="edge.midY"
+                title="Conditional routing rules"
+                (pointerdown)="$event.stopPropagation()"
+                (click)="openRulesEditor(edge.id)">
+          <mat-icon fontSet="al" fontIcon="al-ico-filter"></mat-icon>
+          {{ edge.ruleCount }}
+        </button>
+      }
+    }
+
     @for (node of nodes(); track trackNode($index, node)) {
       <div class="cp-flow-node"
            [class.cp-flow-node--selected]="selectedNodeId() === node.id"
+           [class.cp-flow-node--multiselected]="selectedNodeIds().has(node.id)"
+           [class.cp-flow-node--grouped]="!!node.groupId"
            [class.cp-flow-node--in-boundary]="containedNodeIds().has(node.id)"
            [class.cp-flow-node--pending]="node.status === 'pending'"
            [class.cp-flow-node--running]="node.status === 'running'"
@@ -72,6 +91,8 @@
            [attr.data-node-id]="node.id"
            (mouseenter)="hoverNode(node.id)"
            (mouseleave)="leaveNode(node.id)"
+           (dblclick)="onNodeDblClick($event, node)"
+           (contextmenu)="onNodeContextMenu($event, node)"
            (pointerdown)="onNodePointerDown($event, node)">
 
         <span class="cp-flow-handle cp-flow-handle--in" [attr.data-node-id]="node.id" title="Input"></span>
@@ -128,7 +149,7 @@
           <div class="cp-flow-node__actions">
             <button mat-icon-button type="button" class="cp-flow-node__action"
                     title="Configure" (pointerdown)="$event.stopPropagation()" (click)="configure($event, node)">
-              <mat-icon fontSet="al" fontIcon="al-ico-configuration"></mat-icon>
+              <mat-icon fontSet="al" fontIcon="al-ico-settings"></mat-icon>
             </button>
             <button mat-icon-button type="button" class="cp-flow-node__action"
                     title="Duplicate" (pointerdown)="$event.stopPropagation()" (click)="duplicate($event, node)">
@@ -174,6 +195,14 @@
         }
       </div>
     }
+
+    @if (marquee(); as box) {
+      <div class="cp-flow-marquee"
+           [style.left.px]="box.x"
+           [style.top.px]="box.y"
+           [style.width.px]="box.width"
+           [style.height.px]="box.height"></div>
+    }
   </div>
 
   <div class="cp-flow-controls">
@@ -184,7 +213,186 @@
       <mat-icon fontSet="al" fontIcon="al-ico-minus"></mat-icon>
     </button>
     <button mat-icon-button type="button" title="Fit" aria-label="Fit canvas" (pointerdown)="$event.stopPropagation()" (click)="fitView()">
-      <mat-icon fontSet="al" fontIcon="al-ico-crop"></mat-icon>
+      <mat-icon fontSet="al" fontIcon="al-ico-zoom-to-fit"></mat-icon>
     </button>
   </div>
+
+  <!-- Right-click edge context menu -->
+  @if (edgeMenu(); as menu) {
+    <div class="cp-flow-menu-backdrop" (pointerdown)="closeEdgeMenu()" (contextmenu)="$event.preventDefault(); closeEdgeMenu()"></div>
+    <div class="cp-flow-menu" [style.left.px]="menu.x" [style.top.px]="menu.y"
+         (pointerdown)="$event.stopPropagation()">
+      <button type="button" class="cp-flow-menu__item" (click)="openRulesEditor(menu.edgeId)">
+        <mat-icon fontSet="al" fontIcon="al-ico-settings"></mat-icon>
+        <span>Manage rules</span>
+      </button>
+      <button type="button" class="cp-flow-menu__item cp-flow-menu__item--danger" (click)="disconnectFromMenu(menu.edgeId)">
+        <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+        <span>Disconnect</span>
+      </button>
+    </div>
+  }
+
+  <!-- Right-click node selection context menu -->
+  @if (nodeMenu(); as menu) {
+    <div class="cp-flow-menu-backdrop" (pointerdown)="closeNodeMenu()" (contextmenu)="$event.preventDefault(); closeNodeMenu()"></div>
+    <div class="cp-flow-menu" [style.left.px]="menu.x" [style.top.px]="menu.y"
+         (pointerdown)="$event.stopPropagation()">
+      @if (selectionCount() >= 2) {
+        <button type="button" class="cp-flow-menu__item" (click)="groupSelection()">
+          <mat-icon fontSet="al" fontIcon="al-ico-frame-rule"></mat-icon>
+          <span>Group</span>
+          <span class="cp-flow-menu__shortcut">Ctrl+G</span>
+        </button>
+      }
+      @if (hasGroupedSelection()) {
+        <button type="button" class="cp-flow-menu__item" (click)="ungroupSelection()">
+          <mat-icon fontSet="al" fontIcon="al-ico-link-off"></mat-icon>
+          <span>Ungroup</span>
+          <span class="cp-flow-menu__shortcut">Ctrl+Shift+G</span>
+        </button>
+      }
+      @if (selectionCount() >= 2 || hasGroupedSelection()) {
+        <div class="cp-flow-menu__sep"></div>
+      }
+      <button type="button" class="cp-flow-menu__item" (click)="copySelection()">
+        <mat-icon fontSet="al" fontIcon="al-ico-copy-to-clipboard"></mat-icon>
+        <span>Copy</span>
+        <span class="cp-flow-menu__shortcut">Ctrl+C</span>
+      </button>
+      <button type="button" class="cp-flow-menu__item" (click)="cutSelection()">
+        <mat-icon fontSet="al" fontIcon="al-ico-move-to"></mat-icon>
+        <span>Cut</span>
+        <span class="cp-flow-menu__shortcut">Ctrl+X</span>
+      </button>
+      <button type="button" class="cp-flow-menu__item" (click)="duplicateSelection()">
+        <mat-icon fontSet="al" fontIcon="al-ico-clone"></mat-icon>
+        <span>Duplicate</span>
+        <span class="cp-flow-menu__shortcut">Ctrl+D</span>
+      </button>
+      @if (hasClipboard()) {
+        <button type="button" class="cp-flow-menu__item" (click)="pasteSelection()">
+          <mat-icon fontSet="al" fontIcon="al-ico-import"></mat-icon>
+          <span>Paste</span>
+          <span class="cp-flow-menu__shortcut">Ctrl+V</span>
+        </button>
+      }
+    </div>
+  }
+
+  <!-- Conditional-routing rules editor overlay -->
+  @if (rulesEdge(); as edge) {
+    <div class="cp-flow-rules" (pointerdown)="$event.stopPropagation()" (wheel)="$event.stopPropagation()">
+      <div class="cp-flow-rules__head">
+        <div>
+          <strong>Routing rules</strong>
+          <span class="cp-flow-rules__sub">{{ nodeLabel(edge.source) }} → {{ nodeLabel(edge.target) }}</span>
+        </div>
+        <button mat-icon-button type="button" title="Close" (click)="closeRulesEditor()">
+          <mat-icon fontSet="al" fontIcon="al-ico-dialog-x"></mat-icon>
+        </button>
+      </div>
+
+      <div class="cp-flow-rules__body">
+        @if (!edge.rules?.length) {
+          <p class="cp-flow-rules__empty">No rules yet. Add a rule to route this connection based on the states or
+            variables produced by previous nodes.</p>
+        }
+
+        @for (rule of edge.rules ?? []; track trackRule($index, rule)) {
+          <div class="cp-flow-rule">
+            <div class="cp-flow-rule__head">
+              <span class="cp-flow-rule__title">Rule {{ $index + 1 }}</span>
+              <button mat-icon-button type="button" class="cp-flow-rule__remove" title="Delete rule"
+                      (click)="removeRule(edge.id, rule.id)">
+                <mat-icon fontSet="al" fontIcon="al-ico-trash"></mat-icon>
+              </button>
+            </div>
+
+            @for (condition of rule.conditions; track trackCondition($index, condition)) {
+              <div class="cp-flow-cond">
+                <span class="cp-flow-cond__kw">{{ $index === 0 ? 'If' : (condition.connector === 'or' ? 'elif' : 'and') }}</span>
+                @if ($index > 0) {
+                  <select class="cp-flow-cond__connector"
+                          [ngModel]="condition.connector ?? 'and'"
+                          (ngModelChange)="updateCondition(edge.id, rule, condition.id, {connector: $event})">
+                    <option value="and">and</option>
+                    <option value="or">elif</option>
+                  </select>
+                }
+                <select class="cp-flow-cond__node"
+                        [ngModel]="condition.sourceNodeId"
+                        (ngModelChange)="updateCondition(edge.id, rule, condition.id, {sourceNodeId: $event})">
+                  @for (source of ruleSourceNodes(); track source.id) {
+                    <option [value]="source.id">{{ source.label }}</option>
+                  }
+                </select>
+                <select class="cp-flow-cond__var"
+                        [ngModel]="condition.variable"
+                        (ngModelChange)="updateCondition(edge.id, rule, condition.id, {variable: $event})">
+                  @for (variable of variablesFor(condition.sourceNodeId); track variable.key) {
+                    <option [value]="variable.key">{{ variable.label }}</option>
+                  }
+                </select>
+                <select class="cp-flow-cond__op"
+                        [ngModel]="condition.operator"
+                        (ngModelChange)="updateCondition(edge.id, rule, condition.id, {operator: $event})">
+                  @for (op of operatorOptions; track op.value) {
+                    <option [value]="op.value">{{ op.label }}</option>
+                  }
+                </select>
+                @if (isValueOperator(condition.operator)) {
+                  <input class="cp-flow-cond__value" type="text" placeholder="value"
+                         [ngModel]="condition.value ?? ''"
+                         (ngModelChange)="updateCondition(edge.id, rule, condition.id, {value: $event})" />
+                }
+                <button mat-icon-button type="button" class="cp-flow-cond__remove" title="Remove condition"
+                        (click)="removeCondition(edge.id, rule, condition.id)">
+                  <mat-icon fontSet="al" fontIcon="al-ico-minus"></mat-icon>
+                </button>
+              </div>
+            }
+
+            <button type="button" class="cp-flow-rule__add-cond" (click)="addCondition(edge.id, rule)">
+              <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon> Add condition
+            </button>
+
+            <div class="cp-flow-rule__then">
+              <span class="cp-flow-cond__kw">Then</span>
+              <select class="cp-flow-rule__action"
+                      [ngModel]="rule.action"
+                      (ngModelChange)="setRuleAction(edge.id, rule.id, $event)">
+                @for (action of actionOptions; track action.value) {
+                  <option [value]="action.value">{{ action.label }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="cp-flow-rules__foot">
+        <div class="cp-flow-rules__add-wrap">
+          <button type="button" class="cp-flow-rules__add"
+                  [class.cp-flow-rules__add--open]="addRuleMenuOpen()"
+                  (click)="toggleAddRuleMenu()">
+            <mat-icon fontSet="al" fontIcon="al-ico-plus"></mat-icon> Add rule
+            <mat-icon class="cp-flow-rules__add-caret" fontSet="al" fontIcon="al-ico-caret-right"></mat-icon>
+          </button>
+          @if (addRuleMenuOpen()) {
+            <div class="cp-flow-rules__add-menu">
+              <button type="button" class="cp-flow-menu__item" (click)="addRule(edge.id)">
+                <mat-icon fontSet="al" fontIcon="al-ico-filter"></mat-icon>
+                <span>If</span>
+              </button>
+              <button type="button" class="cp-flow-menu__item" (click)="addActionRule(edge.id)">
+                <mat-icon fontSet="al" fontIcon="al-ico-run"></mat-icon>
+                <span>Action</span>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
 </div>

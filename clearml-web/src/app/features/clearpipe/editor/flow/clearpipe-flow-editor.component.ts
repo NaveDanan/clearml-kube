@@ -110,12 +110,17 @@ export class ClearpipeFlowEditorComponent {
       this.store.reset();
     }
 
-    // Mirror the configuration panel to the canvas selection: expand when a node
-    // or a boundary is selected, collapse when the selection is cleared.
+    // Configuration is opened explicitly (double-click a node, the Configure
+    // action, or the manual expander) — never on a plain single selection. We
+    // only auto-COLLAPSE when nothing is selected, and auto-OPEN for boundaries.
     effect(() => {
-      const nothingSelected =
-        this.store.selectedNodeId() === null && this.store.selectedBoundaryId() === null;
-      this.inspectorCollapsed.set(nothingSelected);
+      const boundarySelected = this.store.selectedBoundaryId() !== null;
+      const nodeSelected = this.store.selectedNodeId() !== null;
+      if (boundarySelected) {
+        this.inspectorCollapsed.set(false);
+      } else if (!nodeSelected) {
+        this.inspectorCollapsed.set(true);
+      }
     });
 
     // Hovering a node (or keeping Overview open) upgrades the normal five-second
@@ -195,6 +200,11 @@ export class ClearpipeFlowEditorComponent {
 
   protected toggleInspector(): void {
     this.inspectorCollapsed.update(collapsed => !collapsed);
+  }
+
+  /** Explicit request to open the configuration panel (double-click / Configure). */
+  protected openInspector(): void {
+    this.inspectorCollapsed.set(false);
   }
 
   protected name(): string {

@@ -2,6 +2,7 @@
 {{- $email := .Values.email | default dict }}
 {{- $emailAuthentication := $email.authentication | default dict }}
 {{- $emailAuthenticationEnabled := true }}
+{{- $oidc := .Values.auth.oidc | default dict }}
 {{- if hasKey $emailAuthentication "enabled" }}
 {{- $emailAuthenticationEnabled = $emailAuthentication.enabled }}
 {{- end }}
@@ -143,11 +144,13 @@ spec:
             value: "{{ .Values.clearml.defaultCompany }}"
           - name: CLEARML__APISERVER__AUTH__SESSION_AUTH_COOKIE_NAME
             value: {{ .Values.clearml.cookieName }}
+          - name: CLEARML__APISERVER__AUTH__COOKIES__SECURE
+            value: {{ .Values.clearml.cookieSecure | quote }}
           {{- if .Values.clearml.cookieDomain }}
           - name: CLEARML__APISERVER__AUTH__COOKIES__DOMAIN
             value: ".{{ .Values.clearml.cookieDomain }}"
           {{- end }}
-          {{- if or (eq .Values.auth.mode "password") (eq .Values.auth.mode "oidc") }}
+          {{- if eq .Values.auth.mode "password" }}
           # Enable fixed-user (username/password) authentication. The actual user
           # list is supplied via apiserver.existingAdditionalConfigsSecret
           # (an apiserver.conf carrying the auth.fixed_users.users block).
@@ -155,6 +158,75 @@ spec:
             value: "true"
           - name: CLEARML__apiserver__auth__fixed_users__pass_hashed
             value: {{ .Values.auth.fixedUsers.passHashed | quote }}
+          {{- end }}
+          {{- if and (eq .Values.auth.mode "oidc") $oidc.enabled }}
+          # Native authorization-code OIDC login. The API validates signed ID
+          # tokens and provisions stable identities by issuer + subject.
+          - name: CLEARML__APISERVER__AUTH__OIDC__ENABLED
+            value: "true"
+          - name: CLEARML__APISERVER__AUTH__OIDC__ISSUER_URL
+            value: {{ $oidc.issuerUrl | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__CLIENT_ID
+            value: {{ $oidc.clientId | toJson | quote }}
+          - name: CLEARML_OIDC_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: {{ $oidc.existingSecret }}
+                key: client-secret
+          - name: CLEARML__APISERVER__AUTH__OIDC__CLIENT_AUTHENTICATION_METHOD
+            value: {{ $oidc.clientAuthenticationMethod | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__REDIRECT_URL
+            value: {{ $oidc.redirectUrl | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__SCOPES
+            value: {{ $oidc.scopes | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__DISPLAY_NAME
+            value: {{ $oidc.displayName | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__START_URL
+            value: {{ $oidc.startUrl | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__AUTHORIZATION_URL
+            value: {{ $oidc.authorizationUrl | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__TOKEN_URL
+            value: {{ $oidc.tokenUrl | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__JWKS_URL
+            value: {{ $oidc.jwksUrl | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__END_SESSION_URL
+            value: {{ $oidc.endSessionUrl | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__POST_LOGOUT_REDIRECT_URL
+            value: {{ $oidc.postLogoutRedirectUrl | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__LOGIN_ERROR_URL
+            value: {{ ($oidc.loginErrorUrl | default $oidc.postLogoutRedirectUrl) | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__VERIFY_TLS
+            value: {{ $oidc.verifyTls | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__HTTP_TIMEOUT_SEC
+            value: {{ $oidc.httpTimeoutSec | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__STATE_TTL_SEC
+            value: {{ $oidc.stateTtlSec | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__ALLOWED_ALGORITHMS
+            value: {{ $oidc.allowedAlgorithms | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__EMAIL_CLAIM
+            value: {{ $oidc.emailClaim | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__NAME_CLAIM
+            value: {{ $oidc.nameClaim | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__GIVEN_NAME_CLAIM
+            value: {{ $oidc.givenNameClaim | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__FAMILY_NAME_CLAIM
+            value: {{ $oidc.familyNameClaim | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__GROUPS_CLAIM
+            value: {{ $oidc.groupsClaim | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__REQUIRE_VERIFIED_EMAIL
+            value: {{ $oidc.requireVerifiedEmail | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__ALLOWED_GROUPS
+            value: {{ $oidc.allowedGroups | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__ADMIN_GROUPS
+            value: {{ $oidc.adminGroups | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__DEFAULT_ROLE
+            value: {{ $oidc.defaultRole | toJson | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__SYNC_ROLES
+            value: {{ $oidc.syncRoles | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__SYNC_PROFILE
+            value: {{ $oidc.syncProfile | quote }}
+          - name: CLEARML__APISERVER__AUTH__OIDC__LINK_EXISTING_USERS_BY_EMAIL
+            value: {{ $oidc.linkExistingUsersByEmail | quote }}
           {{- end }}
           {{- if $email.enabled }}
           # Outgoing SMTP for user notifications (task/pipeline/dataset/report done).

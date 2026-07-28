@@ -34,11 +34,14 @@ data:
           "secret": "${CLEARML_OIDC_CLIENT_SECRET}",
           "standardFlowEnabled": true,
           "directAccessGrantsEnabled": true,
+          "attributes": {
+            "post.logout.redirect.uris": "http://127.0.0.1:8080/login"
+          },
           "redirectUris": [
-            "http://clearml.127.0.0.1.nip.io/oauth2/callback"
+            "http://127.0.0.1:8080/api/login.oidc_callback"
           ],
           "webOrigins": [
-            "http://clearml.127.0.0.1.nip.io"
+            "http://127.0.0.1:8080"
           ],
           "protocolMappers": [
             {
@@ -49,6 +52,18 @@ data:
                 "included.client.audience": "clearml",
                 "id.token.claim": "true",
                 "access.token.claim": "true"
+              }
+            },
+            {
+              "name": "clearml-groups",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-group-membership-mapper",
+              "config": {
+                "claim.name": "groups",
+                "full.path": "true",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
               }
             }
           ]
