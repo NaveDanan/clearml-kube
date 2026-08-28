@@ -1,8 +1,9 @@
 # ClearML deployment on the two-node mmems K3s cluster.
 #
-# Argo CD applies this file on top of values.yaml. Credentials remain in the
-# existing Kubernetes Secrets restored during the K3s migration. Do not add
-# secret values to this file.
+# Argo CD watches master and applies this file on top of values.yaml after each
+# push that changes the chart path. Credentials remain in the existing
+# Kubernetes Secrets restored during the K3s migration. Do not add secret
+# values to this file.
 
 global:
   imageRegistry: ""
