@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: clearml
+  name: clearml-server
   namespace: argocd
   annotations:
     argocd.argoproj.io/manifest-generate-paths: clearml-charts
@@ -9,15 +9,28 @@ spec:
   project: default
   destination:
     server: https://kubernetes.default.svc
-    namespace: clearml
+    namespace: clearml-server
   syncPolicy:
+    automated:
+      allowEmpty: false
+      prune: false
+      selfHeal: true
+    retry:
+      limit: 8
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
     syncOptions:
       - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+      - PruneLast=true
   source:
     repoURL: https://github.com/NaveDanan/clearml-kube.git
     path: clearml-charts
-    targetRevision: main
+    targetRevision: master
     helm:
+      releaseName: clearml-server
       valueFiles:
         - values.yaml
-        - values-testing.yaml
+        - values-k3s-mmems.yaml

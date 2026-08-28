@@ -1,0 +1,223 @@
+# ClearML deployment on the two-node mmems K3s cluster.
+#
+# Argo CD applies this file on top of values.yaml. Credentials remain in the
+# existing Kubernetes Secrets restored during the K3s migration. Do not add
+# secret values to this file.
+
+global:
+  imageRegistry: ""
+
+imageCredentials:
+  enabled: false
+
+clearml:
+  cookieName: "clearml-token-k8s"
+  cookieDomain: ""
+  cookieSecure: false
+  clientConfigurationApiUrl: "/api"
+  clientConfigurationFilesUrl: "/files"
+  existingSecret: "clearml-conf"
+
+auth:
+  mode: "name-only"
+  oidc:
+    enabled: false
+
+email:
+  enabled: false
+
+apiserver:
+  enabled: true
+  extraEnvs:
+    - name: CLEARML__secure__clearpipe__provenance_keys__current_key_id
+      value: "current"
+    - name: CLEARML__secure__clearpipe__provenance_keys__keys__current
+      valueFrom:
+        secretKeyRef:
+          name: "clearml-provenance"
+          key: "signing-key"
+  image:
+    registry: ""
+    repository: "clearml/clearml"
+    tag: "2026-08-10-issues-nav"
+    pullPolicy: Never
+  service:
+    type: LoadBalancer
+    nodePort: 30008
+  ingress:
+    enabled: false
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+fileserver:
+  enabled: true
+  image:
+    registry: ""
+    repository: "clearml/clearml"
+    tag: "2026-08-10-issues-nav"
+    pullPolicy: Never
+  service:
+    type: LoadBalancer
+    nodePort: 30081
+  ingress:
+    enabled: false
+  storage:
+    enabled: true
+    data:
+      class: longhorn
+      accessMode: ReadWriteOnce
+      size: 40Gi
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+clearpipeScheduler:
+  enabled: true
+  image:
+    registry: ""
+    repository: "clearml/clearpipe-scheduler"
+    tag: "2026-08-06"
+    pullPolicy: Never
+  pollSeconds: 30
+  existingSecret: "clearpipe-scheduler-credentials"
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsUser: 10001
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+webserver:
+  enabled: true
+  image:
+    registry: ""
+    repository: "clearml/clearml"
+    tag: "2026-08-10-issues-nav"
+    pullPolicy: Never
+  service:
+    type: LoadBalancer
+    nodePort: 30080
+  additionalConfigs:
+    configuration.json: |
+      {
+        "apiBaseUrl": "http://127.0.0.1:8008",
+        "fileBaseUrl": "http://127.0.0.1:8081",
+        "displayedServerUrls": {
+          "apiServer": "http://127.0.0.1:8008",
+          "filesServer": "http://127.0.0.1:8081"
+        }
+      }
+  ingress:
+    enabled: false
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+runaiWorker:
+  enabled: true
+  image:
+    registry: ""
+    repository: "clearml/runai-worker"
+    tag: "2026-08-06"
+    pullPolicy: Never
+  replicaCount: 1
+  pollInterval: 10
+  batchSize: 5
+  podSecurityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+    runAsGroup: 1000
+    fsGroup: 1000
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+redis:
+  enabled: true
+  architecture: standalone
+  master:
+    name: "{{ .Release.Name }}-redis-master"
+    persistence:
+      enabled: true
+      accessModes:
+        - ReadWriteOnce
+      storageClass: longhorn
+      size: 2Gi
+
+mongodb:
+  enabled: true
+  architecture: standalone
+  replicaCount: 1
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    storageClass: longhorn
+    size: 10Gi
+
+elasticsearch:
+  enabled: true
+  replicas: 1
+  image: "docker.elastic.co/elasticsearch/elasticsearch"
+  imageTag: "7.17.3"
+  imagePullPolicy: IfNotPresent
+  esJavaOpts: "-Xmx1g -Xms1g"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  volumeClaimTemplate:
+    storageClassName: longhorn
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Gi

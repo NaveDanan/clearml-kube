@@ -1,7 +1,7 @@
 annotations:
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "casted port to string before concatenation"
+    - kind: changed
+      description: "Dropped kubernetes max compatible version"
 apiVersion: v2
 appVersion: "2.0"
 dependencies:
@@ -24,7 +24,7 @@ keywords:
 - clearml
 - machine learning
 - mlops
-kubeVersion: '>= 1.21.0-0 < 1.33.0-0'
+kubeVersion: '>= 1.21.0-0'
 maintainers:
 - name: filippo-clearml
   url: https://github.com/filippo-clearml
